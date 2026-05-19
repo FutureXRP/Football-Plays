@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Play Designer Pro</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap');
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --gold:#c8a84b;--red:#c0392b;
+  --panel:#141414;--panel2:#1e1e1e;--panel3:#252525;
+  --border:#2a2a2a;--text:#e8e0d0;--muted:#777;--accent:#c8a84b;
+}
+body{background:#0a0a0a;color:var(--text);font-family:'Barlow',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
+header{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:14px;flex-shrink:0}
+header h1{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+header .sub{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+header .spacer{flex:1}
+.main{display:flex;flex:1;overflow:hidden;height:calc(100vh - 47px)}
+.sidebar{width:210px;min-width:210px;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
+.sidebar.left{border-right:1px solid var(--border)}
+.sidebar.right{border-left:1px solid var(--border);width:230px;min-width:230px}
+.sb-scroll{overflow-y:auto;flex:1}
+.sb-scroll::-webkit-scrollbar{width:3px}
+.sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
+.tab-bar{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
+.tab{flex:1;padding:9px 4px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all 0.15s;border-bottom:2px solid transparent}
+.tab:hover{color:var(--text)}
+.tab.a-off{color:#5aabff;border-bottom-color:#3498db}
+.tab.a-def{color:#ff7070;border-bottom-color:#e74c3c}
+.tab.a-routes{color:var(--gold);border-bottom-color:var(--gold)}
+.sec{padding:11px 12px 8px;border-bottom:1px solid var(--border)}
+.slabel{font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
+.fbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;padding:7px 3px;cursor:pointer;text-align:center;text-transform:uppercase;transition:all 0.15s;border-radius:3px}
+.fbtn:hover{border-color:var(--gold);color:var(--gold)}
+.fbtn.ao{background:#142a4a;color:#70aaff;border-color:#2a5a9a}
+.fbtn.ad{background:#3a1010;color:#ff8888;border-color:#8b2020}
+.tg{display:flex;flex-direction:column;gap:4px}
+.tbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow',sans-serif;font-size:12px;padding:8px 10px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;transition:all 0.15s;border-radius:3px}
+.tbtn:hover{border-color:var(--accent)}
+.tbtn.ta{border-color:var(--accent);background:rgba(200,168,75,0.1)}
+.tbtn.tad{border-color:#e74c3c;background:rgba(200,50,50,0.1)}
+.plist{display:flex;flex-direction:column;gap:4px}
+.pi{display:flex;align-items:center;gap:8px;padding:5px 7px;background:var(--panel2);border-radius:3px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;font-size:11px}
+.pi:hover{background:#282828}
+.pi.so{border-color:#3498db}
+.pi.sd{border-color:#e74c3c}
+.pdot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'Barlow Condensed',sans-serif;flex-shrink:0}
+.pname{flex:1;font-size:11px}
+.ppnum{font-size:10px;color:var(--muted)}
+.ced{padding:10px 12px;border-bottom:1px solid var(--border)}
+.cr{display:flex;gap:6px;margin-bottom:6px;align-items:center}
+.cr label{font-size:10px;color:var(--muted);width:28px;flex-shrink:0;text-transform:uppercase}
+.ci{flex:1;background:var(--panel3);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:5px 7px;border-radius:3px;outline:none}
+.ci:focus{border-color:var(--gold)}
+select.ci{cursor:pointer}
+.addbtn{width:100%;padding:7px;background:var(--panel3);border:1px solid var(--border);color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:all 0.15s}
+.addbtn:hover{border-color:var(--gold);background:rgba(200,168,75,0.1)}
+.addbtn.d{color:#e74c3c}.addbtn.d:hover{border-color:#e74c3c;background:rgba(200,50,50,0.1)}
+.tcontent{display:none}.tcontent.vis{display:block}
+.canvas-area{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
+.fwrap{flex:1;display:flex;align-items:center;justify-content:center;padding:10px;background:#080808}
+#field-canvas{display:block;border:2px solid #2a2a2a;box-shadow:0 0 60px rgba(0,0,0,0.95)}
+.bbar{background:var(--panel);border-top:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
+.pninput{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:7px 12px;width:190px;border-radius:3px;outline:none}
+.pninput:focus{border-color:var(--gold)}
+.btn{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:8px 14px;border:none;cursor:pointer;border-radius:3px;transition:all 0.15s;white-space:nowrap}
+.bg{background:var(--gold);color:#000}.bg:hover{background:#d4b055}
+.bgreen{background:#1a7c3a;color:#fff;display:flex;align-items:center;gap:6px}.bgreen:hover{background:#1e9044}
+.bred{background:var(--red);color:#fff}.bred:hover{background:#e04030}
+.bgh{background:transparent;border:1px solid var(--border);color:var(--muted)}.bgh:hover{border-color:#e74c3c;color:#e74c3c}
+.smsg{font-size:12px;color:var(--muted);flex:1;font-style:italic}
+.smsg.sl{color:var(--gold)}.smsg.se{color:var(--red)}.smsg.sk{color:#4caf50}
+.ai-box{padding:12px}
+.ai-out{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:10px;font-size:11px;line-height:1.65;color:var(--text);min-height:80px;white-space:pre-wrap;overflow-y:auto;max-height:230px}
+.ai-out.empty{color:var(--muted);font-style:italic}
+.li{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:var(--muted)}
+.ll{width:24px;height:3px;border-radius:2px;flex-shrink:0}
+.sprow{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
+.sprow label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
+input[type=range]{flex:1;accent-color:var(--gold);height:4px}
+.spv{font-size:12px;color:var(--gold);min-width:28px;text-align:right}
+.badge{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:2px;text-transform:uppercase}
+.bo{background:#142a4a;color:#70aaff;border:1px solid #2a5a9a}
+.bd{background:#3a1010;color:#ff8888;border:1px solid #8b2020}
+</style>
+</head>
+<body>
+<header>
+  <h1>⚡ Play Designer Pro</h1>
+  <span class="sub">Offense · Defense · AI</span>
+  <div class="spacer"></div>
+  <span class="badge bo" id="mbadge">OFFENSE</span>
+</header>
+<div class="main">
+
+<!-- LEFT SIDEBAR -->
+<div class="sidebar left">
+  <div class="tab-bar">
+    <button class="tab a-off" id="lt-off" onclick="setLTab('off')">Offense</button>
+    <button class="tab" id="lt-def" onclick="setLTab('def')">Defense</button>
+    <button class="tab" id="lt-routes" onclick="setLTab('routes')">Routes</button>
+  </div>
+  <div class="sb-scroll">
+
+    <!-- OFFENSE -->
+    <div class="tcontent vis" id="lc-off">
+      <div class="sec">
+        <div class="slabel">Formation</div>
+        <div class="fg" id="off-fbtns">
+          <button class="fbtn ao" onclick="loadOff('shotgun')">Shotgun</button>
+          <button class="fbtn" onclick="loadOff('iformation')">I-Form</button>
+          <button class="fbtn" onclick="loadOff('spread')">Spread</button>
+          <button class="fbtn" onclick="loadOff('singleback')">Singleback</button>
+          <button class="fbtn" onclick="loadOff('pistol')">Pistol</button>
+          <button class="fbtn" onclick="loadOff('wildcat')">Wildcat</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="slabel">Players</div>
+        <div class="plist" id="opl"></div>
+      </div>
+      <div class="ced">
+        <div class="slabel" style="margin-bottom:8px">Add Player</div>
+        <div class="cr"><label>Pos</label>
+          <select class="ci" id="nop"><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>FB</option></select>
+        </div>
+        <div class="cr"><label>Label</label><input class="ci" id="nol" type="text" maxlength="4" placeholder="WR2"/></div>
+        <button class="addbtn" onclick="addOff()">+ Add Offensive Player</button>
+      </div>
+      <div class="sec">
+        <div class="slabel">Actions</div>
+        <div class="tg">
+          <button class="tbtn" onclick="removeSelected('off')"><span>🗑</span> Remove Selected</button>
+          <button class="tbtn" onclick="resetOff()"><span>↺</span> Reset Formation</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- DEFENSE -->
+    <div class="tcontent" id="lc-def">
+      <div class="sec">
+        <div class="slabel">Formation</div>
+        <div class="fg" id="def-fbtns">
+          <button class="fbtn" onclick="loadDef('43')">4-3</button>
+          <button class="fbtn ad" onclick="loadDef('34')">3-4</button>
+          <button class="fbtn" onclick="loadDef('nickel')">Nickel</button>
+          <button class="fbtn" onclick="loadDef('dime')">Dime</button>
+          <button class="fbtn" onclick="loadDef('cover2')">Cover 2</button>
+          <button class="fbtn" onclick="loadDef('cover3')">Cover 3</button>
+          <button class="fbtn" onclick="loadDef('46')">46 Bear</button>
+          <button class="fbtn" onclick="loadDef('prevent')">Prevent</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="slabel">Players</div>
+        <div class="plist" id="dpl"></div>
+      </div>
+      <div class="ced">
+        <div class="slabel" style="margin-bottom:8px">Add Defender</div>
+        <div class="cr"><label>Pos</label>
+          <select class="ci" id="ndp"><option>DE</option><option>DT</option><option>NT</option><option>LB</option><option>CB</option><option>S</option><option>FS</option><option>SS</option><option>DB</option></select>
+        </div>
+        <div class="cr"><label>Label</label><input class="ci" id="ndl" type="text" maxlength="4" placeholder="CB3"/></div>
+        <button class="addbtn d" onclick="addDef()">+ Add Defender</button>
+      </div>
+      <div class="sec">
+        <div class="slabel">Actions</div>
+        <div class="tg">
+          <button class="tbtn" onclick="removeSelected('def')"><span>🗑</span> Remove Selected</button>
+          <button class="tbtn" onclick="resetDef()"><span>↺</span> Reset Formation</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ROUTES -->
+    <div class="tcontent" id="lc-routes">
+      <div class="sec">
+        <div class="slabel">Draw Tool</div>
+        <div class="tg">
+          <button class="tbtn ta" id="t-select" onclick="setTool('select')"><span>🖱</span> Select / Move</button>
+          <button class="tbtn" id="t-run" onclick="setTool('run')"><span>🟡</span> Run Route</button>
+          <button class="tbtn" id="t-block" onclick="setTool('block')"><span>🟥</span> Block</button>
+          <button class="tbtn" id="t-motion" onclick="setTool('motion')"><span>➡</span> Motion (Pre-snap)</button>
+          <div style="height:1px;background:var(--border);margin:4px 0"></div>
+          <button class="tbtn" id="t-coverage" onclick="setTool('coverage')"><span>🔴</span> Coverage (DEF)</button>
+          <button class="tbtn" id="t-blitz" onclick="setTool('blitz')"><span>⚡</span> Blitz (DEF)</button>
+          <button class="tbtn" id="t-zone" onclick="setTool('zone')"><span>🔵</span> Zone Drop (DEF)</button>
+        </div>
+      </div>
+      <div class="sec">
+        <div class="slabel">Hint</div>
+        <div style="font-size:11px;color:var(--muted);line-height:1.6">Click player in list or on field to select, then drag to draw a route.</div>
+      </div>
+      <div class="sec">
+        <div class="slabel">Route Actions</div>
+        <div class="tg">
+          <button class="tbtn" onclick="clearORoutes()"><span>🗑</span> Clear Off Routes</button>
+          <button class="tbtn" onclick="clearDRoutes()"><span>🗑</span> Clear Def Routes</button>
+          <button class="tbtn" onclick="undoRoute()"><span>↩</span> Undo Last</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- CANVAS -->
+<div class="canvas-area">
+  <div class="fwrap">
+    <canvas id="field-canvas" width="700" height="520"></canvas>
+  </div>
+  <div class="bbar">
+    <input class="pninput" id="pname" type="text" placeholder="NAME YOUR PLAY" maxlength="30"/>
+    <button class="btn bg" onclick="analyzePlay()">🤖 AI Analyze</button>
+    <button class="btn bgreen" id="pbtn" onclick="runPlay()">▶ RUN PLAY</button>
+    <button class="btn bred" id="sbtn" onclick="stopPlay()" style="display:none">■ STOP</button>
+    <span class="smsg" id="smsg">Select a player · Draw routes in Routes tab · Drag to reposition</span>
+  </div>
+</div>
+
+<!-- RIGHT PANEL -->
+<div class="sidebar right">
+  <div class="sb-scroll">
+    <div class="ai-box">
+      <div class="slabel" style="margin-bottom:8px">AI Tactical Breakdown</div>
+      <div class="ai-out empty" id="ai-resp">Hit "AI Analyze" for a matchup breakdown vs the defense...</div>
+    </div>
+    <div class="sprow">
+      <label>Speed</label>
+      <input type="range" min="0.5" max="3" step="0.5" value="1" id="spslider" oninput="updSpeed(this.value)">
+      <span class="spv" id="spv">1×</span>
+    </div>
+    <div class="sec">
+      <div class="slabel" style="margin-bottom:10px">Route Legend</div>
+      <div class="li"><div class="ll" style="background:#f5c842"></div>Run Route (OFF)</div>
+      <div class="li"><div class="ll" style="background:#e74c3c"></div>Block (OFF, dashed)</div>
+      <div class="li"><div class="ll" style="background:#3498db"></div>Motion Pre-snap</div>
+      <div class="li"><div class="ll" style="background:#ff6b6b"></div>Coverage (DEF)</div>
+      <div class="li"><div class="ll" style="background:#ff3333"></div>Blitz (DEF, dashed)</div>
+      <div class="li"><div class="ll" style="background:#9b59b6"></div>Zone Drop (DEF)</div>
+    </div>
+    <div class="sec">
+      <div class="slabel" style="margin-bottom:8px">Shapes</div>
+      <div class="li"><span style="width:14px;height:14px;border-radius:50%;background:#888;display:inline-block;flex-shrink:0"></span>Circle = Offense</div>
+      <div class="li"><span style="width:14px;height:14px;border-radius:2px;background:#8b1a1a;border:1.5px solid #ff4444;display:inline-block;flex-shrink:0"></span>Square = Defense</div>
+    </div>
+    <div class="sec">
+      <div class="slabel" style="margin-bottom:8px">Position Colors</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#c8a84b;display:inline-block;flex-shrink:0"></span>QB</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#e74c3c;display:inline-block;flex-shrink:0"></span>RB / FB</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#3498db;display:inline-block;flex-shrink:0"></span>WR</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#9b59b6;display:inline-block;flex-shrink:0"></span>TE</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#7f8c8d;display:inline-block;flex-shrink:0"></span>OL</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#8b1a1a;border:1px solid #ff4444;display:inline-block;flex-shrink:0"></span>DL (DE/DT/NT)</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#7a0000;border:1px solid #ff6666;display:inline-block;flex-shrink:0"></span>LB</div>
+      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#5a0060;border:1px solid #ff44ff;display:inline-block;flex-shrink:0"></span>CB / S / DB</div>
+    </div>
+    <div class="sec" style="border-bottom:none">
+      <div class="slabel" style="margin-bottom:6px">Tips</div>
+      <div style="font-size:10px;color:var(--muted);line-height:1.8">
+        • Drag any player anywhere to customize alignment<br>
+        • Add custom players via the editor in each tab<br>
+        • Defense draws coverage/blitz/zone — all animate<br>
+        • AI reads full off + def context<br>
+        • Reset formation restores default positions
+      </div>
+    </div>
+  </div>
+</div>
+
+</div>
+<script>
+const canvas=document.getElementById('field-canvas');
+const ctx=canvas.getContext('2d');
+const W=canvas.width,H=canvas.height,LOS_Y=H*.63;
+let spd=1,tool='select',selId=null,selSide=null;
+let drawing=false,dpts=[],animating=false,raf=null;
+let drag=null,doff={x:0,y:0};
+let nextOId=100,nextDId=200;
+
+const oc={QB:'#c8a84b',RB:'#e74c3c',WR:'#3498db',TE:'#9b59b6',OL:'#7f8c8d',FB:'#e67e22'};
+const dc={DE:'#8b1a1a',DT:'#8b1a1a',NT:'#8b1a1a',LB:'#7a0000',CB:'#5a0060',S:'#5a0060',FS:'#5a0060',SS:'#5a0060',DB:'#5a0060'};
+const db={DE:'#ff4444',DT:'#ff5555',NT:'#ff5555',LB:'#ff7777',CB:'#ff44ff',S:'#ff66ff',FS:'#ff66ff',SS:'#ff88ff',DB:'#ff66ff'};
+const rc={run:'#f5c842',block:'#e74c3c',motion:'#3498db',coverage:'#ff6b6b',blitz:'#ff3333',zone:'#9b59b6'};
+
+const OForms={
+  shotgun:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.76},{id:6,pos:'RB',label:'RB',x:.62,y:.79},{id:7,pos:'WR',label:'WR',x:.10,y:.63},{id:8,pos:'WR',label:'WR',x:.22,y:.65},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
+  iformation:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.68},{id:6,pos:'FB',label:'FB',x:.50,y:.75},{id:7,pos:'RB',label:'RB',x:.50,y:.83},{id:8,pos:'WR',label:'WR',x:.10,y:.63},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
+  spread:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.75},{id:6,pos:'WR',label:'WR',x:.05,y:.63},{id:7,pos:'WR',label:'WR',x:.18,y:.65},{id:8,pos:'WR',label:'WR',x:.82,y:.65},{id:9,pos:'WR',label:'WR',x:.95,y:.63},{id:10,pos:'RB',label:'RB',x:.62,y:.79}],
+  singleback:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.68},{id:6,pos:'RB',label:'RB',x:.50,y:.77},{id:7,pos:'WR',label:'WR',x:.08,y:.63},{id:8,pos:'WR',label:'WR',x:.92,y:.63},{id:9,pos:'TE',label:'TE',x:.78,y:.64},{id:10,pos:'TE',label:'TE',x:.22,y:.64}],
+  pistol:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.71},{id:6,pos:'RB',label:'RB',x:.50,y:.79},{id:7,pos:'WR',label:'WR',x:.10,y:.63},{id:8,pos:'WR',label:'WR',x:.22,y:.65},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
+  wildcat:[{id:0,pos:'OL',label:'LT',x:.28,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.72,y:.63},{id:5,pos:'RB',label:'WC',x:.50,y:.71},{id:6,pos:'WR',label:'WR',x:.08,y:.63},{id:7,pos:'WR',label:'WR',x:.18,y:.65},{id:8,pos:'WR',label:'WR',x:.82,y:.65},{id:9,pos:'WR',label:'WR',x:.92,y:.63},{id:10,pos:'QB',label:'QB',x:.34,y:.55}]
+};
+
+const DForms={
+  '43':[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.34,y:.44},{id:206,pos:'LB',label:'WLB',x:.66,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.30,y:.34},{id:210,pos:'FS',label:'FS',x:.70,y:.32}],
+  '34':[{id:200,pos:'DE',label:'LE',x:.32,y:.53},{id:201,pos:'NT',label:'NT',x:.50,y:.52},{id:202,pos:'DE',label:'RE',x:.68,y:.53},{id:203,pos:'LB',label:'LOLB',x:.22,y:.46},{id:204,pos:'LB',label:'LILB',x:.40,y:.45},{id:205,pos:'LB',label:'RILB',x:.60,y:.45},{id:206,pos:'LB',label:'ROLB',x:.78,y:.46},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.36,y:.34},{id:210,pos:'FS',label:'FS',x:.64,y:.32}],
+  nickel:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.44,y:.44},{id:205,pos:'LB',label:'SLB',x:.56,y:.44},{id:206,pos:'CB',label:'LCB',x:.08,y:.52},{id:207,pos:'CB',label:'RCB',x:.92,y:.52},{id:208,pos:'CB',label:'NCB',x:.30,y:.43},{id:209,pos:'SS',label:'SS',x:.50,y:.34},{id:210,pos:'FS',label:'FS',x:.70,y:.32}],
+  dime:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.50,y:.52},{id:202,pos:'DE',label:'RE',x:.70,y:.53},{id:203,pos:'LB',label:'MLB',x:.50,y:.44},{id:204,pos:'CB',label:'LCB',x:.08,y:.52},{id:205,pos:'CB',label:'RCB',x:.92,y:.52},{id:206,pos:'CB',label:'SC1',x:.22,y:.46},{id:207,pos:'CB',label:'SC2',x:.78,y:.46},{id:208,pos:'DB',label:'DB',x:.36,y:.37},{id:209,pos:'SS',label:'SS',x:.50,y:.33},{id:210,pos:'FS',label:'FS',x:.64,y:.37}],
+  cover2:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.36,y:.44},{id:206,pos:'LB',label:'WLB',x:.64,y:.44},{id:207,pos:'CB',label:'LCB',x:.12,y:.53},{id:208,pos:'CB',label:'RCB',x:.88,y:.53},{id:209,pos:'SS',label:'SS',x:.28,y:.30},{id:210,pos:'FS',label:'FS',x:.72,y:.30}],
+  cover3:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.36,y:.44},{id:206,pos:'LB',label:'WLB',x:.64,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.48},{id:208,pos:'CB',label:'RCB',x:.92,y:.48},{id:209,pos:'SS',label:'SS',x:.35,y:.33},{id:210,pos:'FS',label:'FS',x:.50,y:.27}],
+  '46':[{id:200,pos:'DE',label:'LE',x:.26,y:.53},{id:201,pos:'DT',label:'DT',x:.38,y:.52},{id:202,pos:'DT',label:'DT',x:.54,y:.52},{id:203,pos:'DE',label:'RE',x:.66,y:.53},{id:204,pos:'LB',label:'LB',x:.78,y:.53},{id:205,pos:'LB',label:'LB',x:.42,y:.44},{id:206,pos:'LB',label:'LB',x:.58,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.25,y:.43},{id:210,pos:'FS',label:'FS',x:.50,y:.30}],
+  prevent:[{id:200,pos:'DE',label:'LE',x:.32,y:.54},{id:201,pos:'DE',label:'RE',x:.68,y:.54},{id:202,pos:'LB',label:'LB',x:.44,y:.47},{id:203,pos:'LB',label:'LB',x:.56,y:.47},{id:204,pos:'CB',label:'LCB',x:.08,y:.51},{id:205,pos:'CB',label:'RCB',x:.92,y:.51},{id:206,pos:'CB',label:'SC1',x:.22,y:.42},{id:207,pos:'CB',label:'SC2',x:.78,y:.42},{id:208,pos:'DB',label:'DB',x:.36,y:.34},{id:209,pos:'SS',label:'SS',x:.50,y:.28},{id:210,pos:'FS',label:'FS',x:.64,y:.34}]
+};
+
+let offPs=[],defPs=[],routes=[];
+let curOForm='shotgun',curDForm='34';
+
+function mk(t,side){return{...t,x:t.x*W,y:t.y*H,ox:t.x*W,oy:t.y*H,animX:t.x*W,animY:t.y*H,side};}
+
+function loadOff(name){
+  curOForm=name;
+  routes=routes.filter(r=>r.side==='def');
+  offPs=OForms[name].map(t=>mk(t,'off'));
+  nextOId=100+offPs.length;
+  document.querySelectorAll('#off-fbtns .fbtn').forEach(b=>b.classList.toggle('ao',normalizeBtn(b.textContent)===name));
+  if(selSide==='off'){selId=null;selSide=null;}
+  rebuildLists();drawAll();setSt('Loaded '+name,'sk');
+}
+function loadDef(name){
+  curDForm=name;
+  routes=routes.filter(r=>r.side==='off');
+  defPs=DForms[name].map(t=>mk(t,'def'));
+  nextDId=200+defPs.length;
+  document.querySelectorAll('#def-fbtns .fbtn').forEach(b=>b.classList.toggle('ad',normalizeBtn(b.textContent)===name));
+  if(selSide==='def'){selId=null;selSide=null;}
+  rebuildLists();drawAll();setSt('Loaded '+name+' defense','sk');
+}
+function normalizeBtn(t){return t.toLowerCase().replace(/[^a-z0-9]/g,'');}
+function resetOff(){loadOff(curOForm);}
+function resetDef(){loadDef(curDForm);}
+
+function addOff(){
+  const pos=document.getElementById('nop').value;
+  const label=(document.getElementById('nol').value.trim()||pos).slice(0,4);
+  offPs.push(mk({id:nextOId++,pos,label,x:.50,y:.70},'off'));
+  document.getElementById('nol').value='';
+  rebuildLists();drawAll();setSt('Added '+pos+' '+label,'sk');
+}
+function addDef(){
+  const pos=document.getElementById('ndp').value;
+  const label=(document.getElementById('ndl').value.trim()||pos).slice(0,4);
+  defPs.push(mk({id:nextDId++,pos,label,x:.50,y:.40},'def'));
+  document.getElementById('ndl').value='';
+  rebuildLists();drawAll();setSt('Added '+pos+' '+label,'sk');
+}
+function removeSelected(side){
+  if(!selId||selSide!==side){setSt('Select a '+side+' player first','se');return;}
+  if(side==='off') offPs=offPs.filter(p=>p.id!==selId);
+  else defPs=defPs.filter(p=>p.id!==selId);
+  routes=routes.filter(r=>r.playerId!==selId);
+  selId=null;selSide=null;rebuildLists();drawAll();
+}
+
+function rebuildLists(){
+  const ol=document.getElementById('opl'),dl=document.getElementById('dpl');
+  ol.innerHTML='';dl.innerHTML='';
+  offPs.forEach(p=>{
+    const d=document.createElement('div');
+    d.className='pi'+(selId===p.id&&selSide==='off'?' so':'');
+    d.innerHTML=`<div class="pdot" style="background:${oc[p.pos]||'#888'};color:#000">${p.label.slice(0,2)}</div><span class="pname">${p.pos}·${p.label}</span><span class="ppnum">${routes.filter(r=>r.playerId===p.id).length}r</span>`;
+    d.onclick=()=>selP(p.id,'off');ol.appendChild(d);
+  });
+  defPs.forEach(p=>{
+    const d=document.createElement('div');
+    d.className='pi'+(selId===p.id&&selSide==='def'?' sd':'');
+    d.innerHTML=`<div class="pdot" style="background:${dc[p.pos]||'#8b1a1a'};border:1.5px solid ${db[p.pos]||'#ff4444'};color:#ffaaaa;border-radius:3px">${p.label.slice(0,2)}</div><span class="pname">${p.pos}·${p.label}</span><span class="ppnum">${routes.filter(r=>r.playerId===p.id).length}r</span>`;
+    d.onclick=()=>selP(p.id,'def');dl.appendChild(d);
+  });
+}
+
+function selP(id,side){
+  if(selId===id&&selSide===side){selId=null;selSide=null;}
+  else{selId=id;selSide=side;}
+  const mb=document.getElementById('mbadge');
+  mb.textContent=side==='def'?'DEFENSE':'OFFENSE';
+  mb.className='badge '+(side==='def'?'bd':'bo');
+  rebuildLists();drawAll();
+}
+
+function setLTab(t){
+  ['off','def','routes'].forEach(n=>{
+    const tab=document.getElementById('lt-'+n);
+    const con=document.getElementById('lc-'+n);
+    const active=n===t;
+    con.classList.toggle('vis',active);
+    tab.className='tab'+(active?' a-'+n:'');
+  });
+}
+
+function setTool(t){
+  tool=t;
+  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('ta','tad'));
+  const el=document.getElementById('t-'+t);
+  if(el) el.classList.add(['coverage','blitz','zone'].includes(t)?'tad':'ta');
+  canvas.style.cursor=t==='select'?'default':'crosshair';
+}
+
+// ─── FIELD ───────────────────────────────────────────────────────
+function drawField(){
+  for(let i=0;i<10;i++){ctx.fillStyle=i%2===0?'#244f18':'#224d16';ctx.fillRect(0,i*(H/10),W,H/10);}
+  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
+  for(let i=0;i<=10;i++){const y=i*(H/10);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
+  ctx.beginPath();ctx.moveTo(2,0);ctx.lineTo(2,H);ctx.stroke();
+  ctx.beginPath();ctx.moveTo(W-2,0);ctx.lineTo(W-2,H);ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=1;
+  for(let y=0;y<=H;y+=H/10) for(let x=W*.28;x<=W*.72;x+=10){ctx.beginPath();ctx.moveTo(x,y-4);ctx.lineTo(x,y+4);ctx.stroke();}
+  ctx.strokeStyle='rgba(255,220,0,.7)';ctx.lineWidth=2;ctx.setLineDash([8,5]);
+  ctx.beginPath();ctx.moveTo(0,LOS_Y);ctx.lineTo(W,LOS_Y);ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='rgba(255,220,0,.55)';ctx.font='10px Barlow Condensed';ctx.textAlign='left';
+  ctx.fillText('LINE OF SCRIMMAGE',7,LOS_Y-5);
+  ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(0,0,W,H*.06);
+  ctx.fillStyle='rgba(255,255,255,.06)';ctx.font='bold 18px Barlow Condensed';ctx.textAlign='center';
+  ctx.fillText('END ZONE',W/2,H*.048);ctx.textAlign='left';
+}
+
+function arrow(fx,fy,tx,ty,color){
+  const a=Math.atan2(ty-fy,tx-fx),s=9;
+  ctx.fillStyle=color;ctx.beginPath();
+  ctx.moveTo(tx,ty);ctx.lineTo(tx-s*Math.cos(a-.4),ty-s*Math.sin(a-.4));
+  ctx.lineTo(tx-s*Math.cos(a+.4),ty-s*Math.sin(a+.4));
+  ctx.closePath();ctx.fill();
+}
+
+function drawRoutes(){
+  routes.forEach(r=>{
+    if(r.points.length<2)return;
+    const color=rc[r.type]||'#fff';
+    ctx.strokeStyle=color;ctx.lineWidth=2.5;
+    ctx.setLineDash(['block','blitz'].includes(r.type)?[6,4]:[]);
+    ctx.beginPath();ctx.moveTo(r.points[0].x,r.points[0].y);
+    for(let i=1;i<r.points.length;i++) ctx.lineTo(r.points[i].x,r.points[i].y);
+    ctx.stroke();
+    const last=r.points[r.points.length-1],prev=r.points[r.points.length-2];
+    arrow(prev.x,prev.y,last.x,last.y,color);
+    ctx.setLineDash([]);
+  });
+  if(drawing&&dpts.length>1){
+    const color=rc[tool]||'#fff';
+    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.globalAlpha=.65;ctx.setLineDash([4,3]);
+    ctx.beginPath();ctx.moveTo(dpts[0].x,dpts[0].y);
+    for(let i=1;i<dpts.length;i++) ctx.lineTo(dpts[i].x,dpts[i].y);
+    ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
+  }
+}
+
+function drawGroup(group,useAnim){
+  group.forEach(p=>{
+    const px=useAnim?p.animX:p.x,py=useAnim?p.animY:p.y;
+    const isDef=p.side==='def',r=isDef?12:14;
+    const isSel=selId===p.id&&selSide===p.side;
+    const color=isDef?(dc[p.pos]||'#8b1a1a'):(oc[p.pos]||'#888');
+    const border=isDef?(db[p.pos]||'#ff4444'):null;
+    if(isSel){
+      ctx.beginPath();ctx.arc(px,py,r+6,0,Math.PI*2);
+      ctx.fillStyle=isDef?'rgba(255,80,80,.15)':'rgba(52,152,219,.15)';ctx.fill();
+    }
+    ctx.beginPath();ctx.arc(px+1.5,py+1.5,r,0,Math.PI*2);
+    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fill();
+    if(isDef){
+      ctx.fillStyle=color;ctx.fillRect(px-r,py-r,r*2,r*2);
+      ctx.strokeStyle=isSel?'#fff':(border||'#ff4444');ctx.lineWidth=isSel?2:1.5;
+      ctx.strokeRect(px-r,py-r,r*2,r*2);
+    } else {
+      ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
+      if(isSel){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.stroke();}
+    }
+    ctx.fillStyle=isDef?'#ffbbbb':'#000';
+    ctx.font='bold 9px Barlow Condensed';ctx.textAlign='center';ctx.textBaseline='middle';
+    ctx.fillText(p.label.slice(0,3),px,py);
+    ctx.textBaseline='alphabetic';ctx.textAlign='left';
+  });
+}
+
+function drawAll(useAnim){
+  ctx.clearRect(0,0,W,H);drawField();drawRoutes();
+  drawGroup(defPs,useAnim);drawGroup(offPs,useAnim);
+}
+
+// ─── INPUT ───────────────────────────────────────────────────────
+function cpos(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*(W/r.width),y:(e.clientY-r.top)*(H/r.height)};}
+
+function hitPlayer(x,y,rad=18){
+  const op=offPs.find(p=>Math.hypot(p.x-x,p.y-y)<rad);if(op)return{player:op,side:'off'};
+  const dp=defPs.find(p=>Math.hypot(p.x-x,p.y-y)<rad);if(dp)return{player:dp,side:'def'};
+  return null;
+}
+
+canvas.addEventListener('mousedown',e=>{
+  if(animating)return;
+  const pos=cpos(e);
+  if(tool==='select'){
+    const hit=hitPlayer(pos.x,pos.y);
+    if(hit){drag=hit.player;doff={x:pos.x-hit.player.x,y:pos.y-hit.player.y};selP(hit.player.id,hit.side);}
+    else{selId=null;selSide=null;rebuildLists();drawAll();}
+  } else {
+    if(!selId){setSt('Select a player first!','se');return;}
+    const all=[...offPs,...defPs];
+    const p=all.find(pp=>pp.id===selId);if(!p)return;
+    const defTools=['coverage','blitz','zone'];
+    const offTools=['run','block','motion'];
+    if(defTools.includes(tool)&&p.side!=='def'){setSt('Coverage/Blitz/Zone = defense only','se');return;}
+    if(offTools.includes(tool)&&p.side!=='off'){setSt('Run/Block/Motion = offense only','se');return;}
+    drawing=true;dpts=[{x:p.x,y:p.y}];
+  }
+});
+
+canvas.addEventListener('mousemove',e=>{
+  if(animating)return;
+  const pos=cpos(e);
+  if(drag){drag.x=pos.x-doff.x;drag.y=pos.y-doff.y;drag.ox=drag.x;drag.oy=drag.y;drawAll();return;}
+  if(drawing){dpts.push(pos);if(dpts.length>3)dpts=simp(dpts,5);drawAll();}
+});
+
+canvas.addEventListener('mouseup',e=>{
+  if(animating)return;
+  if(drag){drag=null;rebuildLists();drawAll();return;}
+  if(drawing){
+    drawing=false;
+    if(dpts.length>2){
+      const all=[...offPs,...defPs],p=all.find(pp=>pp.id===selId);
+      routes.push({playerId:selId,side:p.side,type:tool,points:simp(dpts,8)});
+      rebuildLists();setSt(`Route added for ${p?.label}`,'sk');
+    }
+    dpts=[];drawAll();
+  }
+});
+
+canvas.addEventListener('mouseleave',()=>{if(drawing){drawing=false;dpts=[];drawAll();}drag=null;});
+
+function simp(pts,md){
+  if(pts.length<=2)return pts;
+  const r=[pts[0]];
+  for(let i=1;i<pts.length;i++){const prev=r[r.length-1];if(Math.hypot(pts[i].x-prev.x,pts[i].y-prev.y)>=md)r.push(pts[i]);}
+  if(r[r.length-1]!==pts[pts.length-1])r.push(pts[pts.length-1]);
+  return r;
+}
+
+// ─── ROUTE ACTIONS ───────────────────────────────────────────────
+function clearORoutes(){routes=routes.filter(r=>r.side==='def');rebuildLists();drawAll();setSt('Off routes cleared','');}
+function clearDRoutes(){routes=routes.filter(r=>r.side==='off');rebuildLists();drawAll();setSt('Def routes cleared','');}
+function undoRoute(){if(routes.length){routes.pop();rebuildLists();drawAll();setSt('Undone','');}}
+
+// ─── ANIMATION ───────────────────────────────────────────────────
+function runPlay(){
+  if(animating)return;
+  if(!routes.length){setSt('Draw some routes first!','se');return;}
+  animating=true;
+  document.getElementById('pbtn').style.display='none';
+  document.getElementById('sbtn').style.display='';
+  setSt('▶ Running play...','sl');
+
+  const all=[...offPs,...defPs];
+  all.forEach(p=>{p.animX=p.x;p.animY=p.y;});
+
+  const motR=routes.filter(r=>r.type==='motion');
+  const mainR=routes.filter(r=>r.type!=='motion');
+
+  function bcd(pts){const d=[0];for(let i=1;i<pts.length;i++)d.push(d[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));return d;}
+  function gpt(pts,dists,t){
+    const total=dists[dists.length-1];if(total===0)return pts[0];
+    const target=t*total;
+    for(let i=1;i<dists.length;i++){if(dists[i]>=target){const seg=dists[i]-dists[i-1],frac=seg===0?0:(target-dists[i-1])/seg;return{x:pts[i-1].x+frac*(pts[i].x-pts[i-1].x),y:pts[i-1].y+frac*(pts[i].y-pts[i-1].y)};}}
+    return pts[pts.length-1];
+  }
+
+  const trks={},tdists={},mtrks={},mdists={};
+  all.forEach(p=>{
+    const pR=mainR.filter(r=>r.playerId===p.id);
+    let pts=[{x:p.x,y:p.y}];pR.forEach(r=>pts=pts.concat(r.points.slice(1)));
+    trks[p.id]=pts.length>1?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}];
+    tdists[p.id]=bcd(trks[p.id]);
+    const mR=motR.filter(r=>r.playerId===p.id);
+    let mpts=[];mR.forEach(r=>mpts=mpts.concat(r.points));
+    mtrks[p.id]=mpts.length>0?mpts:null;
+    if(mtrks[p.id])mdists[p.id]=bcd(mtrks[p.id]);
+  });
+
+  const MD=1200/spd,PD=2800/spd,SP=220;
+  const start=performance.now();
+  let phase=motR.length>0?'motion':'play',snapT=null,playS=null;
+
+  function animate(now){
+    if(!animating)return;
+    ctx.clearRect(0,0,W,H);drawField();drawRoutes();
+    if(phase==='motion'){
+      const t=Math.min((now-start)/MD,1);
+      all.forEach(p=>{if(mtrks[p.id]){const pt=gpt(mtrks[p.id],mdists[p.id],t);p.animX=pt.x;p.animY=pt.y;}else{p.animX=p.x;p.animY=p.y;}});
+      if(t>=1){phase='pause';snapT=now;all.forEach(p=>{if(mtrks[p.id]){p.x=p.animX;p.y=p.animY;}});}
+    } else if(phase==='pause'){
+      if(now-snapT>SP){phase='play';playS=now;
+        all.forEach(p=>{const pR=mainR.filter(r=>r.playerId===p.id);let pts=[{x:p.x,y:p.y}];pR.forEach(r=>pts=pts.concat(r.points.slice(1)));trks[p.id]=pts.length>1?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}];tdists[p.id]=bcd(trks[p.id]);});
+      }
+    } else {
+      const t=Math.min((now-(playS||start))/PD,1);
+      const e=t<.5?2*t*t:-1+(4-2*t)*t;
+      all.forEach(p=>{const pt=gpt(trks[p.id],tdists[p.id],e);p.animX=pt.x;p.animY=pt.y;});
+      if(t>=1){drawGroup(defPs,true);drawGroup(offPs,true);setTimeout(()=>stopPlay(true),600);return;}
+    }
+    drawGroup(defPs,true);drawGroup(offPs,true);
+    raf=requestAnimationFrame(animate);
+  }
+  raf=requestAnimationFrame(animate);
+}
+
+function stopPlay(fin){
+  animating=false;if(raf){cancelAnimationFrame(raf);raf=null;}
+  document.getElementById('pbtn').style.display='';
+  document.getElementById('sbtn').style.display='none';
+  const all=[...offPs,...defPs];all.forEach(p=>{p.animX=p.ox;p.animY=p.oy;p.x=p.ox;p.y=p.oy;});
+  drawAll();setSt(fin?'✓ Play complete!':'Play stopped.',fin?'sk':'');
+}
+
+function updSpeed(v){spd=parseFloat(v);document.getElementById('spv').textContent=v+'×';}
+function setSt(m,t){const el=document.getElementById('smsg');el.textContent=m;el.className='smsg'+(t?' '+t:'');}
+
+// ─── AI ──────────────────────────────────────────────────────────
+async function analyzePlay(){
+  const name=document.getElementById('pname').value||'Untitled Play';
+  const ob=document.querySelector('#off-fbtns .fbtn.ao'),db2=document.querySelector('#def-fbtns .fbtn.ad');
+  const oForm=ob?ob.textContent:'Unknown',dForm=db2?db2.textContent:'Unknown';
+
+  const oRoutes=routes.filter(r=>r.side==='off').map(r=>{
+    const p=offPs.find(pp=>pp.id===r.playerId);
+    const e=r.points[r.points.length-1],s=r.points[0];
+    const dir=(e.y-s.y)<-40?'deep':(e.y-s.y)<0?'short':'flat/crossing';
+    const side=(e.x-s.x)<-30?'left':(e.x-s.x)>30?'right':'middle';
+    return `${p?.pos}(${p?.label}): ${r.type} — ${dir} ${side}`;
+  }).join('\n');
+
+  const dRoutes=routes.filter(r=>r.side==='def').map(r=>{
+    const p=defPs.find(pp=>pp.id===r.playerId);return `${p?.pos}(${p?.label}): ${r.type}`;
+  }).join('\n');
+
+  const prompt=`You are an elite NFL analyst. Analyze this play matchup (5-6 sentences max):
+
+Play: "${name}"
+Offense: ${oForm}
+Off Routes:\n${oRoutes||'None drawn'}
+
+Defense: ${dForm}
+Def Assignments:\n${dRoutes||'None drawn'}
+
+Analyze: (1) offensive concept & primary route combo, (2) how defense is aligned vs it, (3) which routes beat the coverage, (4) where defense wins, (5) best adjustment for either side. Sharp, direct, real football terminology.`;
+
+  const box=document.getElementById('ai-resp');
+  box.textContent='Analyzing matchup...';box.className='ai-out';setSt('🤖 Analyzing...','sl');
+  try{
+    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
+    const data=await res.json();
+    const text=data.content?.find(b=>b.type==='text')?.text||'No response.';
+    box.textContent=text;box.className='ai-out';setSt('✓ Analysis complete.','sk');
+  } catch(err){box.textContent='Error: '+err.message;box.className='ai-out';setSt('AI error','se');}
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────
+loadOff('shotgun');
+loadDef('34');
+setTool('select');
+</script>
+</body>
+</html>
