@@ -244,6 +244,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
           <div class="chip"><span class="legend-line" style="background:#e74c3c"></span> Block</div>
           <div class="chip"><span class="legend-line" style="background:#3498db"></span> Motion</div>
           <div class="chip">🏈 Ball path</div>
+          <div class="chip"><span class="legend-line" style="background:#ff9090"></span> Def path</div>
         </div>
         <div class="divider"></div>
         <p class="hint" style="margin-top:7px">
@@ -254,7 +255,8 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
           <span class="kbd">Ctrl+Z</span> undo &nbsp;
           <span class="kbd">Ctrl+Y</span> redo &nbsp;
           <span class="kbd">P</span> play action<br><br>
-          Drag any player or defender at any time in Select mode. Defenders can also be dragged in Defense mode.
+          <b style="color:var(--gold)">Defender paths:</b> Click a defender to select them (red halo), then draw in any mode to set their custom movement path. Dashed red = custom path. Hit 👁 Preview AI to see AI reactions before running.<br><br>
+          Drag any player or defender at any time in Select mode.
         </p>
       </div>
     </div>
@@ -262,6 +264,25 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     <div class="section">
       <div class="label">🤖 Smart Coach</div>
       <div id="coach" class="coach">Generate a run scheme, pass protection, or defensive look — then click Coach for a full integrated breakdown with real matchup analysis, gap counts, coverage stress points, and coaching adjustments.</div>
+    </div>
+
+    <div class="section">
+      <div class="label">Defense Movement</div>
+      <p class="hint" style="margin-bottom:9px">Select a defender on the field, then draw their path in any draw mode. Or use AI reactions during animation.</p>
+      <select id="defReactionMode" class="select" style="margin-bottom:7px">
+        <option value="ai">AI Reactions (auto)</option>
+        <option value="custom">Custom Paths Only</option>
+        <option value="both">AI + Custom Overrides</option>
+      </select>
+      <div class="grid2">
+        <button class="btn full" onclick="clearDefPaths()">✕ Clear Def Paths</button>
+        <button class="btn full blue" onclick="previewDefReactions()">👁 Preview AI</button>
+      </div>
+    </div>
+
+    <div class="section">
+      <button class="btn red full" style="font-size:14px;padding:11px;letter-spacing:1px" onclick="hardReset()">↺ RESET EVERYTHING</button>
+      <p class="hint" style="margin-top:7px;text-align:center">Clears all routes, blocks, motions, resets formation and defense to default.</p>
     </div>
   </aside>
 </div>
@@ -277,7 +298,7 @@ const LOS = H * .62;
 
 let mode = 'select';
 let selected = { side: 'offense', id: null };
-let players = [], defenders = [], routes = [], blocks = [], motions = [];
+let players = [], defenders = [], routes = [], blocks = [], motions = [], defRoutes = [];
 let ballPath = null, drag = null, drawing = false, drawPts = [];
 let anim = false, raf = null;
 let currentFormation = 'Shotgun';
@@ -580,7 +601,7 @@ function loadCustomFormation(name) {
 // ─────────────────────────────────────────────
 function cloneState() {
   return JSON.parse(JSON.stringify({
-    currentFormation, players, defenders, routes, blocks, motions,
+    currentFormation, players, defenders, routes, blocks, motions, defRoutes,
     ballPath, selected, playName: document.getElementById('playName')?.value || ''
   }));
 }
@@ -591,6 +612,7 @@ function applyState(st) {
   players = st.players || []; defenders = st.defenders || [];
   routes = st.routes || []; blocks = st.blocks || [];
   motions = st.motions || []; ballPath = st.ballPath || null;
+  defRoutes = st.defRoutes || [];
   selected = st.selected || { side: 'offense', id: null };
   if (document.getElementById('playName')) document.getElementById('playName').value = st.playName || '';
   buildList(); renderEditor(); draw();
@@ -1338,6 +1360,8 @@ function renderEditor() {
     el.innerHTML = 'Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.';
     return;
   }
+  const isDef = selected.side === 'defense';
+  const hasCustomPath = isDef && defRoutes.some(r => r.did === p.id);
   el.className = '';
   el.innerHTML = `
     <div class="editor-grid">
@@ -1348,7 +1372,11 @@ function renderEditor() {
       <label>Color</label><input class="input" type="color" value="${p.color}" oninput="editSel('color',this.value)">
       <label>X / Y</label><input class="input" value="${Math.round(p.x)}, ${Math.round(p.y)}" onchange="setXY(this.value)">
     </div>
-    <button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete Player</button>`;
+    ${isDef ? `<div class="hint" style="margin-top:8px;padding:7px;background:#1a0a0a;border:1px solid #3a1818;border-radius:5px">
+      <span style="color:#ff9090;font-weight:700">Defender selected.</span> Switch to any draw mode (R/B/M) then draw on the field to set a custom movement path for this defender during animation.
+      ${hasCustomPath ? `<br><button class="btn red full" style="margin-top:6px;font-size:11px;padding:5px" onclick="clearOneDefPath(${p.id})">✕ Remove Custom Path</button>` : '<br><span style="color:var(--muted)">No custom path yet — AI reactions will apply.</span>'}
+    </div>` : ''}
+    <button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete ${isDef ? 'Defender' : 'Player'}</button>`;
 }
 
 function editSel(k, v) {
@@ -1460,8 +1488,18 @@ canvas.onmousedown = e => {
     return;
   }
 
+  // If a defender is selected, allow drawing their path in route/block/motion modes
+  if (selected.side === 'defense' && selected.id !== null) {
+    const d = defenders.find(x => x.id === selected.id);
+    if (d) {
+      drawing = true;
+      drawPts = [{ x: d.x, y: d.y }];
+      return;
+    }
+  }
+
   const p = obj();
-  if (!p || selected.side !== 'offense') { status('Select an offensive player first.', 'error'); return; }
+  if (!p || selected.side !== 'offense') { status('Select an offensive or defensive player first.', 'error'); return; }
   drawing = true;
   drawPts = [{ x: p.x, y: p.y }];
 };
@@ -1478,13 +1516,22 @@ canvas.onmouseup = e => {
   drawing = false;
   if (drawPts.length > 2) {
     pushHistory('Add assignment');
-    const type = mode === 'motion' ? 'motion' : mode === 'block' ? 'block' : 'route';
-    const arr = type === 'motion' ? motions : type === 'block' ? blocks : routes;
-    arr.push({ pid: selected.id, type, pts: simplify(drawPts, 9), manual: true });
-    const p = obj();
-    if (p) p.assignment = type === 'route' ? 'Manual route' : type === 'block' ? 'Manual block' : 'Pre-snap motion';
+    // If a defender is selected, save to defRoutes
+    if (selected.side === 'defense' && selected.id !== null) {
+      defRoutes = defRoutes.filter(r => r.did !== selected.id); // replace existing
+      defRoutes.push({ did: selected.id, pts: simplify(drawPts, 9), manual: true });
+      const d = defenders.find(x => x.id === selected.id);
+      if (d) d.assignment = 'Custom path drawn';
+      status('Defender path drawn. Will animate on Run.', 'success');
+    } else {
+      const type = mode === 'motion' ? 'motion' : mode === 'block' ? 'block' : 'route';
+      const arr = type === 'motion' ? motions : type === 'block' ? blocks : routes;
+      arr.push({ pid: selected.id, type, pts: simplify(drawPts, 9), manual: true });
+      const p = obj();
+      if (p) p.assignment = type === 'route' ? 'Manual route' : type === 'block' ? 'Manual block' : 'Pre-snap motion';
+      status('Assignment added.', 'success');
+    }
     buildList();
-    status('Assignment added.', 'success');
   }
   drawPts = []; draw();
 };
@@ -1504,7 +1551,216 @@ function simplify(pts, d) {
 }
 
 // ─────────────────────────────────────────────
-// ANIMATION ENGINE
+// DEFENSIVE REACTION AI
+// ─────────────────────────────────────────────
+function computeDefenderTracks() {
+  const reactionMode = document.getElementById('defReactionMode')?.value || 'ai';
+  const coverage = document.getElementById('coverage').value;
+  const front = document.getElementById('defFront').value;
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+
+  // Detect play type from routes/motions/ballPath
+  const hasRun = !!ballPath || routes.some(r => r.kind === 'carry');
+  const hasPass = routes.some(r => r.kind !== 'carry' && r.type === 'route');
+  const isPlayAction = routes.some(r => r.playAction) || motions.some(m => m.playAction);
+
+  // Determine run direction
+  let runDir = 0;
+  if (hasRun && ballPath && ballPath.length >= 2) {
+    runDir = ballPath[ballPath.length - 1].x > center.x ? 1 : -1;
+  }
+
+  const defTracks = {};
+
+  defenders.forEach(d => {
+    // 1. Check for manually drawn custom path first
+    const customPath = defRoutes.find(r => r.did === d.id);
+    if (customPath && (reactionMode === 'custom' || reactionMode === 'both')) {
+      defTracks[d.id] = customPath.pts;
+      return;
+    }
+    if (reactionMode === 'custom') {
+      // no AI, no custom = stay put
+      defTracks[d.id] = [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
+      return;
+    }
+
+    // 2. AI reaction based on role and play type
+    let pts = [{ x: d.x, y: d.y }];
+    const pos = d.pos;
+
+    if (pos === 'DL') {
+      if (hasRun) {
+        // Flow hard toward the run
+        const flowX = d.x + runDir * 45 + (d.x > center.x ? 12 : -12);
+        const flowY = d.y + 28; // downhill
+        pts.push({ x: d.x + runDir * 18, y: d.y + 10 });
+        pts.push({ x: flowX, y: flowY });
+      } else {
+        // Pass rush — drive upfield toward QB
+        const qb = players.find(p => p.pos === 'QB');
+        const targetX = qb ? qb.x + (d.x - qb.x) * 0.15 : d.x;
+        const targetY = qb ? qb.y - 8 : LOS + 50;
+        pts.push({ x: d.x + (d.x > center.x ? 18 : -18), y: d.y + 16 });
+        pts.push({ x: targetX, y: targetY });
+      }
+    } else if (pos === 'LB') {
+      if (hasRun) {
+        // Fill run gap — downhill to the hole
+        const fillX = center.x + runDir * 38 + (d.x - center.x) * 0.3;
+        const fillY = LOS + 15;
+        pts.push({ x: d.x + runDir * 20, y: d.y + 12 });
+        pts.push({ x: fillX, y: fillY });
+      } else if (isPlayAction) {
+        // LBs bite on run fake, then recover
+        pts.push({ x: d.x + runDir * 28, y: d.y + 14 }); // bite step
+        pts.push({ x: d.x + runDir * 10, y: d.y + 5 });  // recover
+        const dropX = getDropTarget(d, coverage, center).x;
+        const dropY = getDropTarget(d, coverage, center).y;
+        pts.push({ x: dropX, y: dropY });
+      } else {
+        // Drop into coverage zone
+        const drop = getDropTarget(d, coverage, center);
+        pts.push({ x: d.x, y: d.y - 8 }); // read step
+        pts.push({ x: drop.x, y: drop.y });
+      }
+    } else if (pos === 'CB') {
+      // Find nearest WR to cover
+      const nearestWR = findNearestReceiver(d, players);
+      if (nearestWR) {
+        const wrRoute = routes.find(r => r.pid === nearestWR.id && r.type === 'route');
+        if (wrRoute && wrRoute.pts && wrRoute.pts.length > 1) {
+          // Trail receiver through their route
+          const routeMid = wrRoute.pts[Math.floor(wrRoute.pts.length / 2)];
+          const routeEnd = wrRoute.pts[wrRoute.pts.length - 1];
+          if (coverage.includes('Man') || coverage.includes('Zero')) {
+            pts.push({ x: nearestWR.x + (d.x - nearestWR.x) * 0.4, y: nearestWR.y - 10 });
+            pts.push({ x: routeMid.x + (d.x - nearestWR.x) * 0.2, y: routeMid.y });
+            pts.push({ x: routeEnd.x, y: routeEnd.y + 12 }); // trail by 12px
+          } else {
+            // Zone — drop to coverage landmark
+            const drop = getCBZoneDrop(d, coverage, center);
+            pts.push({ x: d.x, y: d.y - 12 });
+            pts.push({ x: drop.x, y: drop.y });
+          }
+        } else {
+          // No route found — bail to zone landmark
+          const drop = getCBZoneDrop(d, coverage, center);
+          pts.push({ x: d.x, y: d.y - 12 });
+          pts.push({ x: drop.x, y: drop.y });
+        }
+      } else {
+        pts.push({ x: d.x, y: d.y - 20 });
+      }
+    } else if (pos === 'S') {
+      // Safety rotates based on coverage shell
+      const rotDrop = getSafetyDrop(d, coverage, center, hasRun, runDir);
+      pts.push({ x: d.x, y: d.y - 6 }); // read step
+      pts.push({ x: rotDrop.x, y: rotDrop.y });
+    }
+
+    defTracks[d.id] = pts.length > 1 ? pts : [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
+  });
+
+  return defTracks;
+}
+
+function findNearestReceiver(def, players) {
+  const receivers = players.filter(p => ['WR','TE','RB','FB'].includes(p.pos));
+  if (!receivers.length) return null;
+  return receivers.reduce((best, r) =>
+    Math.hypot(r.x - def.x, r.y - def.y) < Math.hypot(best.x - def.x, best.y - def.y) ? r : best
+  );
+}
+
+function getDropTarget(lb, coverage, center) {
+  const isLeft = lb.x < center.x;
+  if (coverage.includes('Cover 3') || coverage.includes('Tampa')) {
+    return { x: lb.x + (isLeft ? -20 : 20), y: lb.y - 55 };
+  } else if (coverage.includes('Cover 2')) {
+    return { x: lb.x + (isLeft ? -15 : 15), y: lb.y - 45 };
+  } else if (coverage.includes('Cover 4') || coverage.includes('Quarters')) {
+    return { x: lb.x, y: lb.y - 50 };
+  } else if (coverage.includes('Man') || coverage.includes('Zero')) {
+    // Man — LB finds his man (nearest back/TE)
+    return { x: lb.x + (isLeft ? -25 : 25), y: lb.y - 40 };
+  }
+  return { x: lb.x, y: lb.y - 45 };
+}
+
+function getCBZoneDrop(cb, coverage, center) {
+  const isLeft = cb.x < center.x;
+  const side = isLeft ? -1 : 1;
+  if (coverage.includes('Cover 3')) {
+    return { x: cb.x + side * 15, y: cb.y - 60 }; // third of field deep
+  } else if (coverage.includes('Cover 2') || coverage.includes('Tampa')) {
+    return { x: cb.x + side * 30, y: cb.y - 30 }; // flat/curl
+  } else if (coverage.includes('Cover 4') || coverage.includes('Quarters')) {
+    return { x: cb.x + side * 10, y: cb.y - 55 }; // quarter
+  } else if (coverage.includes('Cover 6')) {
+    return isLeft
+      ? { x: cb.x + side * 30, y: cb.y - 32 } // field side = cover 2 half
+      : { x: cb.x + side * 10, y: cb.y - 60 }; // boundary = cover 4 quarter
+  }
+  return { x: cb.x, y: cb.y - 50 };
+}
+
+function getSafetyDrop(s, coverage, center, hasRun, runDir) {
+  const isLeft = s.x < center.x;
+  if (hasRun) {
+    // Safety rotates down to support the run side
+    return { x: s.x + runDir * 60, y: s.y + 25 };
+  }
+  if (coverage.includes('Cover 3') || coverage.includes('Tampa')) {
+    // One deep middle safety
+    return { x: center.x + (isLeft ? -35 : 35), y: s.y - 30 };
+  } else if (coverage.includes('Cover 2')) {
+    // Two deep halves
+    return { x: s.x + (isLeft ? -20 : 20), y: s.y - 35 };
+  } else if (coverage.includes('Cover 4') || coverage.includes('Quarters')) {
+    return { x: s.x + (isLeft ? -15 : 15), y: s.y - 40 };
+  } else if (coverage.includes('Man Free')) {
+    // Single high free safety stays deep center
+    const isFree = s.label.includes('F') || s.label.includes('FS');
+    return isFree
+      ? { x: center.x, y: s.y - 25 }
+      : { x: s.x + runDir * 25, y: s.y + 10 }; // SS comes down
+  } else if (coverage.includes('Zero')) {
+    // Zero blitz — safety blitzes or covers down
+    return { x: s.x + (isLeft ? -30 : 30), y: s.y + 30 };
+  }
+  return { x: s.x, y: s.y - 25 };
+}
+
+// ─────────────────────────────────────────────
+// PREVIEW DEFENSIVE REACTIONS (without running play)
+// ─────────────────────────────────────────────
+function previewDefReactions() {
+  const all = [...motions, ...routes, ...blocks];
+  if (!all.length && !ballPath) { status('Generate an offensive play first to preview reactions.', 'error'); return; }
+  const tracks = computeDefenderTracks();
+  // Draw preview arrows on the field showing where each defender will go
+  defenders.forEach(d => {
+    const pts = tracks[d.id];
+    if (pts && pts.length > 1) {
+      d._previewPts = pts;
+    }
+  });
+  drawWithPreview(tracks);
+  status('Preview: AI reaction paths shown in red. Draw custom paths to override.', 'success');
+}
+
+function drawWithPreview(tracks) {
+  draw(); // normal draw first
+  if (!tracks) return;
+  defenders.forEach(d => {
+    const pts = tracks[d.id];
+    if (pts && pts.length > 1) drawPath(pts, '#ff5555', true, 1.8);
+  });
+}
+
+// ─────────────────────────────────────────────
+// ANIMATION ENGINE (offense + defense)
 // ─────────────────────────────────────────────
 function runPlay() {
   if (anim) return;
@@ -1517,8 +1773,10 @@ function runPlay() {
 
   let start = performance.now();
   players.forEach(p => { p.animX = p.x; p.animY = p.y; });
+  defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
 
-  const tracks = {};
+  // Build offensive tracks
+  const offTracks = {};
   players.forEach(p => {
     const playerActions = all.filter(a => a.pid === p.id);
     let pts = [];
@@ -1531,8 +1789,11 @@ function runPlay() {
       }
       pts = pts.concat(pts.length ? seg.slice(1) : seg);
     });
-    tracks[p.id] = pts.length ? pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+    offTracks[p.id] = pts.length ? pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
   });
+
+  // Build defensive tracks
+  const defTracks = computeDefenderTracks();
 
   function ptAt(pts, e) {
     if (pts.length < 2) return pts[0] || { x: 0, y: 0 };
@@ -1544,21 +1805,27 @@ function runPlay() {
 
   function step(t) {
     const prog = Math.min((t - start) / 3400, 1);
-    const e = prog < .5 ? 2 * prog * prog : -1 + (4 - 2 * prog) * prog; // ease in-out
-    players.forEach(p => { const pt = ptAt(tracks[p.id], e); p.animX = pt.x; p.animY = pt.y; });
+    const e = prog < .5 ? 2 * prog * prog : -1 + (4 - 2 * prog) * prog;
+    players.forEach(p => { const pt = ptAt(offTracks[p.id], e); p.animX = pt.x; p.animY = pt.y; });
+    defenders.forEach(d => {
+      const pts = defTracks[d.id] || [{ x: d.x, y: d.y }];
+      const pt = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], e);
+      d.animX = pt.x; d.animY = pt.y;
+    });
     draw();
     if (prog < 1) raf = requestAnimationFrame(step);
     else setTimeout(() => stopPlay(true), 500);
   }
 
   raf = requestAnimationFrame(step);
-  status('Running 11-player animation...', 'loading');
+  status('Running full 22-player animation...', 'loading');
 }
 
 function stopPlay(done = false) {
   anim = false;
   if (raf) cancelAnimationFrame(raf);
   players.forEach(p => { p.animX = p.x; p.animY = p.y; });
+  defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
   draw();
@@ -1575,8 +1842,11 @@ function draw() {
   drawLines(routes, '#f5c842', false);
   drawLines(blocks, '#e74c3c', true);
   if (ballPath) drawPath(ballPath, '#d8892b', false, 5);
+  // Draw defender custom paths (white/ghost color, dashed)
+  defRoutes.forEach(dr => drawPath(dr.pts, '#ff9090', true, 2.2));
   if (drawing && drawPts.length > 1) {
-    drawPath(drawPts, mode === 'block' ? '#e74c3c' : mode === 'motion' ? '#3498db' : '#f5c842', true, 2);
+    const isDefDraw = selected.side === 'defense' && selected.id !== null;
+    drawPath(drawPts, isDefDraw ? '#ff9090' : mode === 'block' ? '#e74c3c' : mode === 'motion' ? '#3498db' : '#f5c842', true, 2);
   }
   drawPeople(defenders, true);
   drawPeople(players, false);
@@ -1713,7 +1983,7 @@ function serialize() {
   return {
     name: document.getElementById('playName').value || 'Untitled Play',
     formation: currentFormation, players, defenders,
-    routes, blocks, motions, ballPath, date: Date.now()
+    routes, blocks, motions, defRoutes, ballPath, date: Date.now()
   };
 }
 
@@ -1741,6 +2011,7 @@ function loadSaved(i) {
   players = p.players || []; defenders = p.defenders || [];
   routes = p.routes || []; blocks = p.blocks || [];
   motions = p.motions || []; ballPath = p.ballPath || null;
+  defRoutes = p.defRoutes || [];
   currentFormation = p.formation || currentFormation;
   document.getElementById('playName').value = p.name;
   selected = { side: 'offense', id: null };
@@ -1755,11 +2026,42 @@ function copyJSON() {
   } catch (e) { status('Copy failed — use Save instead.', 'error'); }
 }
 
+function clearDefPaths() {
+  pushHistory('Clear def paths');
+  defRoutes = [];
+  defenders.forEach(d => {
+    if (d.assignment === 'Custom path drawn') d.assignment = document.getElementById('coverage').value;
+  });
+  draw();
+  status('Defender custom paths cleared.', 'success');
+}
+
+function clearOneDefPath(did) {
+  pushHistory('Clear one def path');
+  defRoutes = defRoutes.filter(r => r.did !== did);
+  const d = defenders.find(x => x.id === did);
+  if (d && d.assignment === 'Custom path drawn') d.assignment = document.getElementById('coverage').value;
+  renderEditor(); draw();
+  status('Custom path removed — AI reactions will apply.', 'success');
+}
+
 function resetAll() {
   pushHistory('Reset all');
-  routes = []; blocks = []; motions = []; ballPath = null;
+  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = [];
   loadFormation(currentFormation);
   autoDefense();
+}
+
+function hardReset() {
+  if (!confirm('Reset everything? This will clear all routes, blocks, motions, formation, and defense.')) return;
+  historyStack = []; redoStack = [];
+  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = [];
+  selected = { side: 'offense', id: null };
+  document.getElementById('playName').value = '';
+  loadFormation('Shotgun');
+  autoDefense();
+  coach('Reset complete. Pick a formation and generate a new play.');
+  status('Everything reset.', 'success');
 }
 
 function exportPNG() {
