@@ -1998,9 +1998,14 @@ function runPlay() {
       pPlay.forEach(a => {
         let seg = a.pts && a.pts.length ? a.pts : [startPos, startPos];
         if (a.type === 'block') {
+          // Preserve ALL intermediate waypoints — only append the settle nudge at the end
           const last = seg[seg.length - 1];
-          const settle = { x: last.x + (last.x - seg[0].x) * .15, y: last.y + (last.y - seg[0].y) * .15 };
-          seg = [seg[0], last, settle];
+          const prev = seg.length >= 2 ? seg[seg.length - 2] : seg[0];
+          const settle = {
+            x: last.x + (last.x - prev.x) * .15,
+            y: last.y + (last.y - prev.y) * .15
+          };
+          seg = [...seg, settle]; // full path + settle, no points dropped
         }
         pts = pts.concat(seg.slice(1));
       });
