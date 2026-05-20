@@ -98,7 +98,8 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     <div class="section" data-coach="offense">
       <div class="label">Formation Library</div>
       <div class="grid2" id="formationBtns"></div>
-      <div class="grid2" style="margin-top:8px">
+      <div class="grid3" style="margin-top:8px">
+        <button class="btn full" id="btn-flip" onclick="flipFormation()">⇄ Flip →</button>
         <button class="btn full" onclick="saveFormation()">💾 Save</button>
         <button class="btn full" onclick="refreshFormations()">↻ Refresh</button>
       </div>
@@ -115,9 +116,9 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn" id="mode-block" onclick="setMode('block')" title="Draw block (B)">🟥</button>
         <button class="btn" id="mode-ball" onclick="setMode('ball')" title="Set RB aiming point">🏈</button>
         <button class="btn" id="mode-def" onclick="setMode('def')" title="Move defenders (D)">🛡</button>
-        <button class="btn" id="mode-motion" onclick="setMode('motion')" title="Draw motion">➡</button>
+        <button class="btn" id="mode-motion" onclick="setMode('motion')" title="Draw pre-snap motion (M)">➡</button>
       </div>
-      <p class="hint" style="margin-top:7px">Select a player first, then draw. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">D</span> def · <span class="kbd">S</span> select</p>
+      <p class="hint" style="margin-top:7px">Select a player first, then draw. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">M</span> motion · <span class="kbd">D</span> def · <span class="kbd">S</span> select</p>
     </div>
 
     <div class="section" data-coach="offense">
@@ -167,9 +168,9 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
       <div class="label">Defense AI</div>
       <select id="defFront" class="select">
         <option>4-3 Over</option><option>4-3 Under</option>
-        <option>3-4 Odd</option><option>Nickel 2-4-5</option>
-        <option>Bear Front</option><option>Goal Line</option>
-        <option>Dime</option><option>Quarter</option>
+        <option>3-4 Odd</option><option>5-2</option>
+        <option>Nickel 2-4-5</option><option>Bear Front</option>
+        <option>Goal Line</option><option>Dime</option><option>Quarter</option>
       </select>
       <select id="coverage" class="select" style="margin-top:6px">
         <option>Cover 3</option><option>Cover 2</option>
@@ -214,6 +215,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn green" onclick="savePlay()" title="Download .pdpro save file">💾 Save</button>
         <button class="btn blue" onclick="openPlayFile()" title="Open .pdpro save file">📂 Open</button>
         <button class="btn" onclick="exportPNG()" title="Download PNG image">📸 PNG</button>
+        <button class="btn" onclick="exportVideo()" title="Record animation as .webm video (Chrome/Edge)">🎬 Video</button>
         <button class="btn" onclick="resetAll()" title="Reset routes/blocks, keep formation">↺ Reset</button>
         <button class="btn red" onclick="hardReset()" title="Reset everything including formation">⬛ Full Reset</button>
       </div>
@@ -276,13 +278,16 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <p class="hint" style="margin-top:7px">
           <span class="kbd">R</span> draw route &nbsp;
           <span class="kbd">B</span> draw block &nbsp;
+          <span class="kbd">M</span> pre-snap motion &nbsp;
           <span class="kbd">D</span> move defenders &nbsp;
           <span class="kbd">S</span> select/move<br><br>
           <span class="kbd">Ctrl+Z</span> undo &nbsp;
           <span class="kbd">Ctrl+Y</span> redo &nbsp;
-          <span class="kbd">P</span> play action<br><br>
-          <b style="color:var(--gold)">Defender paths:</b> Click a defender to select them (red halo), then draw in any mode to set their custom movement path. Dashed red = custom path. Hit 👁 Preview AI to see AI reactions before running.<br><br>
-          Drag any player or defender at any time in Select mode.
+          <span class="kbd">P</span> play action &nbsp;
+          <span class="kbd">Space</span> run/stop<br><br>
+          <b style="color:var(--gold)">⇄ Flip:</b> Mirrors the entire formation left↔right. All routes, blocks, and motion paths flip with it. Works on any formation at any time.<br><br>
+          <b style="color:var(--gold)">Motion timing:</b> Pre-snap motion (blue lines) plays out first before the snap, then the play unfolds. QB reaches position faster than skill players.<br><br>
+          <b style="color:var(--gold)">Defender paths:</b> Select a defender, draw in any mode to set a custom path. Dashed red = custom path.
         </p>
       </div>
     </div>
@@ -330,6 +335,7 @@ let players = [], defenders = [], routes = [], blocks = [], motions = [], defRou
 let ballPath = null, drag = null, drawing = false, drawPts = [];
 let anim = false, raf = null;
 let currentFormation = 'Shotgun';
+let flipped = false;
 let historyStack = [], redoStack = [];
 let suspendHistory = false;
 let coordinatorSide = 'offense';
@@ -375,31 +381,19 @@ const formations = {
 'Empty 5-Wide': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
   ['QB','QB',.50,.74],
-  ['X','WR',.06,.62],['H','WR',.18,.64],['Y','WR',.50,.80],['F','WR',.82,.64],['Z','WR',.94,.62]
+  ['X','WR',.06,.62],['H','WR',.20,.64],['Y','WR',.50,.64],['F','WR',.80,.64],['Z','WR',.94,.62]
 ],
 'Trips Right': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
   ['QB','QB',.50,.74],['RB','RB',.42,.79],
   ['X','WR',.07,.62],
-  ['Y','TE',.80,.63],['H','WR',.88,.65],['Z','WR',.96,.62]
-],
-'Trips Left': [
-  ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
-  ['QB','QB',.50,.74],['RB','RB',.58,.79],
-  ['Z','WR',.93,.62],
-  ['X','WR',.04,.62],['H','WR',.12,.65],['Y','TE',.20,.63]
+  ['Y','TE',.77,.63],['H','WR',.86,.65],['Z','WR',.94,.62]
 ],
 'Bunch Right': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
   ['QB','QB',.50,.74],['RB','RB',.42,.79],
   ['X','WR',.07,.62],
-  ['Y','TE',.80,.63],['H','WR',.88,.69],['Z','WR',.93,.57]
-],
-'Bunch Left': [
-  ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
-  ['QB','QB',.50,.74],['RB','RB',.58,.79],
-  ['Z','WR',.93,.62],
-  ['X','WR',.07,.57],['H','WR',.12,.69],['Y','TE',.20,.63]
+  ['Y','TE',.78,.63],['H','WR',.86,.70],['Z','WR',.92,.56]
 ],
 'Ace 12': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
@@ -410,7 +404,7 @@ const formations = {
 'Wing-T': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
   ['QB','QB',.50,.68],['FB','FB',.50,.76],
-  ['HB','RB',.38,.81],['WB','RB',.79,.65],
+  ['HB','RB',.42,.82],['WB','RB',.79,.65],
   ['X','WR',.08,.62],['Y','TE',.80,.63]
 ],
 'Flexbone': [
@@ -421,8 +415,8 @@ const formations = {
 ],
 'Power I': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
-  ['QB','QB',.50,.68],['FB','FB',.50,.73],
-  ['HB','RB',.50,.82],['TB','RB',.50,.90],
+  ['QB','QB',.50,.67],['FB','FB',.50,.76],
+  ['HB','RB',.50,.85],['TB','RB',.50,.93],
   ['X','WR',.08,.62],['Y','TE',.82,.63]
 ],
 'Wildcat': [
@@ -434,7 +428,7 @@ const formations = {
 'Beast Heavy': [
   ['LT','OL',.22,.62],['LG','OL',.33,.62],['C','OL',.44,.62],['RG','OL',.55,.62],['RT','OL',.66,.62],
   ['TE','TE',.77,.63],['WB','RB',.86,.66],
-  ['QB','QB',.50,.69],['FB','FB',.57,.77],['RB','RB',.65,.84],
+  ['QB','QB',.44,.69],['FB','FB',.50,.77],['RB','RB',.58,.84],
   ['X','WR',.07,.62]
 ],
 'Singleback 2TE': [
@@ -486,6 +480,12 @@ const defTemplates = {
   ['LB','LB',.50,.43],
   ['CB','CB',.06,.34],['CB','CB',.94,.34],['NB','CB',.22,.36],['DB','CB',.78,.36],
   ['FS','S',.41,.22],['SS','S',.61,.24]
+],
+'5-2': [
+  ['LE','DL',.24,.53],['LT','DL',.35,.52],['NT','DL',.50,.51],['RT','DL',.65,.52],['RE','DL',.76,.53],
+  ['WILL','LB',.38,.43],['MIKE','LB',.62,.43],
+  ['CB','CB',.07,.35],['CB','CB',.93,.35],
+  ['FS','S',.50,.22],['SS','S',.65,.30]
 ],
 'Quarter': [
   ['DT','DL',.44,.52],['DT','DL',.56,.52],
@@ -558,13 +558,61 @@ function mkPlayer(arr, i) {
 function loadFormation(f) {
   if (players.length && !suspendHistory) pushHistory('Load formation');
   currentFormation = f;
+  flipped = false;
   players = normalizeSpacing(formations[f].map(mkPlayer));
-  routes = []; blocks = []; motions = []; ballPath = null;
+  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = [];
   selected = { side: 'offense', id: null };
   document.querySelectorAll('#formationBtns .btn').forEach(b =>
     b.classList.toggle('active', b.textContent.trim() === f));
+  updateFlipButton();
   buildList(); renderEditor(); draw();
   status('Loaded ' + f + '.', 'success');
+}
+
+// Mirror an x-coordinate around the field center
+function mirrorX(x) { return W - x; }
+
+// Flip all x-coordinates in a points array
+function flipPts(pts) {
+  if (!pts) return pts;
+  const result = pts.map(p => ({ ...p, x: mirrorX(p.x) }));
+  // Preserve throw-arc metadata
+  if (pts._isThrow)    result._isThrow    = pts._isThrow;
+  if (pts._throwDelay) result._throwDelay = pts._throwDelay;
+  if (pts._targetId)   result._targetId   = pts._targetId;
+  return result;
+}
+
+function flipFormation() {
+  if (anim) return;
+  pushHistory('Flip formation');
+  flipped = !flipped;
+
+  // Mirror all player x positions
+  players.forEach(p => {
+    p.x  = mirrorX(p.x);  p.ox  = p.x;  p.animX = p.x;
+  });
+  // Mirror all defender x positions
+  defenders.forEach(d => {
+    d.x  = mirrorX(d.x);  d.ox  = d.x;  d.animX = d.x;
+  });
+  // Mirror all path data
+  routes.forEach(r   => { r.pts = flipPts(r.pts); });
+  blocks.forEach(b   => { b.pts = flipPts(b.pts); });
+  motions.forEach(m  => { m.pts = flipPts(m.pts); });
+  defRoutes.forEach(r => { r.pts = flipPts(r.pts); });
+  if (ballPath) ballPath = flipPts(ballPath);
+
+  updateFlipButton();
+  buildList(); draw();
+  status('Formation flipped ' + (flipped ? '← left' : '→ right') + '.', 'success');
+}
+
+function updateFlipButton() {
+  const btn = document.getElementById('btn-flip');
+  if (!btn) return;
+  btn.textContent = flipped ? '⇄ Flip ←' : '⇄ Flip →';
+  btn.classList.toggle('active', flipped);
 }
 
 function refreshFormations() {
@@ -611,7 +659,7 @@ function loadCustomFormation(name) {
 // ─────────────────────────────────────────────
 function cloneState() {
   return JSON.parse(JSON.stringify({
-    currentFormation, players, defenders, routes, blocks, motions, defRoutes,
+    currentFormation, flipped, players, defenders, routes, blocks, motions, defRoutes,
     ballPath, selected, playName: document.getElementById('playName')?.value || ''
   }));
 }
@@ -619,12 +667,14 @@ function cloneState() {
 function applyState(st) {
   suspendHistory = true;
   currentFormation = st.currentFormation || currentFormation;
+  flipped = st.flipped || false;
   players = st.players || []; defenders = st.defenders || [];
   routes = st.routes || []; blocks = st.blocks || [];
   motions = st.motions || []; ballPath = st.ballPath || null;
   defRoutes = st.defRoutes || [];
   selected = st.selected || { side: 'offense', id: null };
   if (document.getElementById('playName')) document.getElementById('playName').value = st.playName || '';
+  updateFlipButton();
   buildList(); renderEditor(); draw();
   suspendHistory = false;
 }
@@ -736,9 +786,13 @@ function suggestDefense() {
     reasons.push('Spread sets with 4 WRs force at least 5 DBs — nickel with zone is the base answer');
     counters.push('Fire zones (3-under, 3-deep) let you generate pressure while keeping 3 deep zones');
   } else if (o.heavy) {
-    front = 'Bear Front'; cov = 'Cover 3';
-    reasons.push('Heavy / 2-TE / FB sets threaten power run — Bear front fills all A/B gaps and takes away inside zone');
-    counters.push('Walk SS into box pre-snap, hold CB alignment to keep pitch responsibility vs. bootleg');
+    front = '5-2'; cov = 'Cover 2';
+    reasons.push('Heavy / 2-TE / FB sets are run-first — 5-2 fills every gap with a down lineman and keeps 2 LBs free to flow to the ball');
+    counters.push('WILL and MIKE must stay clean — block the offensive line, let them find the ball carrier. SS in the box as the 8th run defender');
+  } else if (currentFormation.includes('Power') || currentFormation.includes('Beast')) {
+    front = '5-2'; cov = 'Man Free';
+    reasons.push('Power/Beast formations demand a loaded box — 5-2 with a Monster SS gives 8 men in the box before the snap');
+    counters.push('Declare gap responsibility pre-snap for all 5 DL — no freelancing. The 2 LBs are your first and second level run stoppers');
   } else if (currentFormation.includes('Flexbone') || currentFormation.includes('Wing') || currentFormation.includes('Wildcat') || currentFormation.includes('Option')) {
     front = '3-4 Odd'; cov = 'Man Free';
     reasons.push('Option/Wing-T requires assignment-sound run fits — 3-4 gives flexible force players to each side');
@@ -1864,83 +1918,171 @@ function drawWithPreview(tracks) {
 }
 
 // ─────────────────────────────────────────────
-// ANIMATION ENGINE (offense + defense)
+// ANIMATION ENGINE — two-phase: motion → snap → play
+// QB runs at 1.4× speed to reach position first
 // ─────────────────────────────────────────────
 function runPlay() {
   if (anim) return;
-  const all = [...motions, ...routes, ...blocks];
-  if (!all.length) { status('Add routes, blocking, or a ball path first.', 'error'); return; }
+  const allActions = [...motions, ...routes, ...blocks];
+  if (!allActions.length) { status('Add routes, blocking, or a ball path first.', 'error'); return; }
 
   anim = true;
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.add('active');
 
-  let start = performance.now();
-  players.forEach(p => { p.animX = p.x; p.animY = p.y; });
-  defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
+  // ── Phase split ──────────────────────────────
+  // If there are any motion paths, Phase 1 = motion only (0 → MOTION_END)
+  // Phase 2 = routes + blocks + ball (MOTION_END → 1.0)
+  const hasMotion = motions.length > 0;
+  const MOTION_END = hasMotion ? 0.28 : 0; // 28% of total time for pre-snap motion
+  const PLAY_START = MOTION_END;
+  const TOTAL_MS   = hasMotion ? 4200 : 3400;
 
-  // Build offensive tracks
-  const offTracks = {};
+  let start = performance.now();
+  players.forEach(p  => { p.animX  = p.x;  p.animY  = p.y;  });
+  defenders.forEach(d => { d.animX  = d.x;  d.animY  = d.y;  });
+
+  // ── Build offensive tracks ───────────────────
+  // Separate motion tracks from play tracks
+  const motionTracks = {}; // pid → pts (pre-snap motion path)
+  const playTracks   = {}; // pid → pts (post-snap play path)
+
   players.forEach(p => {
-    const playerActions = all.filter(a => a.pid === p.id);
-    let pts = [];
-    playerActions.forEach(a => {
-      let seg = a.pts && a.pts.length ? a.pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
-      if (a.type === 'block') {
-        const last = seg[seg.length - 1];
-        const settle = { x: last.x + (last.x - seg[0].x) * .15, y: last.y + (last.y - seg[0].y) * .15 };
-        seg = [seg[0], last, settle];
-      }
-      pts = pts.concat(pts.length ? seg.slice(1) : seg);
-    });
-    offTracks[p.id] = pts.length ? pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+    const pMotions = motions.filter(a => a.pid === p.id);
+    const pPlay    = [...routes, ...blocks].filter(a => a.pid === p.id);
+
+    // Motion track: just the motion path
+    if (pMotions.length) {
+      let pts = [];
+      pMotions.forEach(a => {
+        const seg = a.pts && a.pts.length ? a.pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+        pts = pts.concat(pts.length ? seg.slice(1) : seg);
+      });
+      motionTracks[p.id] = pts;
+    }
+
+    // Play track: routes + blocks, starting from end of motion (or original position)
+    const startPos = motionTracks[p.id]
+      ? motionTracks[p.id][motionTracks[p.id].length - 1]
+      : { x: p.x, y: p.y };
+
+    if (pPlay.length) {
+      let pts = [startPos];
+      pPlay.forEach(a => {
+        let seg = a.pts && a.pts.length ? a.pts : [startPos, startPos];
+        if (a.type === 'block') {
+          const last = seg[seg.length - 1];
+          const settle = { x: last.x + (last.x - seg[0].x) * .15, y: last.y + (last.y - seg[0].y) * .15 };
+          seg = [seg[0], last, settle];
+        }
+        pts = pts.concat(seg.slice(1));
+      });
+      playTracks[p.id] = pts;
+    } else {
+      // No play action — hold at motion end position
+      playTracks[p.id] = [startPos, startPos];
+    }
   });
 
-  // Build defensive tracks
+  // ── Defensive tracks ────────────────────────
   const defTracks = computeDefenderTracks();
 
-  // Check if this is a play-action with a throw arc
+  // ── Throw arc ───────────────────────────────
   const isThrowPlay = ballPath && ballPath._isThrow;
   const throwDelay  = isThrowPlay ? (ballPath._throwDelay || 0.58) : 0;
+  let footballPos   = null;
 
-  // Football in-air position (null = not in flight yet)
-  let footballPos = null;
+  // ── Per-player speed profiles ────────────────
+  // QB completes his full track at 62% of play phase progress.
+  // Map playRaw 0→0.62 to QB progress 0→1, hold at 1 after.
+  // OL completes blocks early too (they fire off the ball fast).
+  // All others run full 0→1 duration.
+  const QB_COMPLETE_AT  = 0.62; // QB done at 62% of play phase
+  const OL_COMPLETE_AT  = 0.75; // OL fires and settles early
+
+  function playerProgress(p, playRaw) {
+    const isQB = p.pos === 'QB' || p.label === 'QB';
+    const isOL = p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label);
+    if (isQB) return Math.min(playRaw / QB_COMPLETE_AT, 1.0);
+    if (isOL) return Math.min(playRaw / OL_COMPLETE_AT, 1.0);
+    return playRaw;
+  }
 
   function ptAt(pts, e) {
-    if (pts.length < 2) return pts[0] || { x: 0, y: 0 };
-    const idx = Math.min(pts.length - 2, Math.floor(e * (pts.length - 1)));
-    const local = (e * (pts.length - 1)) - idx;
+    if (!pts || pts.length < 2) return pts ? pts[0] : { x: 0, y: 0 };
+    const clamped = Math.max(0, Math.min(1, e));
+    const idx   = Math.min(pts.length - 2, Math.floor(clamped * (pts.length - 1)));
+    const local = (clamped * (pts.length - 1)) - idx;
     const a = pts[idx], b = pts[idx + 1] || a;
     return { x: a.x + (b.x - a.x) * local, y: a.y + (b.y - a.y) * local };
   }
 
-  function step(t) {
-    const prog = Math.min((t - start) / 3400, 1);
-    const e = prog < .5 ? 2 * prog * prog : -1 + (4 - 2 * prog) * prog;
+  function easeInOut(t) {
+    return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+  }
 
-    players.forEach(p => { const pt = ptAt(offTracks[p.id], e); p.animX = pt.x; p.animY = pt.y; });
+  function step(t) {
+    const raw  = Math.min((t - start) / TOTAL_MS, 1);
+    const e    = easeInOut(raw);
+
+    players.forEach(p => {
+      if (hasMotion && raw < MOTION_END) {
+        // ── Phase 1: Motion only ──
+        const motE = easeInOut(raw / MOTION_END);
+        if (motionTracks[p.id]) {
+          const pt = ptAt(motionTracks[p.id], motE);
+          p.animX = pt.x; p.animY = pt.y;
+        }
+        // Everyone else holds position during motion phase
+      } else {
+        // ── Phase 2: Play unfolds ──
+        const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
+        const pProg   = playerProgress(p, playRaw);
+        const playerE = easeInOut(pProg);
+        const pt = ptAt(playTracks[p.id], playerE);
+        p.animX = pt.x; p.animY = pt.y;
+      }
+    });
+
+    // Defenders only move in play phase
     defenders.forEach(d => {
-      const pts = defTracks[d.id] || [{ x: d.x, y: d.y }];
-      const pt = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], e);
+      if (hasMotion && raw < MOTION_END) return; // hold during motion
+      const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
+      const defE    = easeInOut(playRaw);
+      const pts     = defTracks[d.id] || [{ x: d.x, y: d.y }];
+      const pt      = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], defE);
       d.animX = pt.x; d.animY = pt.y;
     });
 
-    // Throw arc: compute football position after the throw delay
-    if (isThrowPlay && prog >= throwDelay) {
-      const throwT = Math.min((prog - throwDelay) / (1 - throwDelay), 1);
-      const p0 = ballPath[0], p1 = ballPath[1], p2 = ballPath[2];
-      footballPos = arcPt(p0, p1, p2, throwT);
-    } else {
-      footballPos = null;
+    // Throw arc (only in play phase)
+    if (isThrowPlay) {
+      const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
+      if (playRaw >= throwDelay) {
+        const throwT = Math.min((playRaw - throwDelay) / (1 - throwDelay), 1);
+        const p0 = ballPath[0], p1 = ballPath[1], p2 = ballPath[2];
+        footballPos = arcPt(p0, p1, p2, throwT);
+      } else {
+        footballPos = null;
+      }
     }
 
     drawFrame(footballPos);
-    if (prog < 1) raf = requestAnimationFrame(step);
+
+    // Show "SET" pause text briefly at snap moment
+    if (hasMotion && raw >= MOTION_END - 0.02 && raw <= MOTION_END + 0.02) {
+      ctx.fillStyle = 'rgba(255,220,0,0.85)';
+      ctx.font = '900 18px Barlow Condensed';
+      ctx.textAlign = 'center';
+      ctx.fillText('SET — HIKE', W / 2, LOS - 14);
+      ctx.textAlign = 'left';
+    }
+
+    if (raw < 1) raf = requestAnimationFrame(step);
     else setTimeout(() => stopPlay(true), 500);
   }
 
   raf = requestAnimationFrame(step);
-  status('Running full 22-player animation...', 'loading');
+  status(hasMotion ? 'Motion → snap → play animation running...' : 'Running play animation...', 'loading');
 }
 
 function stopPlay(done = false) {
@@ -1950,8 +2092,10 @@ function stopPlay(done = false) {
   defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
+  // Stop recording if active — triggers saveVideoFile via onstop
+  if (isRecording) stopVideoRecording();
   drawFrame(null);
-  status(done ? 'Play animation complete.' : 'Stopped.', done ? 'success' : '');
+  if (!isRecording) status(done ? 'Play animation complete.' : 'Stopped.', done ? 'success' : '');
 }
 
 // ─────────────────────────────────────────────
@@ -2177,7 +2321,7 @@ function serialize() {
   return {
     version: 7,
     name: document.getElementById('playName').value || 'Untitled Play',
-    formation: currentFormation,
+    formation: currentFormation, flipped,
     players, defenders, routes, blocks, motions, defRoutes,
     ballPath: bp,
     date: Date.now()
@@ -2193,6 +2337,7 @@ function deserialize(data) {
   motions      = data.motions      || [];
   defRoutes    = data.defRoutes    || [];
   currentFormation = data.formation || 'Shotgun';
+  flipped      = data.flipped      || false;
 
   // Restore ballPath with throw metadata
   if (data.ballPath) {
@@ -2209,6 +2354,7 @@ function deserialize(data) {
 
   document.getElementById('playName').value = data.name || '';
   selected = { side: 'offense', id: null };
+  updateFlipButton();
   buildList(); renderEditor(); draw();
 }
 
@@ -2349,6 +2495,72 @@ function exportPNG() {
 }
 
 // ─────────────────────────────────────────────
+// VIDEO EXPORT — MediaRecorder → WebM download
+// ─────────────────────────────────────────────
+let mediaRecorder = null;
+let recordedChunks = [];
+let isRecording = false;
+
+function startVideoRecording() {
+  if (!canvas.captureStream) {
+    status('Video recording not supported in this browser. Use Chrome or Edge.', 'error');
+    return false;
+  }
+  try {
+    recordedChunks = [];
+    const stream = canvas.captureStream(30); // 30fps
+    const options = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? { mimeType: 'video/webm;codecs=vp9' }
+      : MediaRecorder.isTypeSupported('video/webm')
+        ? { mimeType: 'video/webm' }
+        : {};
+    mediaRecorder = new MediaRecorder(stream, options);
+    mediaRecorder.ondataavailable = e => { if (e.data.size > 0) recordedChunks.push(e.data); };
+    mediaRecorder.onstop = () => saveVideoFile();
+    mediaRecorder.start(100); // collect chunks every 100ms
+    isRecording = true;
+    return true;
+  } catch (err) {
+    status('Could not start recording: ' + err.message, 'error');
+    return false;
+  }
+}
+
+function stopVideoRecording() {
+  if (mediaRecorder && isRecording) {
+    mediaRecorder.stop();
+    isRecording = false;
+  }
+}
+
+function saveVideoFile() {
+  if (!recordedChunks.length) return;
+  const blob = new Blob(recordedChunks, { type: 'video/webm' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const n    = (document.getElementById('playName').value || 'play').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.href     = url;
+  a.download = n + '.webm';
+  a.click();
+  URL.revokeObjectURL(url);
+  recordedChunks = [];
+  status('Video saved as .webm — opens in Chrome, VLC, or Firefox. Convert to MP4 with VLC if needed.', 'success');
+}
+
+function exportVideo() {
+  if (anim) { status('Stop the animation before recording.', 'error'); return; }
+  if (!canvas.captureStream) {
+    status('Video export needs Chrome or Edge. On Safari, use Cmd+Shift+5 screen record.', 'error');
+    return;
+  }
+  const ok = startVideoRecording();
+  if (ok) {
+    runPlay();
+    status('Recording started — video saves automatically when animation finishes.', 'loading');
+  }
+}
+
+// ─────────────────────────────────────────────
 // TOUCH EVENTS
 // ─────────────────────────────────────────────
 ['touchstart','touchmove','touchend','touchcancel'].forEach(ev =>
@@ -2394,6 +2606,7 @@ function init() {
   suggestDefense();
   refreshSaved();
   refreshCustomFormations();
+  updateFlipButton();
   draw();
   suspendHistory = false;
   historyStack = []; redoStack = [];
