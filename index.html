@@ -40,8 +40,9 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .canvas-wrap{display:flex;flex-direction:column;min-width:0;background:#0b0b0b}
 .field-holder{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;overflow:hidden;position:relative}
 canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-shadow:0 0 44px rgba(0,0,0,.8);touch-action:none}
-.bar{height:62px;background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
-.play-name{width:210px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:800 17px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:9px 12px}
+.bar{background:var(--panel);border-top:1px solid var(--border);padding:8px 14px;display:flex;flex-direction:column;gap:6px}
+.bar-row{display:flex;align-items:center;gap:6px;flex-wrap:nowrap}
+.play-name{width:200px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:800 16px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:7px 10px}
 .status{flex:1;font-size:13px;color:var(--muted);font-style:italic;min-width:120px}
 .status.success{color:var(--success)}.status.error{color:#ff6b5f}.status.loading{color:var(--gold)}
 .player-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;margin-bottom:5px;cursor:pointer;transition:.1s}
@@ -88,7 +89,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     <div class="section">
       <div class="label">Coordinator Mode</div>
       <div class="coach-tabs">
-        <button class="btn active full" id="tab-offense" onclick="setCoordinator('offense')">⚔ Offense</button>
+        <button class="btn active full" id="tab-offense" onclick="setCoordinator('offense')">▶ Offense</button>
         <button class="btn full" id="tab-defense" onclick="setCoordinator('defense')">🛡 Defense</button>
       </div>
       <p class="hint" style="margin-top:8px">Offense: formations, run game, pass concepts, protections. Defense: fronts, coverage shells, blitz packages, gap assignments.</p>
@@ -196,19 +197,26 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
       <div class="anim-progress" id="animProgress">⏵ RUNNING</div>
     </div>
     <div class="bar">
-      <input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36">
-      <button class="btn green" onclick="runPlay()">▶ Run</button>
-      <button class="btn red" onclick="stopPlay()">■ Stop</button>
-      <button class="btn blue" onclick="smartAnalyze()">🤖 Coach</button>
-      <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
-      <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
-      <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
-      <button class="btn" onclick="saveToSession()">📌 Keep</button>
-      <button class="btn green" onclick="savePlay()">💾 Save</button>
-      <button class="btn blue" onclick="openPlayFile()">📂 Open</button>
-      <button class="btn" onclick="exportPNG()">📸 PNG</button>
-      <button class="btn" onclick="resetAll()">↺ Reset</button>
-      <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach for full analysis.</span>
+      <!-- Row 1: play name + primary playback + coach -->
+      <div class="bar-row">
+        <input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36">
+        <button class="btn green" onclick="runPlay()">▶ Run</button>
+        <button class="btn red" onclick="stopPlay()">■ Stop</button>
+        <button class="btn blue" onclick="smartAnalyze()">🤖 Coach</button>
+        <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
+        <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
+        <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
+        <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach.</span>
+      </div>
+      <!-- Row 2: save / open / export / reset -->
+      <div class="bar-row">
+        <button class="btn" onclick="saveToSession()" title="Quick-save to session list">📌 Keep</button>
+        <button class="btn green" onclick="savePlay()" title="Download .pdpro save file">💾 Save</button>
+        <button class="btn blue" onclick="openPlayFile()" title="Open .pdpro save file">📂 Open</button>
+        <button class="btn" onclick="exportPNG()" title="Download PNG image">📸 PNG</button>
+        <button class="btn" onclick="resetAll()" title="Reset routes/blocks, keep formation">↺ Reset</button>
+        <button class="btn red" onclick="hardReset()" title="Reset everything including formation">⬛ Full Reset</button>
+      </div>
     </div>
   </main>
 
@@ -299,8 +307,10 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     </div>
 
     <div class="section">
-      <button class="btn red full" style="font-size:14px;padding:11px;letter-spacing:1px" onclick="hardReset()">↺ RESET EVERYTHING</button>
-      <p class="hint" style="margin-top:7px;text-align:center">Clears all routes, blocks, motions, resets formation and defense to default.</p>
+      <p class="hint" style="text-align:center;padding:4px 0">
+        <b style="color:var(--muted)">↺ Reset</b> clears routes/blocks, keeps formation.<br>
+        <b style="color:#c0392b">⬛ Full Reset</b> in toolbar clears everything.
+      </p>
     </div>
   </aside>
 </div>
