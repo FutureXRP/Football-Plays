@@ -1,668 +1,99 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Play Designer Pro</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Play Designer Pro — Intelligent Modeling</title>
 <style>
-@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600&display=swap');
-*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
-:root{
-  --gold:#c8a84b;--red:#c0392b;
-  --panel:#141414;--panel2:#1e1e1e;--panel3:#252525;
-  --border:#2a2a2a;--text:#e8e0d0;--muted:#777;--accent:#c8a84b;
-}
-body{background:#0a0a0a;color:var(--text);font-family:'Barlow',sans-serif;min-height:100vh;display:flex;flex-direction:column;overflow:hidden}
-header{background:var(--panel);border-bottom:1px solid var(--border);padding:8px 16px;display:flex;align-items:center;gap:14px;flex-shrink:0}
-header h1{font-family:'Barlow Condensed',sans-serif;font-size:20px;font-weight:900;letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
-header .sub{font-size:11px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
-header .spacer{flex:1}
-.main{display:flex;flex:1;overflow:hidden;height:calc(100vh - 47px)}
-.sidebar{width:210px;min-width:210px;background:var(--panel);display:flex;flex-direction:column;overflow:hidden}
-.sidebar.left{border-right:1px solid var(--border)}
-.sidebar.right{border-left:1px solid var(--border);width:230px;min-width:230px}
-.sb-scroll{overflow-y:auto;flex:1}
-.sb-scroll::-webkit-scrollbar{width:3px}
-.sb-scroll::-webkit-scrollbar-thumb{background:var(--border);border-radius:2px}
-.tab-bar{display:flex;border-bottom:1px solid var(--border);flex-shrink:0}
-.tab{flex:1;padding:9px 4px;font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;text-align:center;cursor:pointer;color:var(--muted);border:none;background:transparent;transition:all 0.15s;border-bottom:2px solid transparent}
-.tab:hover{color:var(--text)}
-.tab.a-off{color:#5aabff;border-bottom-color:#3498db}
-.tab.a-def{color:#ff7070;border-bottom-color:#e74c3c}
-.tab.a-routes{color:var(--gold);border-bottom-color:var(--gold)}
-.sec{padding:11px 12px 8px;border-bottom:1px solid var(--border)}
-.slabel{font-family:'Barlow Condensed',sans-serif;font-size:10px;letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:8px}
-.fg{display:grid;grid-template-columns:1fr 1fr;gap:5px}
-.fbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:11px;font-weight:600;letter-spacing:.5px;padding:7px 3px;cursor:pointer;text-align:center;text-transform:uppercase;transition:all 0.15s;border-radius:3px}
-.fbtn:hover{border-color:var(--gold);color:var(--gold)}
-.fbtn.ao{background:#142a4a;color:#70aaff;border-color:#2a5a9a}
-.fbtn.ad{background:#3a1010;color:#ff8888;border-color:#8b2020}
-.tg{display:flex;flex-direction:column;gap:4px}
-.tbtn{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow',sans-serif;font-size:12px;padding:8px 10px;cursor:pointer;text-align:left;display:flex;align-items:center;gap:8px;transition:all 0.15s;border-radius:3px}
-.tbtn:hover{border-color:var(--accent)}
-.tbtn.ta{border-color:var(--accent);background:rgba(200,168,75,0.1)}
-.tbtn.tad{border-color:#e74c3c;background:rgba(200,50,50,0.1)}
-.plist{display:flex;flex-direction:column;gap:4px}
-.pi{display:flex;align-items:center;gap:8px;padding:5px 7px;background:var(--panel2);border-radius:3px;border:1px solid var(--border);cursor:pointer;transition:all 0.15s;font-size:11px}
-.pi:hover{background:#282828}
-.pi.so{border-color:#3498db}
-.pi.sd{border-color:#e74c3c}
-.pdot{width:20px;height:20px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:9px;font-weight:700;font-family:'Barlow Condensed',sans-serif;flex-shrink:0}
-.pname{flex:1;font-size:11px}
-.ppnum{font-size:10px;color:var(--muted)}
-.ced{padding:10px 12px;border-bottom:1px solid var(--border)}
-.cr{display:flex;gap:6px;margin-bottom:6px;align-items:center}
-.cr label{font-size:10px;color:var(--muted);width:28px;flex-shrink:0;text-transform:uppercase}
-.ci{flex:1;background:var(--panel3);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:12px;padding:5px 7px;border-radius:3px;outline:none}
-.ci:focus{border-color:var(--gold)}
-select.ci{cursor:pointer}
-.addbtn{width:100%;padding:7px;background:var(--panel3);border:1px solid var(--border);color:var(--accent);font-family:'Barlow Condensed',sans-serif;font-size:12px;font-weight:700;letter-spacing:1px;cursor:pointer;border-radius:3px;text-transform:uppercase;transition:all 0.15s}
-.addbtn:hover{border-color:var(--gold);background:rgba(200,168,75,0.1)}
-.addbtn.d{color:#e74c3c}.addbtn.d:hover{border-color:#e74c3c;background:rgba(200,50,50,0.1)}
-.tcontent{display:none}.tcontent.vis{display:block}
-.canvas-area{flex:1;display:flex;flex-direction:column;position:relative;overflow:hidden}
-.fwrap{flex:1;display:flex;align-items:center;justify-content:center;padding:10px;background:#080808}
-#field-canvas{display:block;border:2px solid #2a2a2a;box-shadow:0 0 60px rgba(0,0,0,0.95)}
-.bbar{background:var(--panel);border-top:1px solid var(--border);padding:8px 14px;display:flex;align-items:center;gap:10px;flex-shrink:0}
-.pninput{background:var(--panel2);border:1px solid var(--border);color:var(--text);font-family:'Barlow Condensed',sans-serif;font-size:14px;font-weight:700;letter-spacing:2px;text-transform:uppercase;padding:7px 12px;width:190px;border-radius:3px;outline:none}
-.pninput:focus{border-color:var(--gold)}
-.btn{font-family:'Barlow Condensed',sans-serif;font-size:13px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;padding:8px 14px;border:none;cursor:pointer;border-radius:3px;transition:all 0.15s;white-space:nowrap}
-.bg{background:var(--gold);color:#000}.bg:hover{background:#d4b055}
-.bgreen{background:#1a7c3a;color:#fff;display:flex;align-items:center;gap:6px}.bgreen:hover{background:#1e9044}
-.bred{background:var(--red);color:#fff}.bred:hover{background:#e04030}
-.bgh{background:transparent;border:1px solid var(--border);color:var(--muted)}.bgh:hover{border-color:#e74c3c;color:#e74c3c}
-.smsg{font-size:12px;color:var(--muted);flex:1;font-style:italic}
-.smsg.sl{color:var(--gold)}.smsg.se{color:var(--red)}.smsg.sk{color:#4caf50}
-.ai-box{padding:12px}
-.ai-out{background:var(--panel2);border:1px solid var(--border);border-radius:4px;padding:10px;font-size:11px;line-height:1.65;color:var(--text);min-height:80px;white-space:pre-wrap;overflow-y:auto;max-height:230px}
-.ai-out.empty{color:var(--muted);font-style:italic}
-.li{display:flex;align-items:center;gap:8px;margin-bottom:6px;font-size:11px;color:var(--muted)}
-.ll{width:24px;height:3px;border-radius:2px;flex-shrink:0}
-.sprow{display:flex;align-items:center;gap:8px;padding:10px 12px;border-top:1px solid var(--border)}
-.sprow label{font-size:10px;color:var(--muted);letter-spacing:1px;text-transform:uppercase;white-space:nowrap}
-input[type=range]{flex:1;accent-color:var(--gold);height:4px}
-.spv{font-size:12px;color:var(--gold);min-width:28px;text-align:right}
-.badge{font-family:'Barlow Condensed',sans-serif;font-size:10px;font-weight:700;letter-spacing:1px;padding:3px 8px;border-radius:2px;text-transform:uppercase}
-.bo{background:#142a4a;color:#70aaff;border:1px solid #2a5a9a}
-.bd{background:#3a1010;color:#ff8888;border:1px solid #8b2020}
+@import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap');
+*{box-sizing:border-box;margin:0;padding:0} :root{--bg:#080808;--panel:#141414;--panel2:#1d1d1d;--panel3:#252525;--border:#323232;--text:#eee6d6;--muted:#8f8a80;--gold:#c8a84b;--green:#2a5518;--green2:#285215;--red:#c0392b;--blue:#3498db;--yellow:#f5c842;--purple:#9b59b6;--orange:#e67e22;--success:#49b564} body{background:var(--bg);color:var(--text);font-family:Barlow,system-ui,sans-serif;min-height:100vh;overflow:hidden} button,input,select,textarea{font-family:inherit} header{height:54px;background:linear-gradient(90deg,#111,#181818);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px} h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--gold)} .subtitle{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}.app{height:calc(100vh - 54px);display:grid;grid-template-columns:260px 1fr 310px;overflow:hidden}.panel{background:var(--panel);border-color:var(--border);overflow:auto}.left{border-right:1px solid var(--border)}.right{border-left:1px solid var(--border)}.section{padding:13px;border-bottom:1px solid var(--border)}.label{font:700 11px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:5px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;transition:.12s;text-align:left}.btn:hover{border-color:var(--gold);color:var(--gold)}.btn.active,.btn.primary{background:var(--gold);border-color:var(--gold);color:#111}.btn.green{background:#1a7c3a;border-color:#1a7c3a;color:#fff}.btn.red{background:#73211b;border-color:#9b2d25;color:#fff}.btn.full{width:100%;text-align:center}.tool{display:flex;align-items:center;gap:8px}.input,.select,.textarea{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:8px 9px;outline:none;font-size:13px}.input:focus,.select:focus,.textarea:focus{border-color:var(--gold)}.textarea{min-height:88px;resize:vertical;line-height:1.45}.canvas-wrap{display:flex;flex-direction:column;min-width:0;background:#0b0b0b}.field-holder{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;overflow:hidden;position:relative}canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-shadow:0 0 44px rgba(0,0,0,.8);touch-action:none}.bar{height:62px;background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:10px 14px}.play-name{width:220px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:800 17px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:9px 12px}.status{flex:1;font-size:13px;color:var(--muted);font-style:italic}.status.success{color:var(--success)}.status.error{color:#ff6b5f}.status.loading{color:var(--gold)}.player-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;margin-bottom:5px;cursor:pointer}.player-row.selected{border-color:var(--gold);background:rgba(200,168,75,.08)}.dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px 'Barlow Condensed';color:#080808}.small{font-size:11px;color:var(--muted)}.editor-grid{display:grid;grid-template-columns:76px 1fr;gap:7px;align-items:center}.editor-grid label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}.hint{font-size:11px;color:var(--muted);line-height:1.45}.coach{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;font-size:12px;line-height:1.55;white-space:pre-wrap;max-height:260px;overflow:auto}.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--muted);margin:0 4px 5px 0}.legend-line{width:24px;height:3px;border-radius:2px;display:inline-block}.kbd{font:700 10px monospace;border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--gold)}@media(max-width:980px){body{overflow:auto}.app{height:auto;display:flex;flex-direction:column}.panel{max-height:none}.bar{height:auto;flex-wrap:wrap}.play-name{width:100%}canvas{width:100%;height:auto}.left,.right{border:0;border-top:1px solid var(--border)}}
 </style>
 </head>
 <body>
-<header>
-  <h1>⚡ Play Designer Pro</h1>
-  <span class="sub">Offense · Defense · AI</span>
-  <div class="spacer"></div>
-  <span class="badge bo" id="mbadge">OFFENSE</span>
-</header>
-<div class="main">
+<header><h1>⚡ Play Designer Pro</h1><span class="subtitle">Intelligent offense, defense, blocking, and route modeling</span></header>
+<div class="app">
+  <aside class="panel left">
+    <div class="section"><div class="label">Formation</div><div class="grid2" id="formationBtns"></div></div>
+    <div class="section"><div class="label">Mode</div><div class="grid2">
+      <button class="btn active" id="mode-select" onclick="setMode('select')">🖱 Select</button><button class="btn" id="mode-route" onclick="setMode('route')">🟡 Route</button>
+      <button class="btn" id="mode-block" onclick="setMode('block')">🟥 Block</button><button class="btn" id="mode-ball" onclick="setMode('ball')">🏈 RB Target</button>
+      <button class="btn" id="mode-def" onclick="setMode('def')">🛡 Defense</button><button class="btn" id="mode-motion" onclick="setMode('motion')">➡ Motion</button>
+    </div><p class="hint" style="margin-top:8px">Select a player, then draw. In RB Target mode, click where the runner should hit.</p></div>
+    <div class="section"><div class="label">Run Game AI</div>
+      <select id="runScheme" class="select"><option>Inside Zone</option><option>Outside Zone</option><option>Power</option><option>Counter</option><option>Duo</option><option>Trap</option><option>Draw</option></select>
+      <div class="grid2" style="margin-top:7px"><button class="btn primary full" onclick="autoRun()">Auto Run + Blocks</button><button class="btn full" onclick="clearBlocking()">Clear Blocks</button></div>
+    </div>
+    <div class="section"><div class="label">Pass Pro AI</div>
+      <select id="passScheme" class="select"><option>Half-Slide Left</option><option>Half-Slide Right</option><option>Full Slide Left</option><option>Full Slide Right</option><option>Man Protection</option><option>Max Protect</option></select>
+      <div class="grid2" style="margin-top:7px"><button class="btn primary full" onclick="autoPassPro()">Generate Pass Pro</button><button class="btn full" onclick="addQuickPassConcept()">Quick Concept</button></div>
+    </div>
+    <div class="section"><div class="label">Defense AI</div>
+      <select id="defFront" class="select"><option>4-3 Over</option><option>3-4 Odd</option><option>Nickel 2-4-5</option><option>Bear Front</option><option>Goal Line</option><option>Dime</option></select>
+      <select id="coverage" class="select" style="margin-top:7px"><option>Cover 3</option><option>Cover 2</option><option>Man Free</option><option>Cover 4</option><option>Zero Blitz</option><option>Tampa 2</option></select>
+      <button class="btn primary full" style="margin-top:7px" onclick="autoDefense()">Set Defense</button>
+    </div>
+    <div class="section"><div class="label">Players</div><div id="playerList"></div><button class="btn full" onclick="addPlayer()">＋ Add Player</button></div>
+  </aside>
 
-<!-- LEFT SIDEBAR -->
-<div class="sidebar left">
-  <div class="tab-bar">
-    <button class="tab a-off" id="lt-off" onclick="setLTab('off')">Offense</button>
-    <button class="tab" id="lt-def" onclick="setLTab('def')">Defense</button>
-    <button class="tab" id="lt-routes" onclick="setLTab('routes')">Routes</button>
-  </div>
-  <div class="sb-scroll">
+  <main class="canvas-wrap">
+    <div class="field-holder"><canvas id="field" width="760" height="540"></canvas></div>
+    <div class="bar"><input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36"><button class="btn green" onclick="runPlay()">▶ Run</button><button class="btn red" onclick="stopPlay()">■ Stop</button><button class="btn" onclick="smartAnalyze()">🤖 Coach</button><button class="btn" onclick="savePlay()">💾 Save</button><button class="btn" onclick="exportPNG()">📸 PNG</button><button class="btn" onclick="resetAll()">Reset</button><span id="status" class="status">Pick a formation, customize players, then generate run/pass/defense logic.</span></div>
+  </main>
 
-    <!-- OFFENSE -->
-    <div class="tcontent vis" id="lc-off">
-      <div class="sec">
-        <div class="slabel">Formation</div>
-        <div class="fg" id="off-fbtns">
-          <button class="fbtn ao" onclick="loadOff('shotgun')">Shotgun</button>
-          <button class="fbtn" onclick="loadOff('iformation')">I-Form</button>
-          <button class="fbtn" onclick="loadOff('spread')">Spread</button>
-          <button class="fbtn" onclick="loadOff('singleback')">Singleback</button>
-          <button class="fbtn" onclick="loadOff('pistol')">Pistol</button>
-          <button class="fbtn" onclick="loadOff('wildcat')">Wildcat</button>
-        </div>
-      </div>
-      <div class="sec">
-        <div class="slabel">Players</div>
-        <div class="plist" id="opl"></div>
-      </div>
-      <div class="ced">
-        <div class="slabel" style="margin-bottom:8px">Add Player</div>
-        <div class="cr"><label>Pos</label>
-          <select class="ci" id="nop"><option>QB</option><option>RB</option><option>WR</option><option>TE</option><option>OL</option><option>FB</option></select>
-        </div>
-        <div class="cr"><label>Label</label><input class="ci" id="nol" type="text" maxlength="4" placeholder="WR2"/></div>
-        <button class="addbtn" onclick="addOff()">+ Add Offensive Player</button>
-      </div>
-      <div class="sec">
-        <div class="slabel">Actions</div>
-        <div class="tg">
-          <button class="tbtn" onclick="removeSelected('off')"><span>🗑</span> Remove Selected</button>
-          <button class="tbtn" onclick="resetOff()"><span>↺</span> Reset Formation</button>
-        </div>
-      </div>
+  <aside class="panel right">
+    <div class="section"><div class="label">Selected Player Editor</div><div id="editor" class="hint">Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.</div></div>
+    <div class="section"><div class="label">Saved Plays</div><select class="select" id="saved" onchange="loadSaved(this.value)"><option value="">Load saved play...</option></select></div>
+    <div class="section"><div class="label">Coach Breakdown</div><div id="coach" class="coach">Generate a run scheme, pass protection, defensive look, or click Coach for an integrated breakdown.</div></div>
+    <div class="section"><div class="label">Legend</div>
+      <div class="chip"><span class="legend-line" style="background:#f5c842"></span> Route</div><div class="chip"><span class="legend-line" style="background:#e74c3c"></span> Block</div><div class="chip"><span class="legend-line" style="background:#3498db"></span> Motion</div><div class="chip">🏈 Ball path</div><br>
+      <span class="hint"><span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">D</span> defense · <span class="kbd">S</span> select · drag any player/defender.</span>
     </div>
-
-    <!-- DEFENSE -->
-    <div class="tcontent" id="lc-def">
-      <div class="sec">
-        <div class="slabel">Formation</div>
-        <div class="fg" id="def-fbtns">
-          <button class="fbtn" onclick="loadDef('43')">4-3</button>
-          <button class="fbtn ad" onclick="loadDef('34')">3-4</button>
-          <button class="fbtn" onclick="loadDef('nickel')">Nickel</button>
-          <button class="fbtn" onclick="loadDef('dime')">Dime</button>
-          <button class="fbtn" onclick="loadDef('cover2')">Cover 2</button>
-          <button class="fbtn" onclick="loadDef('cover3')">Cover 3</button>
-          <button class="fbtn" onclick="loadDef('46')">46 Bear</button>
-          <button class="fbtn" onclick="loadDef('prevent')">Prevent</button>
-        </div>
-      </div>
-      <div class="sec">
-        <div class="slabel">Players</div>
-        <div class="plist" id="dpl"></div>
-      </div>
-      <div class="ced">
-        <div class="slabel" style="margin-bottom:8px">Add Defender</div>
-        <div class="cr"><label>Pos</label>
-          <select class="ci" id="ndp"><option>DE</option><option>DT</option><option>NT</option><option>LB</option><option>CB</option><option>S</option><option>FS</option><option>SS</option><option>DB</option></select>
-        </div>
-        <div class="cr"><label>Label</label><input class="ci" id="ndl" type="text" maxlength="4" placeholder="CB3"/></div>
-        <button class="addbtn d" onclick="addDef()">+ Add Defender</button>
-      </div>
-      <div class="sec">
-        <div class="slabel">Actions</div>
-        <div class="tg">
-          <button class="tbtn" onclick="removeSelected('def')"><span>🗑</span> Remove Selected</button>
-          <button class="tbtn" onclick="resetDef()"><span>↺</span> Reset Formation</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- ROUTES -->
-    <div class="tcontent" id="lc-routes">
-      <div class="sec">
-        <div class="slabel">Draw Tool</div>
-        <div class="tg">
-          <button class="tbtn ta" id="t-select" onclick="setTool('select')"><span>🖱</span> Select / Move</button>
-          <button class="tbtn" id="t-run" onclick="setTool('run')"><span>🟡</span> Run Route</button>
-          <button class="tbtn" id="t-block" onclick="setTool('block')"><span>🟥</span> Block</button>
-          <button class="tbtn" id="t-motion" onclick="setTool('motion')"><span>➡</span> Motion (Pre-snap)</button>
-          <div style="height:1px;background:var(--border);margin:4px 0"></div>
-          <button class="tbtn" id="t-coverage" onclick="setTool('coverage')"><span>🔴</span> Coverage (DEF)</button>
-          <button class="tbtn" id="t-blitz" onclick="setTool('blitz')"><span>⚡</span> Blitz (DEF)</button>
-          <button class="tbtn" id="t-zone" onclick="setTool('zone')"><span>🔵</span> Zone Drop (DEF)</button>
-        </div>
-      </div>
-      <div class="sec">
-        <div class="slabel">Hint</div>
-        <div style="font-size:11px;color:var(--muted);line-height:1.6">Click player in list or on field to select, then drag to draw a route.</div>
-      </div>
-      <div class="sec">
-        <div class="slabel">Route Actions</div>
-        <div class="tg">
-          <button class="tbtn" onclick="clearORoutes()"><span>🗑</span> Clear Off Routes</button>
-          <button class="tbtn" onclick="clearDRoutes()"><span>🗑</span> Clear Def Routes</button>
-          <button class="tbtn" onclick="undoRoute()"><span>↩</span> Undo Last</button>
-        </div>
-      </div>
-    </div>
-
-  </div>
-</div>
-
-<!-- CANVAS -->
-<div class="canvas-area">
-  <div class="fwrap">
-    <canvas id="field-canvas" width="700" height="520"></canvas>
-  </div>
-  <div class="bbar">
-    <input class="pninput" id="pname" type="text" placeholder="NAME YOUR PLAY" maxlength="30"/>
-    <button class="btn bg" onclick="analyzePlay()">🤖 AI Analyze</button>
-    <button class="btn bgreen" id="pbtn" onclick="runPlay()">▶ RUN PLAY</button>
-    <button class="btn bred" id="sbtn" onclick="stopPlay()" style="display:none">■ STOP</button>
-    <span class="smsg" id="smsg">Select a player · Draw routes in Routes tab · Drag to reposition</span>
-  </div>
-</div>
-
-<!-- RIGHT PANEL -->
-<div class="sidebar right">
-  <div class="sb-scroll">
-    <div class="ai-box">
-      <div class="slabel" style="margin-bottom:8px">AI Tactical Breakdown</div>
-      <div class="ai-out empty" id="ai-resp">Hit "AI Analyze" for a matchup breakdown vs the defense...</div>
-    </div>
-    <div class="sprow">
-      <label>Speed</label>
-      <input type="range" min="0.5" max="3" step="0.5" value="1" id="spslider" oninput="updSpeed(this.value)">
-      <span class="spv" id="spv">1×</span>
-    </div>
-    <div class="sec">
-      <div class="slabel" style="margin-bottom:10px">Route Legend</div>
-      <div class="li"><div class="ll" style="background:#f5c842"></div>Run Route (OFF)</div>
-      <div class="li"><div class="ll" style="background:#e74c3c"></div>Block (OFF, dashed)</div>
-      <div class="li"><div class="ll" style="background:#3498db"></div>Motion Pre-snap</div>
-      <div class="li"><div class="ll" style="background:#ff6b6b"></div>Coverage (DEF)</div>
-      <div class="li"><div class="ll" style="background:#ff3333"></div>Blitz (DEF, dashed)</div>
-      <div class="li"><div class="ll" style="background:#9b59b6"></div>Zone Drop (DEF)</div>
-    </div>
-    <div class="sec">
-      <div class="slabel" style="margin-bottom:8px">Shapes</div>
-      <div class="li"><span style="width:14px;height:14px;border-radius:50%;background:#888;display:inline-block;flex-shrink:0"></span>Circle = Offense</div>
-      <div class="li"><span style="width:14px;height:14px;border-radius:2px;background:#8b1a1a;border:1.5px solid #ff4444;display:inline-block;flex-shrink:0"></span>Square = Defense</div>
-    </div>
-    <div class="sec">
-      <div class="slabel" style="margin-bottom:8px">Position Colors</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#c8a84b;display:inline-block;flex-shrink:0"></span>QB</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#e74c3c;display:inline-block;flex-shrink:0"></span>RB / FB</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#3498db;display:inline-block;flex-shrink:0"></span>WR</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#9b59b6;display:inline-block;flex-shrink:0"></span>TE</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:50%;background:#7f8c8d;display:inline-block;flex-shrink:0"></span>OL</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#8b1a1a;border:1px solid #ff4444;display:inline-block;flex-shrink:0"></span>DL (DE/DT/NT)</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#7a0000;border:1px solid #ff6666;display:inline-block;flex-shrink:0"></span>LB</div>
-      <div class="li"><span style="width:12px;height:12px;border-radius:2px;background:#5a0060;border:1px solid #ff44ff;display:inline-block;flex-shrink:0"></span>CB / S / DB</div>
-    </div>
-    <div class="sec" style="border-bottom:none">
-      <div class="slabel" style="margin-bottom:6px">Tips</div>
-      <div style="font-size:10px;color:var(--muted);line-height:1.8">
-        • Drag any player anywhere to customize alignment<br>
-        • Add custom players via the editor in each tab<br>
-        • Defense draws coverage/blitz/zone — all animate<br>
-        • AI reads full off + def context<br>
-        • Reset formation restores default positions
-      </div>
-    </div>
-  </div>
-</div>
-
+  </aside>
 </div>
 <script>
-const canvas=document.getElementById('field-canvas');
-const ctx=canvas.getContext('2d');
-const W=canvas.width,H=canvas.height,LOS_Y=H*.63;
-let spd=1,tool='select',selId=null,selSide=null;
-let drawing=false,dpts=[],animating=false,raf=null;
-let drag=null,doff={x:0,y:0};
-let nextOId=100,nextDId=200;
-
-const oc={QB:'#c8a84b',RB:'#e74c3c',WR:'#3498db',TE:'#9b59b6',OL:'#7f8c8d',FB:'#e67e22'};
-const dc={DE:'#8b1a1a',DT:'#8b1a1a',NT:'#8b1a1a',LB:'#7a0000',CB:'#5a0060',S:'#5a0060',FS:'#5a0060',SS:'#5a0060',DB:'#5a0060'};
-const db={DE:'#ff4444',DT:'#ff5555',NT:'#ff5555',LB:'#ff7777',CB:'#ff44ff',S:'#ff66ff',FS:'#ff66ff',SS:'#ff88ff',DB:'#ff66ff'};
-const rc={run:'#f5c842',block:'#e74c3c',motion:'#3498db',coverage:'#ff6b6b',blitz:'#ff3333',zone:'#9b59b6'};
-
-const OForms={
-  shotgun:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.76},{id:6,pos:'RB',label:'RB',x:.62,y:.79},{id:7,pos:'WR',label:'WR',x:.10,y:.63},{id:8,pos:'WR',label:'WR',x:.22,y:.65},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
-  iformation:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.68},{id:6,pos:'FB',label:'FB',x:.50,y:.75},{id:7,pos:'RB',label:'RB',x:.50,y:.83},{id:8,pos:'WR',label:'WR',x:.10,y:.63},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
-  spread:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.75},{id:6,pos:'WR',label:'WR',x:.05,y:.63},{id:7,pos:'WR',label:'WR',x:.18,y:.65},{id:8,pos:'WR',label:'WR',x:.82,y:.65},{id:9,pos:'WR',label:'WR',x:.95,y:.63},{id:10,pos:'RB',label:'RB',x:.62,y:.79}],
-  singleback:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.68},{id:6,pos:'RB',label:'RB',x:.50,y:.77},{id:7,pos:'WR',label:'WR',x:.08,y:.63},{id:8,pos:'WR',label:'WR',x:.92,y:.63},{id:9,pos:'TE',label:'TE',x:.78,y:.64},{id:10,pos:'TE',label:'TE',x:.22,y:.64}],
-  pistol:[{id:0,pos:'OL',label:'LT',x:.30,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.70,y:.63},{id:5,pos:'QB',label:'QB',x:.50,y:.71},{id:6,pos:'RB',label:'RB',x:.50,y:.79},{id:7,pos:'WR',label:'WR',x:.10,y:.63},{id:8,pos:'WR',label:'WR',x:.22,y:.65},{id:9,pos:'WR',label:'WR',x:.90,y:.63},{id:10,pos:'TE',label:'TE',x:.78,y:.64}],
-  wildcat:[{id:0,pos:'OL',label:'LT',x:.28,y:.63},{id:1,pos:'OL',label:'LG',x:.38,y:.63},{id:2,pos:'OL',label:'C',x:.50,y:.63},{id:3,pos:'OL',label:'RG',x:.62,y:.63},{id:4,pos:'OL',label:'RT',x:.72,y:.63},{id:5,pos:'RB',label:'WC',x:.50,y:.71},{id:6,pos:'WR',label:'WR',x:.08,y:.63},{id:7,pos:'WR',label:'WR',x:.18,y:.65},{id:8,pos:'WR',label:'WR',x:.82,y:.65},{id:9,pos:'WR',label:'WR',x:.92,y:.63},{id:10,pos:'QB',label:'QB',x:.34,y:.55}]
-};
-
-const DForms={
-  '43':[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.34,y:.44},{id:206,pos:'LB',label:'WLB',x:.66,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.30,y:.34},{id:210,pos:'FS',label:'FS',x:.70,y:.32}],
-  '34':[{id:200,pos:'DE',label:'LE',x:.32,y:.53},{id:201,pos:'NT',label:'NT',x:.50,y:.52},{id:202,pos:'DE',label:'RE',x:.68,y:.53},{id:203,pos:'LB',label:'LOLB',x:.22,y:.46},{id:204,pos:'LB',label:'LILB',x:.40,y:.45},{id:205,pos:'LB',label:'RILB',x:.60,y:.45},{id:206,pos:'LB',label:'ROLB',x:.78,y:.46},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.36,y:.34},{id:210,pos:'FS',label:'FS',x:.64,y:.32}],
-  nickel:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.44,y:.44},{id:205,pos:'LB',label:'SLB',x:.56,y:.44},{id:206,pos:'CB',label:'LCB',x:.08,y:.52},{id:207,pos:'CB',label:'RCB',x:.92,y:.52},{id:208,pos:'CB',label:'NCB',x:.30,y:.43},{id:209,pos:'SS',label:'SS',x:.50,y:.34},{id:210,pos:'FS',label:'FS',x:.70,y:.32}],
-  dime:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.50,y:.52},{id:202,pos:'DE',label:'RE',x:.70,y:.53},{id:203,pos:'LB',label:'MLB',x:.50,y:.44},{id:204,pos:'CB',label:'LCB',x:.08,y:.52},{id:205,pos:'CB',label:'RCB',x:.92,y:.52},{id:206,pos:'CB',label:'SC1',x:.22,y:.46},{id:207,pos:'CB',label:'SC2',x:.78,y:.46},{id:208,pos:'DB',label:'DB',x:.36,y:.37},{id:209,pos:'SS',label:'SS',x:.50,y:.33},{id:210,pos:'FS',label:'FS',x:.64,y:.37}],
-  cover2:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.36,y:.44},{id:206,pos:'LB',label:'WLB',x:.64,y:.44},{id:207,pos:'CB',label:'LCB',x:.12,y:.53},{id:208,pos:'CB',label:'RCB',x:.88,y:.53},{id:209,pos:'SS',label:'SS',x:.28,y:.30},{id:210,pos:'FS',label:'FS',x:.72,y:.30}],
-  cover3:[{id:200,pos:'DE',label:'LE',x:.30,y:.53},{id:201,pos:'DT',label:'DT',x:.42,y:.52},{id:202,pos:'DT',label:'DT',x:.58,y:.52},{id:203,pos:'DE',label:'RE',x:.70,y:.53},{id:204,pos:'LB',label:'MLB',x:.50,y:.44},{id:205,pos:'LB',label:'SLB',x:.36,y:.44},{id:206,pos:'LB',label:'WLB',x:.64,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.48},{id:208,pos:'CB',label:'RCB',x:.92,y:.48},{id:209,pos:'SS',label:'SS',x:.35,y:.33},{id:210,pos:'FS',label:'FS',x:.50,y:.27}],
-  '46':[{id:200,pos:'DE',label:'LE',x:.26,y:.53},{id:201,pos:'DT',label:'DT',x:.38,y:.52},{id:202,pos:'DT',label:'DT',x:.54,y:.52},{id:203,pos:'DE',label:'RE',x:.66,y:.53},{id:204,pos:'LB',label:'LB',x:.78,y:.53},{id:205,pos:'LB',label:'LB',x:.42,y:.44},{id:206,pos:'LB',label:'LB',x:.58,y:.44},{id:207,pos:'CB',label:'LCB',x:.08,y:.52},{id:208,pos:'CB',label:'RCB',x:.92,y:.52},{id:209,pos:'SS',label:'SS',x:.25,y:.43},{id:210,pos:'FS',label:'FS',x:.50,y:.30}],
-  prevent:[{id:200,pos:'DE',label:'LE',x:.32,y:.54},{id:201,pos:'DE',label:'RE',x:.68,y:.54},{id:202,pos:'LB',label:'LB',x:.44,y:.47},{id:203,pos:'LB',label:'LB',x:.56,y:.47},{id:204,pos:'CB',label:'LCB',x:.08,y:.51},{id:205,pos:'CB',label:'RCB',x:.92,y:.51},{id:206,pos:'CB',label:'SC1',x:.22,y:.42},{id:207,pos:'CB',label:'SC2',x:.78,y:.42},{id:208,pos:'DB',label:'DB',x:.36,y:.34},{id:209,pos:'SS',label:'SS',x:.50,y:.28},{id:210,pos:'FS',label:'FS',x:.64,y:.34}]
-};
-
-let offPs=[],defPs=[],routes=[];
-let curOForm='shotgun',curDForm='34';
-
-function mk(t,side){return{...t,x:t.x*W,y:t.y*H,ox:t.x*W,oy:t.y*H,animX:t.x*W,animY:t.y*H,side};}
-
-function loadOff(name){
-  curOForm=name;
-  routes=routes.filter(r=>r.side==='def');
-  offPs=OForms[name].map(t=>mk(t,'off'));
-  nextOId=100+offPs.length;
-  document.querySelectorAll('#off-fbtns .fbtn').forEach(b=>b.classList.toggle('ao',normalizeBtn(b.textContent)===name));
-  if(selSide==='off'){selId=null;selSide=null;}
-  rebuildLists();drawAll();setSt('Loaded '+name,'sk');
-}
-function loadDef(name){
-  curDForm=name;
-  routes=routes.filter(r=>r.side==='off');
-  defPs=DForms[name].map(t=>mk(t,'def'));
-  nextDId=200+defPs.length;
-  document.querySelectorAll('#def-fbtns .fbtn').forEach(b=>b.classList.toggle('ad',normalizeBtn(b.textContent)===name));
-  if(selSide==='def'){selId=null;selSide=null;}
-  rebuildLists();drawAll();setSt('Loaded '+name+' defense','sk');
-}
-function normalizeBtn(t){return t.toLowerCase().replace(/[^a-z0-9]/g,'');}
-function resetOff(){loadOff(curOForm);}
-function resetDef(){loadDef(curDForm);}
-
-function addOff(){
-  const pos=document.getElementById('nop').value;
-  const label=(document.getElementById('nol').value.trim()||pos).slice(0,4);
-  offPs.push(mk({id:nextOId++,pos,label,x:.50,y:.70},'off'));
-  document.getElementById('nol').value='';
-  rebuildLists();drawAll();setSt('Added '+pos+' '+label,'sk');
-}
-function addDef(){
-  const pos=document.getElementById('ndp').value;
-  const label=(document.getElementById('ndl').value.trim()||pos).slice(0,4);
-  defPs.push(mk({id:nextDId++,pos,label,x:.50,y:.40},'def'));
-  document.getElementById('ndl').value='';
-  rebuildLists();drawAll();setSt('Added '+pos+' '+label,'sk');
-}
-function removeSelected(side){
-  if(!selId||selSide!==side){setSt('Select a '+side+' player first','se');return;}
-  if(side==='off') offPs=offPs.filter(p=>p.id!==selId);
-  else defPs=defPs.filter(p=>p.id!==selId);
-  routes=routes.filter(r=>r.playerId!==selId);
-  selId=null;selSide=null;rebuildLists();drawAll();
-}
-
-function rebuildLists(){
-  const ol=document.getElementById('opl'),dl=document.getElementById('dpl');
-  ol.innerHTML='';dl.innerHTML='';
-  offPs.forEach(p=>{
-    const d=document.createElement('div');
-    d.className='pi'+(selId===p.id&&selSide==='off'?' so':'');
-    d.innerHTML=`<div class="pdot" style="background:${oc[p.pos]||'#888'};color:#000">${p.label.slice(0,2)}</div><span class="pname">${p.pos}·${p.label}</span><span class="ppnum">${routes.filter(r=>r.playerId===p.id).length}r</span>`;
-    d.onclick=()=>selP(p.id,'off');ol.appendChild(d);
-  });
-  defPs.forEach(p=>{
-    const d=document.createElement('div');
-    d.className='pi'+(selId===p.id&&selSide==='def'?' sd':'');
-    d.innerHTML=`<div class="pdot" style="background:${dc[p.pos]||'#8b1a1a'};border:1.5px solid ${db[p.pos]||'#ff4444'};color:#ffaaaa;border-radius:3px">${p.label.slice(0,2)}</div><span class="pname">${p.pos}·${p.label}</span><span class="ppnum">${routes.filter(r=>r.playerId===p.id).length}r</span>`;
-    d.onclick=()=>selP(p.id,'def');dl.appendChild(d);
-  });
-}
-
-function selP(id,side){
-  if(selId===id&&selSide===side){selId=null;selSide=null;}
-  else{selId=id;selSide=side;}
-  const mb=document.getElementById('mbadge');
-  mb.textContent=side==='def'?'DEFENSE':'OFFENSE';
-  mb.className='badge '+(side==='def'?'bd':'bo');
-  rebuildLists();drawAll();
-}
-
-function setLTab(t){
-  ['off','def','routes'].forEach(n=>{
-    const tab=document.getElementById('lt-'+n);
-    const con=document.getElementById('lc-'+n);
-    const active=n===t;
-    con.classList.toggle('vis',active);
-    tab.className='tab'+(active?' a-'+n:'');
-  });
-}
-
-function setTool(t){
-  tool=t;
-  document.querySelectorAll('.tbtn').forEach(b=>b.classList.remove('ta','tad'));
-  const el=document.getElementById('t-'+t);
-  if(el) el.classList.add(['coverage','blitz','zone'].includes(t)?'tad':'ta');
-  canvas.style.cursor=t==='select'?'default':'crosshair';
-}
-
-// ─── FIELD ───────────────────────────────────────────────────────
-function drawField(){
-  for(let i=0;i<10;i++){ctx.fillStyle=i%2===0?'#244f18':'#224d16';ctx.fillRect(0,i*(H/10),W,H/10);}
-  ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;
-  for(let i=0;i<=10;i++){const y=i*(H/10);ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
-  ctx.strokeStyle='rgba(255,255,255,0.3)';ctx.lineWidth=1.5;
-  ctx.beginPath();ctx.moveTo(2,0);ctx.lineTo(2,H);ctx.stroke();
-  ctx.beginPath();ctx.moveTo(W-2,0);ctx.lineTo(W-2,H);ctx.stroke();
-  ctx.strokeStyle='rgba(255,255,255,0.18)';ctx.lineWidth=1;
-  for(let y=0;y<=H;y+=H/10) for(let x=W*.28;x<=W*.72;x+=10){ctx.beginPath();ctx.moveTo(x,y-4);ctx.lineTo(x,y+4);ctx.stroke();}
-  ctx.strokeStyle='rgba(255,220,0,.7)';ctx.lineWidth=2;ctx.setLineDash([8,5]);
-  ctx.beginPath();ctx.moveTo(0,LOS_Y);ctx.lineTo(W,LOS_Y);ctx.stroke();
-  ctx.setLineDash([]);
-  ctx.fillStyle='rgba(255,220,0,.55)';ctx.font='10px Barlow Condensed';ctx.textAlign='left';
-  ctx.fillText('LINE OF SCRIMMAGE',7,LOS_Y-5);
-  ctx.fillStyle='rgba(255,255,255,.03)';ctx.fillRect(0,0,W,H*.06);
-  ctx.fillStyle='rgba(255,255,255,.06)';ctx.font='bold 18px Barlow Condensed';ctx.textAlign='center';
-  ctx.fillText('END ZONE',W/2,H*.048);ctx.textAlign='left';
-}
-
-function arrow(fx,fy,tx,ty,color){
-  const a=Math.atan2(ty-fy,tx-fx),s=9;
-  ctx.fillStyle=color;ctx.beginPath();
-  ctx.moveTo(tx,ty);ctx.lineTo(tx-s*Math.cos(a-.4),ty-s*Math.sin(a-.4));
-  ctx.lineTo(tx-s*Math.cos(a+.4),ty-s*Math.sin(a+.4));
-  ctx.closePath();ctx.fill();
-}
-
-function drawRoutes(){
-  routes.forEach(r=>{
-    if(r.points.length<2)return;
-    const color=rc[r.type]||'#fff';
-    ctx.strokeStyle=color;ctx.lineWidth=2.5;
-    ctx.setLineDash(['block','blitz'].includes(r.type)?[6,4]:[]);
-    ctx.beginPath();ctx.moveTo(r.points[0].x,r.points[0].y);
-    for(let i=1;i<r.points.length;i++) ctx.lineTo(r.points[i].x,r.points[i].y);
-    ctx.stroke();
-    const last=r.points[r.points.length-1],prev=r.points[r.points.length-2];
-    arrow(prev.x,prev.y,last.x,last.y,color);
-    ctx.setLineDash([]);
-  });
-  if(drawing&&dpts.length>1){
-    const color=rc[tool]||'#fff';
-    ctx.strokeStyle=color;ctx.lineWidth=2;ctx.globalAlpha=.65;ctx.setLineDash([4,3]);
-    ctx.beginPath();ctx.moveTo(dpts[0].x,dpts[0].y);
-    for(let i=1;i<dpts.length;i++) ctx.lineTo(dpts[i].x,dpts[i].y);
-    ctx.stroke();ctx.setLineDash([]);ctx.globalAlpha=1;
-  }
-}
-
-function drawGroup(group,useAnim){
-  group.forEach(p=>{
-    const px=useAnim?p.animX:p.x,py=useAnim?p.animY:p.y;
-    const isDef=p.side==='def',r=isDef?12:14;
-    const isSel=selId===p.id&&selSide===p.side;
-    const color=isDef?(dc[p.pos]||'#8b1a1a'):(oc[p.pos]||'#888');
-    const border=isDef?(db[p.pos]||'#ff4444'):null;
-    if(isSel){
-      ctx.beginPath();ctx.arc(px,py,r+6,0,Math.PI*2);
-      ctx.fillStyle=isDef?'rgba(255,80,80,.15)':'rgba(52,152,219,.15)';ctx.fill();
-    }
-    ctx.beginPath();ctx.arc(px+1.5,py+1.5,r,0,Math.PI*2);
-    ctx.fillStyle='rgba(0,0,0,.5)';ctx.fill();
-    if(isDef){
-      ctx.fillStyle=color;ctx.fillRect(px-r,py-r,r*2,r*2);
-      ctx.strokeStyle=isSel?'#fff':(border||'#ff4444');ctx.lineWidth=isSel?2:1.5;
-      ctx.strokeRect(px-r,py-r,r*2,r*2);
-    } else {
-      ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.fillStyle=color;ctx.fill();
-      if(isSel){ctx.strokeStyle='#fff';ctx.lineWidth=2;ctx.beginPath();ctx.arc(px,py,r,0,Math.PI*2);ctx.stroke();}
-    }
-    ctx.fillStyle=isDef?'#ffbbbb':'#000';
-    ctx.font='bold 9px Barlow Condensed';ctx.textAlign='center';ctx.textBaseline='middle';
-    ctx.fillText(p.label.slice(0,3),px,py);
-    ctx.textBaseline='alphabetic';ctx.textAlign='left';
-  });
-}
-
-function drawAll(useAnim){
-  ctx.clearRect(0,0,W,H);drawField();drawRoutes();
-  drawGroup(defPs,useAnim);drawGroup(offPs,useAnim);
-}
-
-// ─── INPUT ───────────────────────────────────────────────────────
-function cpos(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*(W/r.width),y:(e.clientY-r.top)*(H/r.height)};}
-
-function hitPlayer(x,y,rad=18){
-  const op=offPs.find(p=>Math.hypot(p.x-x,p.y-y)<rad);if(op)return{player:op,side:'off'};
-  const dp=defPs.find(p=>Math.hypot(p.x-x,p.y-y)<rad);if(dp)return{player:dp,side:'def'};
-  return null;
-}
-
-canvas.addEventListener('mousedown',e=>{
-  if(animating)return;
-  const pos=cpos(e);
-  if(tool==='select'){
-    const hit=hitPlayer(pos.x,pos.y);
-    if(hit){drag=hit.player;doff={x:pos.x-hit.player.x,y:pos.y-hit.player.y};selP(hit.player.id,hit.side);}
-    else{selId=null;selSide=null;rebuildLists();drawAll();}
-  } else {
-    if(!selId){setSt('Select a player first!','se');return;}
-    const all=[...offPs,...defPs];
-    const p=all.find(pp=>pp.id===selId);if(!p)return;
-    const defTools=['coverage','blitz','zone'];
-    const offTools=['run','block','motion'];
-    if(defTools.includes(tool)&&p.side!=='def'){setSt('Coverage/Blitz/Zone = defense only','se');return;}
-    if(offTools.includes(tool)&&p.side!=='off'){setSt('Run/Block/Motion = offense only','se');return;}
-    drawing=true;dpts=[{x:p.x,y:p.y}];
-  }
-});
-
-canvas.addEventListener('mousemove',e=>{
-  if(animating)return;
-  const pos=cpos(e);
-  if(drag){drag.x=pos.x-doff.x;drag.y=pos.y-doff.y;drag.ox=drag.x;drag.oy=drag.y;drawAll();return;}
-  if(drawing){dpts.push(pos);if(dpts.length>3)dpts=simp(dpts,5);drawAll();}
-});
-
-canvas.addEventListener('mouseup',e=>{
-  if(animating)return;
-  if(drag){drag=null;rebuildLists();drawAll();return;}
-  if(drawing){
-    drawing=false;
-    if(dpts.length>2){
-      const all=[...offPs,...defPs],p=all.find(pp=>pp.id===selId);
-      routes.push({playerId:selId,side:p.side,type:tool,points:simp(dpts,8)});
-      rebuildLists();setSt(`Route added for ${p?.label}`,'sk');
-    }
-    dpts=[];drawAll();
-  }
-});
-
-canvas.addEventListener('mouseleave',()=>{if(drawing){drawing=false;dpts=[];drawAll();}drag=null;});
-
-function simp(pts,md){
-  if(pts.length<=2)return pts;
-  const r=[pts[0]];
-  for(let i=1;i<pts.length;i++){const prev=r[r.length-1];if(Math.hypot(pts[i].x-prev.x,pts[i].y-prev.y)>=md)r.push(pts[i]);}
-  if(r[r.length-1]!==pts[pts.length-1])r.push(pts[pts.length-1]);
-  return r;
-}
-
-// ─── ROUTE ACTIONS ───────────────────────────────────────────────
-function clearORoutes(){routes=routes.filter(r=>r.side==='def');rebuildLists();drawAll();setSt('Off routes cleared','');}
-function clearDRoutes(){routes=routes.filter(r=>r.side==='off');rebuildLists();drawAll();setSt('Def routes cleared','');}
-function undoRoute(){if(routes.length){routes.pop();rebuildLists();drawAll();setSt('Undone','');}}
-
-// ─── ANIMATION ───────────────────────────────────────────────────
-function runPlay(){
-  if(animating)return;
-  if(!routes.length){setSt('Draw some routes first!','se');return;}
-  animating=true;
-  document.getElementById('pbtn').style.display='none';
-  document.getElementById('sbtn').style.display='';
-  setSt('▶ Running play...','sl');
-
-  const all=[...offPs,...defPs];
-  all.forEach(p=>{p.animX=p.x;p.animY=p.y;});
-
-  const motR=routes.filter(r=>r.type==='motion');
-  const mainR=routes.filter(r=>r.type!=='motion');
-
-  function bcd(pts){const d=[0];for(let i=1;i<pts.length;i++)d.push(d[i-1]+Math.hypot(pts[i].x-pts[i-1].x,pts[i].y-pts[i-1].y));return d;}
-  function gpt(pts,dists,t){
-    const total=dists[dists.length-1];if(total===0)return pts[0];
-    const target=t*total;
-    for(let i=1;i<dists.length;i++){if(dists[i]>=target){const seg=dists[i]-dists[i-1],frac=seg===0?0:(target-dists[i-1])/seg;return{x:pts[i-1].x+frac*(pts[i].x-pts[i-1].x),y:pts[i-1].y+frac*(pts[i].y-pts[i-1].y)};}}
-    return pts[pts.length-1];
-  }
-
-  const trks={},tdists={},mtrks={},mdists={};
-  all.forEach(p=>{
-    const pR=mainR.filter(r=>r.playerId===p.id);
-    let pts=[{x:p.x,y:p.y}];pR.forEach(r=>pts=pts.concat(r.points.slice(1)));
-    trks[p.id]=pts.length>1?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}];
-    tdists[p.id]=bcd(trks[p.id]);
-    const mR=motR.filter(r=>r.playerId===p.id);
-    let mpts=[];mR.forEach(r=>mpts=mpts.concat(r.points));
-    mtrks[p.id]=mpts.length>0?mpts:null;
-    if(mtrks[p.id])mdists[p.id]=bcd(mtrks[p.id]);
-  });
-
-  const MD=1200/spd,PD=2800/spd,SP=220;
-  const start=performance.now();
-  let phase=motR.length>0?'motion':'play',snapT=null,playS=null;
-
-  function animate(now){
-    if(!animating)return;
-    ctx.clearRect(0,0,W,H);drawField();drawRoutes();
-    if(phase==='motion'){
-      const t=Math.min((now-start)/MD,1);
-      all.forEach(p=>{if(mtrks[p.id]){const pt=gpt(mtrks[p.id],mdists[p.id],t);p.animX=pt.x;p.animY=pt.y;}else{p.animX=p.x;p.animY=p.y;}});
-      if(t>=1){phase='pause';snapT=now;all.forEach(p=>{if(mtrks[p.id]){p.x=p.animX;p.y=p.animY;}});}
-    } else if(phase==='pause'){
-      if(now-snapT>SP){phase='play';playS=now;
-        all.forEach(p=>{const pR=mainR.filter(r=>r.playerId===p.id);let pts=[{x:p.x,y:p.y}];pR.forEach(r=>pts=pts.concat(r.points.slice(1)));trks[p.id]=pts.length>1?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}];tdists[p.id]=bcd(trks[p.id]);});
-      }
-    } else {
-      const t=Math.min((now-(playS||start))/PD,1);
-      const e=t<.5?2*t*t:-1+(4-2*t)*t;
-      all.forEach(p=>{const pt=gpt(trks[p.id],tdists[p.id],e);p.animX=pt.x;p.animY=pt.y;});
-      if(t>=1){drawGroup(defPs,true);drawGroup(offPs,true);setTimeout(()=>stopPlay(true),600);return;}
-    }
-    drawGroup(defPs,true);drawGroup(offPs,true);
-    raf=requestAnimationFrame(animate);
-  }
-  raf=requestAnimationFrame(animate);
-}
-
-function stopPlay(fin){
-  animating=false;if(raf){cancelAnimationFrame(raf);raf=null;}
-  document.getElementById('pbtn').style.display='';
-  document.getElementById('sbtn').style.display='none';
-  const all=[...offPs,...defPs];all.forEach(p=>{p.animX=p.ox;p.animY=p.oy;p.x=p.ox;p.y=p.oy;});
-  drawAll();setSt(fin?'✓ Play complete!':'Play stopped.',fin?'sk':'');
-}
-
-function updSpeed(v){spd=parseFloat(v);document.getElementById('spv').textContent=v+'×';}
-function setSt(m,t){const el=document.getElementById('smsg');el.textContent=m;el.className='smsg'+(t?' '+t:'');}
-
-// ─── AI ──────────────────────────────────────────────────────────
-async function analyzePlay(){
-  const name=document.getElementById('pname').value||'Untitled Play';
-  const ob=document.querySelector('#off-fbtns .fbtn.ao'),db2=document.querySelector('#def-fbtns .fbtn.ad');
-  const oForm=ob?ob.textContent:'Unknown',dForm=db2?db2.textContent:'Unknown';
-
-  const oRoutes=routes.filter(r=>r.side==='off').map(r=>{
-    const p=offPs.find(pp=>pp.id===r.playerId);
-    const e=r.points[r.points.length-1],s=r.points[0];
-    const dir=(e.y-s.y)<-40?'deep':(e.y-s.y)<0?'short':'flat/crossing';
-    const side=(e.x-s.x)<-30?'left':(e.x-s.x)>30?'right':'middle';
-    return `${p?.pos}(${p?.label}): ${r.type} — ${dir} ${side}`;
-  }).join('\n');
-
-  const dRoutes=routes.filter(r=>r.side==='def').map(r=>{
-    const p=defPs.find(pp=>pp.id===r.playerId);return `${p?.pos}(${p?.label}): ${r.type}`;
-  }).join('\n');
-
-  const prompt=`You are an elite NFL analyst. Analyze this play matchup (5-6 sentences max):
-
-Play: "${name}"
-Offense: ${oForm}
-Off Routes:\n${oRoutes||'None drawn'}
-
-Defense: ${dForm}
-Def Assignments:\n${dRoutes||'None drawn'}
-
-Analyze: (1) offensive concept & primary route combo, (2) how defense is aligned vs it, (3) which routes beat the coverage, (4) where defense wins, (5) best adjustment for either side. Sharp, direct, real football terminology.`;
-
-  const box=document.getElementById('ai-resp');
-  box.textContent='Analyzing matchup...';box.className='ai-out';setSt('🤖 Analyzing...','sl');
-  try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:prompt}]})});
-    const data=await res.json();
-    const text=data.content?.find(b=>b.type==='text')?.text||'No response.';
-    box.textContent=text;box.className='ai-out';setSt('✓ Analysis complete.','sk');
-  } catch(err){box.textContent='Error: '+err.message;box.className='ai-out';setSt('AI error','se');}
-}
-
-// ─── INIT ─────────────────────────────────────────────────────────
-loadOff('shotgun');
-loadDef('34');
-setTool('select');
+const canvas=document.getElementById('field'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height,LOS=H*.62;
+let mode='select',selected={side:'offense',id:null},players=[],defenders=[],routes=[],blocks=[],motions=[],ballPath=null,drag=null,drawing=false,drawPts=[],anim=false,raf=null,currentFormation='Shotgun';
+const colors={QB:'#c8a84b',RB:'#e74c3c',WR:'#3498db',TE:'#9b59b6',OL:'#95a5a6',FB:'#e67e22',DEF:'#8b0000',S:'#b71c1c',CB:'#8b0000',LB:'#a22525',DL:'#6d1111'};
+const formations={Shotgun:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.75],['RB','RB',.62,.78],['X','WR',.08,.62],['SLOT','WR',.22,.64],['Z','WR',.92,.62],['Y','TE',.78,.63]],'I-Form':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['FB','FB',.50,.74],['RB','RB',.50,.82],['X','WR',.09,.62],['Z','WR',.91,.62],['Y','TE',.78,.63]],Spread:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['X','WR',.05,.62],['H','WR',.18,.64],['Y','WR',.82,.64],['Z','WR',.95,.62],['RB','RB',.61,.78]],Pistol:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.70],['RB','RB',.50,.79],['X','WR',.08,.62],['H','WR',.22,.64],['Z','WR',.92,.62],['Y','TE',.78,.63]]};
+const defTemplates={
+'4-3 Over':[['DE','DL',.28,.53],['DT','DL',.42,.52],['NT','DL',.54,.52],['DE','DL',.72,.53],['WILL','LB',.30,.43],['MIKE','LB',.50,.42],['SAM','LB',.70,.43],['CB','CB',.08,.35],['CB','CB',.92,.35],['FS','S',.50,.22],['SS','S',.72,.30]],
+'3-4 Odd':[['DE','DL',.36,.52],['NT','DL',.50,.52],['DE','DL',.64,.52],['OLB','LB',.22,.46],['ILB','LB',.43,.42],['ILB','LB',.57,.42],['OLB','LB',.78,.46],['CB','CB',.08,.34],['CB','CB',.92,.34],['FS','S',.50,.22],['SS','S',.68,.30]],
+'Nickel 2-4-5':[['DE','DL',.32,.52],['DT','DL',.45,.52],['DT','DL',.55,.52],['DE','DL',.68,.52],['LB','LB',.42,.42],['LB','LB',.58,.42],['CB','CB',.07,.34],['CB','CB',.93,.34],['NB','CB',.25,.36],['FS','S',.45,.22],['SS','S',.62,.25]],
+'Bear Front':[['DE','DL',.28,.52],['DT','DL',.39,.52],['NT','DL',.50,.52],['DT','DL',.61,.52],['DE','DL',.72,.52],['MIKE','LB',.50,.42],['SAM','LB',.75,.43],['CB','CB',.08,.35],['CB','CB',.92,.35],['FS','S',.45,.22],['SS','S',.62,.27]],
+'Goal Line':[['DE','DL',.25,.52],['DT','DL',.36,.52],['NT','DL',.50,.52],['DT','DL',.64,.52],['DE','DL',.75,.52],['LB','LB',.35,.43],['LB','LB',.50,.42],['LB','LB',.65,.43],['CB','CB',.13,.36],['CB','CB',.87,.36],['S','S',.50,.28]],
+Dime:[['DE','DL',.34,.52],['DT','DL',.46,.52],['DT','DL',.54,.52],['DE','DL',.66,.52],['LB','LB',.50,.43],['CB','CB',.07,.34],['CB','CB',.93,.34],['NB','CB',.25,.36],['DB','CB',.75,.36],['FS','S',.42,.22],['SS','S',.60,.24]]};
+function init(){document.getElementById('formationBtns').innerHTML=Object.keys(formations).map((f,i)=>`<button class="btn ${i?'':'active'}" onclick="loadFormation('${f}',this)">${f}</button>`).join('');loadFormation('Shotgun');autoDefense();refreshSaved();draw();}
+function mkPlayer(arr,i){return{id:i,label:arr[0],pos:arr[1],role:arr[1],x:arr[2]*W,y:arr[3]*H,ox:arr[2]*W,oy:arr[3]*H,assignment:'',color:colors[arr[1]]||'#999',animX:arr[2]*W,animY:arr[3]*H}}
+function loadFormation(f,btn){currentFormation=f;players=formations[f].map(mkPlayer);routes=[];blocks=[];motions=[];ballPath=null;selected={side:'offense',id:null};if(btn){document.querySelectorAll('#formationBtns .btn').forEach(b=>b.classList.remove('active'));btn.classList.add('active')}buildList();renderEditor();draw();status('Loaded '+f+'.','success')}
+function autoDefense(){const front=document.getElementById('defFront').value;defenders=(defTemplates[front]||defTemplates['4-3 Over']).map((d,i)=>({id:i,label:d[0],pos:d[1],role:d[1],x:d[2]*W,y:d[3]*H,assignment:document.getElementById('coverage').value,color:colors[d[1]]||colors.DEF,animX:d[2]*W,animY:d[3]*H}));draw();coach(`Defense generated: ${front} / ${document.getElementById('coverage').value}\n\nYou can drag any defender and edit exact labels/roles from the player editor. This lets a coach start with an AI shell, then customize leverage, depth, blitzes, and disguise.`)}
+function buildList(){const el=document.getElementById('playerList');el.innerHTML=players.map(p=>`<div class="player-row ${selected.side==='offense'&&selected.id===p.id?'selected':''}" onclick="selectObj('offense',${p.id})"><div class="dot" style="background:${p.color}">${p.label}</div><div><b>${p.label}</b> <span class="small">${p.pos}</span><div class="small">${p.assignment||'No assignment'}</div></div><span class="small">${routeCount(p.id)}</span></div>`).join('')}
+function routeCount(id){let n=routes.filter(r=>r.pid===id).length+blocks.filter(r=>r.pid===id).length+motions.filter(r=>r.pid===id).length;return n?n+'x':''}
+function selectObj(side,id){selected={side,id};buildList();renderEditor();draw()}
+function obj(){return selected.side==='defense'?defenders.find(d=>d.id===selected.id):players.find(p=>p.id===selected.id)}
+function renderEditor(){const p=obj(),el=document.getElementById('editor');if(!p){el.className='hint';el.innerHTML='Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.';return}el.className='';el.innerHTML=`<div class="editor-grid"><label>Label</label><input class="input" value="${p.label}" oninput="editSel('label',this.value)"><label>Position</label><input class="input" value="${p.pos}" oninput="editSel('pos',this.value)"><label>Role</label><input class="input" value="${p.role||''}" oninput="editSel('role',this.value)"><label>Assign</label><input class="input" value="${p.assignment||''}" oninput="editSel('assignment',this.value)"><label>Color</label><input class="input" type="color" value="${p.color}" oninput="editSel('color',this.value)"><label>X / Y</label><input class="input" value="${Math.round(p.x)}, ${Math.round(p.y)}" onchange="setXY(this.value)"></div><button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete Selected</button>`}
+function editSel(k,v){const p=obj();if(!p)return;p[k]=v;buildList();draw()} function setXY(v){const p=obj();if(!p)return;const [x,y]=v.split(',').map(n=>Number(n.trim()));if(!isNaN(x)&&!isNaN(y)){p.x=x;p.y=y;p.ox=x;p.oy=y;draw()}}
+function deleteSelected(){if(!obj())return;if(selected.side==='defense')defenders=defenders.filter(d=>d.id!==selected.id);else players=players.filter(p=>p.id!==selected.id);selected={side:'offense',id:null};buildList();renderEditor();draw()}
+function addPlayer(){const id=Math.max(-1,...players.map(p=>p.id))+1;players.push({id,label:'NEW',pos:'WR',role:'Custom',x:W*.5,y:H*.78,ox:W*.5,oy:H*.78,assignment:'',color:colors.WR,animX:W*.5,animY:H*.78});selectObj('offense',id)}
+function setMode(m){mode=m;document.querySelectorAll('[id^=mode-]').forEach(b=>b.classList.remove('active'));document.getElementById('mode-'+m).classList.add('active');canvas.style.cursor=m==='select'?'default':'crosshair'}
+function pos(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}} function hit(list,x,y,rad=18){return list.find(p=>Math.hypot(p.x-x,p.y-y)<rad)}
+canvas.onmousedown=e=>{if(anim)return;const m=pos(e);const off=hit(players,m.x,m.y),def=hit(defenders,m.x,m.y);if(mode==='select'||mode==='def'){if(def){selectObj('defense',def.id);drag=def}else if(off){selectObj('offense',off.id);drag=off}else{selected={side:'offense',id:null};renderEditor();buildList();draw()}return} if(mode==='ball'){const rb=players.find(p=>p.pos==='RB'||p.label==='RB')||obj(); if(!rb){status('Add or select a RB first.','error');return} selected={side:'offense',id:rb.id}; ballPath=[{x:rb.x,y:rb.y},m]; routes=routes.filter(r=>!(r.pid===rb.id&&r.kind==='carry')); routes.push({pid:rb.id,type:'run',kind:'carry',pts:ballPath,auto:true}); rb.assignment='Ball carrier: '+document.getElementById('runScheme').value; buildList();autoRun(false);return} const p=obj(); if(!p||selected.side!=='offense'){status('Select an offensive player first.','error');return} drawing=true;drawPts=[{x:p.x,y:p.y}];};
+canvas.onmousemove=e=>{const m=pos(e);if(drag){drag.x=m.x;drag.y=m.y;drag.ox=m.x;drag.oy=m.y;draw();return} if(drawing){drawPts.push(m);if(drawPts.length>3)drawPts=simplify(drawPts,7);draw()}}; canvas.onmouseup=e=>{if(drag){drag=null;renderEditor();return} if(!drawing)return;drawing=false;if(drawPts.length>2){const type=mode==='motion'?'motion':mode==='block'?'block':'route';const arr=type==='motion'?motions:type==='block'?blocks:routes;arr.push({pid:selected.id,type,pts:simplify(drawPts,9),manual:true});const p=obj(); if(p)p.assignment=type==='route'?'Manual route':type==='block'?'Manual block':'Motion';buildList();status('Assignment added.','success')}drawPts=[];draw()}; canvas.onmouseleave=()=>{drag=null;if(drawing){drawing=false;drawPts=[];draw()}};
+function simplify(pts,d){let out=[pts[0]];for(let i=1;i<pts.length;i++){let a=out[out.length-1],b=pts[i];if(Math.hypot(a.x-b.x,a.y-b.y)>=d)out.push(b)}return out}
+function autoRun(reset=true){if(reset)blocks=blocks.filter(b=>b.manual);const scheme=document.getElementById('runScheme').value;let rb=players.find(p=>p.pos==='RB'||p.label==='RB')||players.find(p=>p.pos==='QB');if(!rb){status('No RB/QB found.','error');return}let target=ballPath?ballPath[1]:{x:scheme.includes('Outside')?W*.78:scheme==='Counter'?W*.35:W*.54,y:H*.39};ballPath=[{x:rb.x,y:rb.y},target];routes=routes.filter(r=>!(r.pid===rb.id&&r.kind==='carry'));routes.push({pid:rb.id,type:'run',kind:'carry',pts:ballPath,auto:true});const dir=target.x>W*.5?1:-1;const ol=players.filter(p=>p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label));ol.forEach((p,i)=>{let tx=p.x+dir*(scheme.includes('Zone')?28:scheme==='Power'?18:10),ty=p.y-55-(i%2)*6; if(scheme==='Duo'){tx=p.x;ty=p.y-45} if(scheme==='Trap'&&['LG','RG'].includes(p.label)){tx=target.x-dir*25;ty=target.y+10} if(scheme==='Counter'&&['TE','FB'].includes(p.pos)){tx=target.x;ty=target.y}blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:tx,y:ty}],auto:true});p.assignment=`${scheme}: ${scheme.includes('Zone')?'zone step/combo':'gap responsibility'} ${dir>0?'right':'left'}`});players.filter(p=>['TE','FB','WR'].includes(p.pos)&&p.id!==rb.id).forEach(p=>{let tx=p.x+(p.x<target.x?35:-35),ty=p.y-40;blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:tx,y:ty}],auto:true});p.assignment=p.pos==='WR'?'Crack/stalk support':'Lead/kick support'});rb.assignment=`Carry to ${Math.round(target.x)},${Math.round(target.y)} — ${scheme}`;buildList();draw();coach(`Run concept generated: ${scheme}\n\nBall target: ${Math.round(target.x)}, ${Math.round(target.y)}. The line was assigned ${scheme.includes('Zone')?'zone/combo tracks':'gap-style leverage'} based on the aiming point. Every red block can be dragged/re-drawn manually after generation.`)}
+function autoPassPro(){blocks=blocks.filter(b=>b.manual);const scheme=document.getElementById('passScheme').value,slide=scheme.includes('Left')?-1:scheme.includes('Right')?1:0;players.filter(p=>p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label)).forEach((p,i)=>{let lane=slide?slide:(p.x<W*.5?-1:p.x>W*.5?1:0);let depth=scheme.includes('Man')?34:scheme.includes('Full')?48:40;blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:p.x+lane*30,y:p.y-depth}],auto:true});p.assignment=scheme+': protect inside-out'});players.filter(p=>['RB','FB','TE'].includes(p.pos)).forEach(p=>{if(scheme==='Max Protect'||p.pos==='RB'){blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:p.x+(p.x<W*.5?-38:38),y:p.y-52}],auto:true});p.assignment=scheme+': scan/check release'}});buildList();draw();coach(`Pass protection generated: ${scheme}\n\nThe OL receives slide/man rules, backs and tight ends receive scan support where appropriate. You can still hand-draw a different pickup for any player.`)}
+function addQuickPassConcept(){routes=routes.filter(r=>!r.autoConcept);const wrs=players.filter(p=>['WR','TE','RB'].includes(p.pos));wrs.forEach((p,i)=>{let dx=p.x<W*.5?-1:1,depth=[105,70,120,45,30][i%5];routes.push({pid:p.id,type:'route',autoConcept:true,pts:[{x:p.x,y:p.y},{x:p.x+dx*(i%2?40:0),y:p.y-depth},{x:p.x+dx*(i%2?95:35),y:p.y-depth-10}]});p.assignment=['Go/clear','Out','Dig','Flat','Option'][i%5]});buildList();draw();coach('Quick pass concept installed: vertical clear-outs, underneath answers, and a middle-window route. Pair with pass protection, then adjust stems manually.')}
+function clearBlocking(){blocks=[];players.forEach(p=>{if(p.assignment&&p.assignment.includes('Protect'))p.assignment=''});buildList();draw()}
+function draw(){ctx.clearRect(0,0,W,H);drawField();drawDefense();drawLines(motions,'#3498db',false);drawLines(routes,'#f5c842',false);drawLines(blocks,'#e74c3c',true);if(ballPath)drawPath(ballPath,'#d8892b',false,5);if(drawing&&drawPts.length>1)drawPath(drawPts,mode==='block'?'#e74c3c':mode==='motion'?'#3498db':'#f5c842',true,2);drawPeople(defenders,true);drawPeople(players,false)}
+function drawField(){for(let i=0;i<10;i++){ctx.fillStyle=i%2?'#285215':'#2a5518';ctx.fillRect(0,i*H/10,W,H/10)}ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;for(let i=0;i<=10;i++){let y=i*H/10;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.strokeStyle='rgba(255,220,0,.65)';ctx.setLineDash([8,5]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,LOS);ctx.lineTo(W,LOS);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,220,0,.55)';ctx.font='700 11px Barlow Condensed';ctx.fillText('LINE OF SCRIMMAGE',8,LOS-5);ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(0,0,W,H*.08);ctx.fillStyle='rgba(255,255,255,.075)';ctx.font='900 22px Barlow Condensed';ctx.textAlign='center';ctx.fillText('END ZONE',W/2,H*.057);ctx.textAlign='left'}
+function drawDefense(){drawPeople(defenders,true)} function drawPeople(list,isDef){list.forEach(p=>{const x=anim?p.animX||p.x:p.x,y=anim?p.animY||p.y:p.y,r=isDef?12:15,sel=selected.id===p.id&&selected.side===(isDef?'defense':'offense');if(sel){ctx.beginPath();ctx.arc(x,y,r+6,0,Math.PI*2);ctx.fillStyle=(p.color||'#fff')+'44';ctx.fill()}ctx.beginPath();ctx.arc(x+2,y+2,r,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.45)';ctx.fill();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=p.color||'#999';ctx.fill();ctx.strokeStyle=sel?'#fff':isDef?'#ff7878':'rgba(0,0,0,.55)';ctx.lineWidth=sel?2.5:1.3;ctx.stroke();ctx.fillStyle=isDef?'#ffd0d0':'#050505';ctx.font=`900 ${isDef?9:10}px Barlow Condensed`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.label,x,y);ctx.textBaseline='alphabetic'});ctx.textAlign='left'}
+function drawLines(arr,color,dash){arr.forEach(a=>drawPath(a.pts,color,dash,2.6))}function drawPath(pts,color,dash,lw){if(!pts||pts.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=lw;if(dash)ctx.setLineDash([7,5]);else ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke();ctx.setLineDash([]);arrow(pts[pts.length-2],pts[pts.length-1],color)}function arrow(a,b,c){let ang=Math.atan2(b.y-a.y,b.x-a.x),s=9;ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));ctx.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill()}
+function runPlay(){if(anim)return;const all=[...motions,...routes,...blocks];if(!all.length){status('Add routes, blocking, or a ball path first.','error');return}anim=true;let start=performance.now();players.forEach(p=>{p.animX=p.x;p.animY=p.y});const tracks={};players.forEach(p=>{const tr=all.filter(a=>a.pid===p.id&&a.type!=='block');let pts=[];tr.forEach(t=>pts=pts.concat(pts.length?t.pts.slice(1):t.pts));tracks[p.id]=pts.length?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}]});function step(t){let prog=Math.min((t-start)/3000,1),e=prog<.5?2*prog*prog:-1+(4-2*prog)*prog;players.forEach(p=>{let pts=tracks[p.id],idx=Math.min(pts.length-2,Math.floor(e*(pts.length-1))),local=(e*(pts.length-1))-idx,a=pts[idx],b=pts[idx+1]||a;p.animX=a.x+(b.x-a.x)*local;p.animY=a.y+(b.y-a.y)*local});draw();if(prog<1)raf=requestAnimationFrame(step);else setTimeout(()=>stopPlay(true),450)}raf=requestAnimationFrame(step);status('Running play...','loading')}
+function stopPlay(done){anim=false;if(raf)cancelAnimationFrame(raf);players.forEach(p=>{p.animX=p.x;p.animY=p.y});draw();status(done?'Play complete.':'Stopped.',done?'success':'')}
+function smartAnalyze(){const run=document.getElementById('runScheme').value,pass=document.getElementById('passScheme').value,front=document.getElementById('defFront').value,cov=document.getElementById('coverage').value;let rb=players.find(p=>p.pos==='RB'||p.label==='RB');let hasRun=!!ballPath;let routeN=routes.filter(r=>r.kind!=='carry').length;let blockN=blocks.length;coach(`Integrated Coach Model\n\nFormation: ${currentFormation}\nDefense: ${front} / ${cov}\nRun plan: ${hasRun?run+' to '+Math.round(ballPath[1].x)+','+Math.round(ballPath[1].y):'No RB aiming point yet'}\nPass pro: ${pass}\nAssignments: ${routeN} route(s), ${blockN} block(s).\n\nRead: ${hasRun?'The run game is now modeled from the ball-carrier aiming point, so the blocking scheme can be adjusted around the landmark instead of generic arrows.':'Set the RB target first to let the system generate a real run fit.'}\n\nWeakness check: ${cov.includes('Zero')?'Zero pressure requires hot answers and immediate throw rules.':cov.includes('Cover 3')?'Cover 3 can be stressed with seams, flats, and flood concepts.':cov.includes('Man')?'Man Free rewards rubs, motion, and crossing leverage.':'Use route distribution to attack spacing between zones.'}\n\nNext best step: drag defenders to the look you expect, regenerate protection or run blocks, then manually adjust any player whose rule you want to coach differently.`)} function coach(t){document.getElementById('coach').textContent=t}
+function status(t,c){const e=document.getElementById('status');e.textContent=t;e.className='status '+(c||'')}
+function serialize(){return{name:document.getElementById('playName').value||'Untitled Play',formation:currentFormation,players,defenders,routes,blocks,motions,ballPath,date:Date.now()}} function savePlay(){let arr=JSON.parse(localStorage.getItem('pdpro.v3')||'[]'),p=serialize();arr=arr.filter(x=>x.name!==p.name);arr.unshift(p);localStorage.setItem('pdpro.v3',JSON.stringify(arr.slice(0,30)));refreshSaved();status('Saved '+p.name+'.','success')} function refreshSaved(){let s=document.getElementById('saved'),arr=JSON.parse(localStorage.getItem('pdpro.v3')||'[]');s.innerHTML='<option value="">Load saved play...</option>'+arr.map((p,i)=>`<option value="${i}">${p.name} · ${new Date(p.date).toLocaleDateString()}</option>`).join('')} function loadSaved(i){if(i==='')return;let p=JSON.parse(localStorage.getItem('pdpro.v3')||'[]')[+i];if(!p)return;Object.assign(window,{players:p.players,defenders:p.defenders,routes:p.routes,blocks:p.blocks,motions:p.motions,ballPath:p.ballPath,currentFormation:p.formation});document.getElementById('playName').value=p.name;selected={side:'offense',id:null};buildList();renderEditor();draw();status('Loaded '+p.name+'.','success')}
+function resetAll(){loadFormation(currentFormation);autoDefense()} function exportPNG(){let a=document.createElement('a'),n=(document.getElementById('playName').value||'play-designer-pro').toLowerCase().replace(/[^a-z0-9]+/g,'-');a.download=n+'.png';a.href=canvas.toDataURL('image/png');a.click();status('PNG exported.','success')}
+['touchstart','touchmove','touchend','touchcancel'].forEach(ev=>canvas.addEventListener(ev,e=>e.preventDefault(),{passive:false}));canvas.addEventListener('touchstart',e=>{let t=e.touches[0];if(t)canvas.dispatchEvent(new MouseEvent('mousedown',{clientX:t.clientX,clientY:t.clientY}))});canvas.addEventListener('touchmove',e=>{let t=e.touches[0];if(t)canvas.dispatchEvent(new MouseEvent('mousemove',{clientX:t.clientX,clientY:t.clientY}))});canvas.addEventListener('touchend',e=>{let t=e.changedTouches[0];if(t)canvas.dispatchEvent(new MouseEvent('mouseup',{clientX:t.clientX,clientY:t.clientY}))});document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;let k=e.key.toLowerCase();if(k==='r')setMode('route');if(k==='b')setMode('block');if(k==='d')setMode('def');if(k==='s')setMode('select')});init();
 </script>
 </body>
 </html>
