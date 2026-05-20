@@ -3,133 +3,1826 @@
 <head>
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-<title>Play Designer Pro v6 — Coordinator Lab</title>
+<title>Play Designer Pro v7 — Coordinator Lab</title>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap');
-*{box-sizing:border-box;margin:0;padding:0} :root{--bg:#080808;--panel:#141414;--panel2:#1d1d1d;--panel3:#252525;--border:#323232;--text:#eee6d6;--muted:#8f8a80;--gold:#c8a84b;--green:#2a5518;--green2:#285215;--red:#c0392b;--blue:#3498db;--yellow:#f5c842;--purple:#9b59b6;--orange:#e67e22;--success:#49b564} body{background:var(--bg);color:var(--text);font-family:Barlow,system-ui,sans-serif;min-height:100vh;overflow:hidden} button,input,select,textarea{font-family:inherit} header{height:54px;background:linear-gradient(90deg,#111,#181818);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px} h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--gold)} .subtitle{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}.app{height:calc(100vh - 54px);display:grid;grid-template-columns:260px 1fr 310px;overflow:hidden}.panel{background:var(--panel);border-color:var(--border);overflow:auto}.left{border-right:1px solid var(--border)}.right{border-left:1px solid var(--border)}.section{padding:13px;border-bottom:1px solid var(--border)}.label{font:700 11px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px}.btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:5px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;transition:.12s;text-align:left}.btn:hover{border-color:var(--gold);color:var(--gold)}.btn.active,.btn.primary{background:var(--gold);border-color:var(--gold);color:#111}.btn.green{background:#1a7c3a;border-color:#1a7c3a;color:#fff}.btn.red{background:#73211b;border-color:#9b2d25;color:#fff}.btn.full{width:100%;text-align:center}.tool{display:flex;align-items:center;gap:8px}.input,.select,.textarea{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:8px 9px;outline:none;font-size:13px}.input:focus,.select:focus,.textarea:focus{border-color:var(--gold)}.textarea{min-height:88px;resize:vertical;line-height:1.45}.canvas-wrap{display:flex;flex-direction:column;min-width:0;background:#0b0b0b}.field-holder{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;overflow:hidden;position:relative}canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-shadow:0 0 44px rgba(0,0,0,.8);touch-action:none}.bar{height:62px;background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:10px;padding:10px 14px}.play-name{width:220px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:800 17px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:9px 12px}.status{flex:1;font-size:13px;color:var(--muted);font-style:italic}.status.success{color:var(--success)}.status.error{color:#ff6b5f}.status.loading{color:var(--gold)}.player-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;margin-bottom:5px;cursor:pointer}.player-row.selected{border-color:var(--gold);background:rgba(200,168,75,.08)}.dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px 'Barlow Condensed';color:#080808}.small{font-size:11px;color:var(--muted)}.editor-grid{display:grid;grid-template-columns:76px 1fr;gap:7px;align-items:center}.editor-grid label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}.hint{font-size:11px;color:var(--muted);line-height:1.45}.coach{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;font-size:12px;line-height:1.55;white-space:pre-wrap;max-height:260px;overflow:auto}.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--muted);margin:0 4px 5px 0}.legend-line{width:24px;height:3px;border-radius:2px;display:inline-block}.kbd{font:700 10px monospace;border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--gold)}.coach-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}.section.hidden-by-coach{display:none}.badge{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 7px;font-size:10px;color:var(--gold);margin-left:6px}
+*{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#080808;--panel:#141414;--panel2:#1d1d1d;--panel3:#252525;
+  --border:#323232;--text:#eee6d6;--muted:#8f8a80;
+  --gold:#c8a84b;--green:#1a7c3a;--red:#73211b;
+  --blue:#3498db;--yellow:#f5c842;--purple:#9b59b6;
+  --orange:#e67e22;--success:#49b564;
+}
+body{background:var(--bg);color:var(--text);font-family:Barlow,system-ui,sans-serif;min-height:100vh;overflow:hidden}
+button,input,select,textarea{font-family:inherit}
+header{height:54px;background:linear-gradient(90deg,#111,#181818);border-bottom:1px solid var(--border);display:flex;align-items:center;gap:16px;padding:0 18px}
+h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--gold)}
+.subtitle{font-size:12px;color:var(--muted);letter-spacing:1px;text-transform:uppercase}
+.v-badge{font-size:11px;background:rgba(200,168,75,.18);border:1px solid rgba(200,168,75,.35);color:var(--gold);padding:2px 8px;border-radius:999px;margin-left:4px}
+.app{height:calc(100vh - 54px);display:grid;grid-template-columns:268px 1fr 318px;overflow:hidden}
+.panel{background:var(--panel);border-color:var(--border);overflow:auto}
+.left{border-right:1px solid var(--border)}.right{border-left:1px solid var(--border)}
+.section{padding:13px;border-bottom:1px solid var(--border)}
+.label{font:700 11px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--muted);margin-bottom:9px}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.grid3{display:grid;grid-template-columns:1fr 1fr 1fr;gap:5px}
+.btn{border:1px solid var(--border);background:var(--panel2);color:var(--text);border-radius:5px;padding:8px 10px;cursor:pointer;font-weight:700;font-size:12px;transition:.12s;text-align:left}
+.btn:hover{border-color:var(--gold);color:var(--gold)}
+.btn.active,.btn.primary{background:var(--gold);border-color:var(--gold);color:#111}
+.btn.green{background:var(--green);border-color:#1a7c3a;color:#fff}
+.btn.red{background:var(--red);border-color:#9b2d25;color:#fff}
+.btn.blue{background:#1a4f7c;border-color:#2a6fac;color:#fff}
+.btn.full{width:100%;text-align:center}
+.input,.select,.textarea{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:8px 9px;outline:none;font-size:13px}
+.input:focus,.select:focus,.textarea:focus{border-color:var(--gold)}
+.textarea{min-height:88px;resize:vertical;line-height:1.45}
+.canvas-wrap{display:flex;flex-direction:column;min-width:0;background:#0b0b0b}
+.field-holder{flex:1;display:flex;align-items:center;justify-content:center;padding:14px;overflow:hidden;position:relative}
+canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-shadow:0 0 44px rgba(0,0,0,.8);touch-action:none}
+.bar{height:62px;background:var(--panel);border-top:1px solid var(--border);display:flex;align-items:center;gap:8px;padding:10px 14px;flex-wrap:wrap}
+.play-name{width:210px;background:var(--panel2);border:1px solid var(--border);color:var(--text);font:800 17px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;border-radius:5px;padding:9px 12px}
+.status{flex:1;font-size:13px;color:var(--muted);font-style:italic;min-width:120px}
+.status.success{color:var(--success)}.status.error{color:#ff6b5f}.status.loading{color:var(--gold)}
+.player-row{display:grid;grid-template-columns:30px 1fr auto;gap:8px;align-items:center;padding:7px;background:var(--panel2);border:1px solid var(--border);border-radius:5px;margin-bottom:5px;cursor:pointer;transition:.1s}
+.player-row:hover{border-color:rgba(200,168,75,.4)}
+.player-row.selected{border-color:var(--gold);background:rgba(200,168,75,.08)}
+.dot{width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;font:800 10px 'Barlow Condensed';color:#080808}
+.small{font-size:11px;color:var(--muted)}
+.editor-grid{display:grid;grid-template-columns:76px 1fr;gap:7px;align-items:center}
+.editor-grid label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:1px}
+.hint{font-size:11px;color:var(--muted);line-height:1.55}
+.coach{background:var(--panel2);border:1px solid var(--border);border-radius:7px;padding:11px;font-size:12px;line-height:1.65;white-space:pre-wrap;max-height:340px;overflow:auto;color:var(--text)}
+.coach .coach-section{color:var(--gold);font-weight:700;letter-spacing:1px;text-transform:uppercase;font-size:11px}
+.chip{display:inline-flex;align-items:center;gap:5px;padding:4px 7px;border:1px solid var(--border);border-radius:999px;font-size:11px;color:var(--muted);margin:0 4px 5px 0}
+.legend-line{width:24px;height:3px;border-radius:2px;display:inline-block}
+.kbd{font:700 10px monospace;border:1px solid var(--border);padding:1px 5px;border-radius:4px;color:var(--gold)}
+.coach-tabs{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.hidden-by-coach{display:none!important}
+.badge{display:inline-block;border:1px solid var(--border);border-radius:999px;padding:3px 7px;font-size:10px;color:var(--gold);margin-left:6px}
+.mode-bar{display:grid;grid-template-columns:repeat(6,1fr);gap:5px}
+.section-title{display:flex;align-items:center;justify-content:space-between}
+.ai-thinking{display:none;font-size:11px;color:var(--gold);font-style:italic}
+.ai-thinking.active{display:block}
+.divider{height:1px;background:var(--border);margin:8px 0}
+/* Tabs in right panel */
+.rtabs{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;margin-bottom:10px}
+.rtab{padding:6px;font-size:11px;font-weight:700;letter-spacing:.5px;text-align:center;cursor:pointer;border-radius:4px;border:1px solid var(--border);background:var(--panel2);color:var(--muted);transition:.12s}
+.rtab.active{background:rgba(200,168,75,.15);border-color:var(--gold);color:var(--gold)}
+.rtab-content{display:none}.rtab-content.active{display:block}
+/* Progress ring for animation */
+.anim-progress{position:absolute;top:14px;right:14px;font:700 12px 'Barlow Condensed';color:var(--gold);background:rgba(0,0,0,.7);padding:4px 10px;border-radius:4px;display:none}
+.anim-progress.active{display:block}
 @media(max-width:980px){body{overflow:auto}.app{height:auto;display:flex;flex-direction:column}.panel{max-height:none}.bar{height:auto;flex-wrap:wrap}.play-name{width:100%}canvas{width:100%;height:auto}.left,.right{border:0;border-top:1px solid var(--border)}}
 </style>
 </head>
 <body>
-<header><h1>⚡ Play Designer Pro</h1><span class="subtitle">Coordinator Lab + collision-safe formations + 11-player animation</span></header>
+<header>
+  <h1>⚡ Play Designer Pro</h1>
+  <span class="v-badge">v7</span>
+  <span class="subtitle">Smart Coach · Fixed Spacing · All-11 Animation</span>
+</header>
 <div class="app">
+  <!-- LEFT PANEL -->
   <aside class="panel left">
-    <div class="section"><div class="label">Coordinator Workspace</div><div class="coach-tabs"><button class="btn active full" id="tab-offense" onclick="setCoordinator('offense')">Offense</button><button class="btn full" id="tab-defense" onclick="setCoordinator('defense')">Defense</button></div><p class="hint" style="margin-top:8px">Offense mode focuses formations, play design, run game, protection, and all 11 offensive assignments. Defense mode focuses fronts, coverage, disguise, leverage, and AI answers to the offensive look.</p></div>
-    <div class="section" data-coach="offense"><div class="label">Formation Library</div><div class="grid2" id="formationBtns"></div><div class="grid2" style="margin-top:8px"><button class="btn full" onclick="saveFormation()">💾 Save Formation</button><button class="btn full" onclick="refreshFormations()">↻ Refresh</button></div><select class="select" id="customFormations" onchange="loadCustomFormation(this.value)" style="margin-top:8px"><option value="">Load custom formation...</option></select><p class="hint" style="margin-top:8px">Built-ins include modern spread, pro-style, heavy, option, and youth-friendly structures. Save any custom spacing you create.</p></div>
-    <div class="section" data-coach="both"><div class="label">Mode</div><div class="grid2">
-      <button class="btn active" id="mode-select" onclick="setMode('select')">🖱 Select</button><button class="btn" id="mode-route" onclick="setMode('route')">🟡 Route</button>
-      <button class="btn" id="mode-block" onclick="setMode('block')">🟥 Block</button><button class="btn" id="mode-ball" onclick="setMode('ball')">🏈 RB Target</button>
-      <button class="btn" id="mode-def" onclick="setMode('def')">🛡 Defense</button><button class="btn" id="mode-motion" onclick="setMode('motion')">➡ Motion</button>
-    </div><p class="hint" style="margin-top:8px">Select a player, then draw. In RB Target mode, click where the runner should hit.</p></div>
-    <div class="section" data-coach="offense"><div class="label">Run Game AI <span class="badge">all 11 move</span></div>
-      <select id="runScheme" class="select"><option>Inside Zone</option><option>Outside Zone</option><option>Power</option><option>Counter</option><option>Duo</option><option>Trap</option><option>Draw</option><option>Stretch</option><option>Pin-Pull</option></select>
-      <div class="grid2" style="margin-top:7px"><button class="btn primary full" onclick="autoRun()">Auto Run + Blocks</button><button class="btn full" onclick="clearBlocking()">Clear Blocks</button></div><button class="btn full" style="margin-top:7px" onclick="autoPlayAction()">🎭 Play Action Pass</button>
+    <div class="section">
+      <div class="label">Coordinator Mode</div>
+      <div class="coach-tabs">
+        <button class="btn active full" id="tab-offense" onclick="setCoordinator('offense')">⚔ Offense</button>
+        <button class="btn full" id="tab-defense" onclick="setCoordinator('defense')">🛡 Defense</button>
+      </div>
+      <p class="hint" style="margin-top:8px">Offense: formations, run game, pass concepts, protections. Defense: fronts, coverage shells, blitz packages, gap assignments.</p>
     </div>
-    <div class="section" data-coach="offense"><div class="label">Pass Pro AI <span class="badge">OL animates</span></div>
-      <select id="passScheme" class="select"><option>Half-Slide Left</option><option>Half-Slide Right</option><option>Full Slide Left</option><option>Full Slide Right</option><option>Man Protection</option><option>Max Protect</option></select>
-      <div class="grid2" style="margin-top:7px"><button class="btn primary full" onclick="autoPassPro()">Generate Pass Pro</button><button class="btn full" onclick="addQuickPassConcept()">Quick Concept</button></div><select id="passConcept" class="select" style="margin-top:7px"><option>Flood</option><option>Levels</option><option>Y-Cross</option><option>Boot Sail</option><option>Mesh</option><option>Smash</option></select>
+
+    <div class="section" data-coach="offense">
+      <div class="label">Formation Library</div>
+      <div class="grid2" id="formationBtns"></div>
+      <div class="grid2" style="margin-top:8px">
+        <button class="btn full" onclick="saveFormation()">💾 Save</button>
+        <button class="btn full" onclick="refreshFormations()">↻ Refresh</button>
+      </div>
+      <select class="select" id="customFormations" onchange="loadCustomFormation(this.value)" style="margin-top:8px">
+        <option value="">Load custom formation...</option>
+      </select>
     </div>
-    <div class="section" data-coach="defense"><div class="label">Defense AI</div>
-      <select id="defFront" class="select"><option>4-3 Over</option><option>3-4 Odd</option><option>Nickel 2-4-5</option><option>Bear Front</option><option>Goal Line</option><option>Dime</option></select>
-      <select id="coverage" class="select" style="margin-top:7px"><option>Cover 3</option><option>Cover 2</option><option>Man Free</option><option>Cover 4</option><option>Zero Blitz</option><option>Tampa 2</option></select>
-      <div class="grid2" style="margin-top:7px"><button class="btn primary full" onclick="suggestDefense()">AI Best Defense</button><button class="btn full" onclick="autoDefense()">Set Selected</button></div>
+
+    <div class="section" data-coach="both">
+      <div class="label">Drawing Mode</div>
+      <div class="mode-bar">
+        <button class="btn active" id="mode-select" onclick="setMode('select')" title="Select/move (S)">🖱</button>
+        <button class="btn" id="mode-route" onclick="setMode('route')" title="Draw route (R)">🟡</button>
+        <button class="btn" id="mode-block" onclick="setMode('block')" title="Draw block (B)">🟥</button>
+        <button class="btn" id="mode-ball" onclick="setMode('ball')" title="Set RB aiming point">🏈</button>
+        <button class="btn" id="mode-def" onclick="setMode('def')" title="Move defenders (D)">🛡</button>
+        <button class="btn" id="mode-motion" onclick="setMode('motion')" title="Draw motion">➡</button>
+      </div>
+      <p class="hint" style="margin-top:7px">Select a player first, then draw. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">D</span> def · <span class="kbd">S</span> select</p>
     </div>
-    <div class="section" data-coach="both"><div class="label">Players</div><div id="playerList"></div><button class="btn full" onclick="addPlayer()">＋ Add Player</button></div>
+
+    <div class="section" data-coach="offense">
+      <div class="label">Run Game <span class="badge">all-11</span></div>
+      <select id="runScheme" class="select">
+        <option>Inside Zone</option><option>Outside Zone</option>
+        <option>Power</option><option>Counter</option>
+        <option>Duo</option><option>Trap</option>
+        <option>Draw</option><option>Stretch</option>
+        <option>Pin-Pull</option><option>Toss Sweep</option>
+        <option>QB Keeper</option><option>Option</option>
+      </select>
+      <select id="runDir" class="select" style="margin-top:6px">
+        <option value="auto">Direction: Auto</option>
+        <option value="left">Force Left</option>
+        <option value="right">Force Right</option>
+        <option value="middle">Middle</option>
+      </select>
+      <div class="grid2" style="margin-top:7px">
+        <button class="btn primary full" onclick="autoRun()">▶ Generate Run</button>
+        <button class="btn full" onclick="clearBlocking()">✕ Clear Blocks</button>
+      </div>
+      <button class="btn full" style="margin-top:6px" onclick="autoPlayAction()">🎭 Play Action Pass</button>
+    </div>
+
+    <div class="section" data-coach="offense">
+      <div class="label">Pass Protection <span class="badge">OL animates</span></div>
+      <select id="passScheme" class="select">
+        <option>Half-Slide Left</option><option>Half-Slide Right</option>
+        <option>Full Slide Left</option><option>Full Slide Right</option>
+        <option>Man Protection</option><option>Max Protect</option>
+        <option>BOB (Big-on-Big)</option><option>Turnback</option>
+      </select>
+      <div class="grid2" style="margin-top:7px">
+        <button class="btn primary full" onclick="autoPassPro()">Generate Pass Pro</button>
+        <button class="btn full" onclick="addQuickPassConcept()">Quick Concept</button>
+      </div>
+      <select id="passConcept" class="select" style="margin-top:6px">
+        <option>Flood</option><option>Levels</option><option>Y-Cross</option>
+        <option>Boot Sail</option><option>Mesh</option><option>Smash</option>
+        <option>Four Verts</option><option>Yankee</option><option>Drive</option>
+        <option>Spacing</option>
+      </select>
+    </div>
+
+    <div class="section" data-coach="defense">
+      <div class="label">Defense AI</div>
+      <select id="defFront" class="select">
+        <option>4-3 Over</option><option>4-3 Under</option>
+        <option>3-4 Odd</option><option>Nickel 2-4-5</option>
+        <option>Bear Front</option><option>Goal Line</option>
+        <option>Dime</option><option>Quarter</option>
+      </select>
+      <select id="coverage" class="select" style="margin-top:6px">
+        <option>Cover 3</option><option>Cover 2</option>
+        <option>Man Free</option><option>Cover 4</option>
+        <option>Zero Blitz</option><option>Tampa 2</option>
+        <option>Cover 6</option><option>Quarters</option>
+      </select>
+      <div class="grid2" style="margin-top:7px">
+        <button class="btn primary full" onclick="suggestDefense()">🤖 AI Recommend</button>
+        <button class="btn full" onclick="autoDefense()">Set Selected</button>
+      </div>
+    </div>
+
+    <div class="section" data-coach="both">
+      <div class="label">Players</div>
+      <div id="playerList"></div>
+      <button class="btn full" style="margin-top:4px" onclick="addPlayer()">＋ Add Player</button>
+    </div>
   </aside>
 
+  <!-- CENTER CANVAS -->
   <main class="canvas-wrap">
-    <div class="field-holder"><canvas id="field" width="760" height="540"></canvas></div>
-    <div class="bar"><input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36"><button class="btn green" onclick="runPlay()">▶ Run</button><button class="btn red" onclick="stopPlay()">■ Stop</button><button class="btn" onclick="smartAnalyze()">🤖 Coach</button><button class="btn" onclick="undoStep()">↶ Undo</button><button class="btn" onclick="redoStep()">↷ Redo</button><button class="btn" onclick="clearSelectedAssignment()">Clear Selected</button><button class="btn" onclick="savePlay()">💾 Save</button><button class="btn" onclick="exportPNG()">📸 PNG</button><button class="btn" onclick="resetAll()">Reset</button><span id="status" class="status">Pick a formation, customize players, then generate run/pass/defense logic.</span></div>
+    <div class="field-holder">
+      <canvas id="field" width="760" height="540"></canvas>
+      <div class="anim-progress" id="animProgress">⏵ RUNNING</div>
+    </div>
+    <div class="bar">
+      <input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36">
+      <button class="btn green" onclick="runPlay()">▶ Run</button>
+      <button class="btn red" onclick="stopPlay()">■ Stop</button>
+      <button class="btn blue" onclick="smartAnalyze()">🤖 Coach</button>
+      <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
+      <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
+      <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
+      <button class="btn" onclick="savePlay()">💾 Save</button>
+      <button class="btn" onclick="exportPNG()">📸 PNG</button>
+      <button class="btn" onclick="resetAll()">↺ Reset</button>
+      <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach for full analysis.</span>
+    </div>
   </main>
 
+  <!-- RIGHT PANEL -->
   <aside class="panel right">
-    <div class="section"><div class="label">Selected Player Editor</div><div id="editor" class="hint">Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.</div></div>
-    <div class="section"><div class="label">Saved Plays</div><select class="select" id="saved" onchange="loadSaved(this.value)"><option value="">Load saved play...</option></select></div>
-    <div class="section"><div class="label">Coach Breakdown</div><div id="coach" class="coach">Generate a run scheme, pass protection, defensive look, or click Coach for an integrated breakdown.</div></div>
-    <div class="section"><div class="label">Legend</div>
-      <div class="chip"><span class="legend-line" style="background:#f5c842"></span> Route</div><div class="chip"><span class="legend-line" style="background:#e74c3c"></span> Block</div><div class="chip"><span class="legend-line" style="background:#3498db"></span> Motion</div><div class="chip">🏈 Ball path</div><br>
-      <span class="hint"><span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">D</span> defense · <span class="kbd">S</span> select · <span class="kbd">⌘/Ctrl+Z</span> undo · drag any player/defender.</span>
+    <div class="section">
+      <div class="rtabs">
+        <div class="rtab active" onclick="switchRTab('editor')">Player</div>
+        <div class="rtab" onclick="switchRTab('plays')">Plays</div>
+        <div class="rtab" onclick="switchRTab('legend')">Legend</div>
+      </div>
+
+      <div class="rtab-content active" id="rtab-editor">
+        <div class="label">Selected Player</div>
+        <div id="editor" class="hint">Select any player on the field to edit name, position, role, assignment, color, and location.</div>
+      </div>
+
+      <div class="rtab-content" id="rtab-plays">
+        <div class="label">Saved Plays</div>
+        <select class="select" id="saved" onchange="loadSaved(this.value)">
+          <option value="">Load saved play...</option>
+        </select>
+        <div class="divider"></div>
+        <div class="label" style="margin-top:8px">Export / Share</div>
+        <div class="grid2">
+          <button class="btn full" onclick="exportPNG()">📸 PNG</button>
+          <button class="btn full" onclick="copyJSON()">📋 Copy JSON</button>
+        </div>
+      </div>
+
+      <div class="rtab-content" id="rtab-legend">
+        <div class="label">Legend</div>
+        <div style="margin-bottom:8px">
+          <div class="chip"><span class="legend-line" style="background:#f5c842"></span> Route</div>
+          <div class="chip"><span class="legend-line" style="background:#e74c3c"></span> Block</div>
+          <div class="chip"><span class="legend-line" style="background:#3498db"></span> Motion</div>
+          <div class="chip">🏈 Ball path</div>
+        </div>
+        <div class="divider"></div>
+        <p class="hint" style="margin-top:7px">
+          <span class="kbd">R</span> draw route &nbsp;
+          <span class="kbd">B</span> draw block &nbsp;
+          <span class="kbd">D</span> move defenders &nbsp;
+          <span class="kbd">S</span> select/move<br><br>
+          <span class="kbd">Ctrl+Z</span> undo &nbsp;
+          <span class="kbd">Ctrl+Y</span> redo &nbsp;
+          <span class="kbd">P</span> play action<br><br>
+          Drag any player or defender at any time in Select mode. Defenders can also be dragged in Defense mode.
+        </p>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="label">🤖 Smart Coach</div>
+      <div id="coach" class="coach">Generate a run scheme, pass protection, or defensive look — then click Coach for a full integrated breakdown with real matchup analysis, gap counts, coverage stress points, and coaching adjustments.</div>
     </div>
   </aside>
 </div>
-<script>
-const canvas=document.getElementById('field'),ctx=canvas.getContext('2d'),W=canvas.width,H=canvas.height,LOS=H*.62;
-let mode='select',selected={side:'offense',id:null},players=[],defenders=[],routes=[],blocks=[],motions=[],ballPath=null,drag=null,drawing=false,drawPts=[],anim=false,raf=null,currentFormation='Shotgun',historyStack=[],redoStack=[],suspendHistory=false;
-const colors={QB:'#c8a84b',RB:'#e74c3c',WR:'#3498db',TE:'#9b59b6',OL:'#95a5a6',FB:'#e67e22',DEF:'#8b0000',S:'#b71c1c',CB:'#8b0000',LB:'#a22525',DL:'#6d1111'};
-const formations={
-Shotgun:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.75],['RB','RB',.62,.78],['X','WR',.08,.62],['SLOT','WR',.22,.64],['Z','WR',.92,.62],['Y','TE',.78,.63]],
-'I-Form':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['FB','FB',.50,.74],['TB','RB',.50,.82],['X','WR',.09,.62],['Z','WR',.91,.62],['Y','TE',.78,.63]],
-Spread:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['X','WR',.05,.62],['H','WR',.18,.64],['Y','WR',.82,.64],['Z','WR',.95,.62],['RB','RB',.61,.78]],
-Pistol:[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.70],['RB','RB',.50,.79],['X','WR',.08,.62],['H','WR',.22,.64],['Z','WR',.92,.62],['Y','TE',.78,.63]],
-'Empty 5-Wide':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['X','WR',.05,.62],['H','WR',.18,.64],['Y','WR',.35,.64],['F','WR',.82,.64],['Z','WR',.95,.62]],
-'Trips Right':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['RB','RB',.42,.78],['X','WR',.07,.62],['Y','TE',.76,.63],['H','WR',.84,.65],['Z','WR',.95,.62]],
-'Trips Left':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['RB','RB',.58,.78],['X','WR',.05,.62],['H','WR',.16,.65],['Y','TE',.24,.63],['Z','WR',.93,.62]],
-'Bunch Right':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['RB','RB',.42,.78],['X','WR',.08,.62],['Y','TE',.77,.63],['H','WR',.84,.68],['Z','WR',.91,.58]],
-'Bunch Left':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.74],['RB','RB',.58,.78],['X','WR',.09,.58],['H','WR',.16,.68],['Y','TE',.24,.63],['Z','WR',.92,.62]],
-'Ace 12':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['RB','RB',.50,.77],['X','WR',.08,.62],['Z','WR',.92,.62],['Y','TE',.76,.63],['U','TE',.24,.63]],
-'Wing-T':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['FB','FB',.50,.75],['HB','RB',.38,.80],['WB','RB',.76,.65],['X','WR',.08,.62],['Y','TE',.72,.63]],
-'Flexbone':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['FB','FB',.50,.76],['AB','RB',.34,.69],['AB','RB',.66,.69],['X','WR',.08,.62],['Z','WR',.92,.62]],
-'Power I':[['LT','OL',.30,.62],['LG','OL',.39,.62],['C','OL',.50,.62],['RG','OL',.61,.62],['RT','OL',.70,.62],['QB','QB',.50,.67],['FB','FB',.50,.72],['HB','RB',.44,.80],['TB','RB',.56,.87],['X','WR',.08,.62],['Y','TE',.78,.63]],
-'Wildcat':[['LT','OL',.28,.62],['LG','OL',.38,.62],['C','OL',.50,.62],['RG','OL',.62,.62],['RT','OL',.72,.62],['WC','RB',.50,.72],['RB','RB',.36,.77],['X','WR',.07,.62],['H','WR',.18,.64],['Y','TE',.80,.63],['Z','WR',.93,.62]],
-'Beast Heavy':[['LT','OL',.24,.62],['LG','OL',.34,.62],['C','OL',.44,.62],['RG','OL',.54,.62],['RT','OL',.64,.62],['TE','TE',.74,.63],['WB','RB',.82,.65],['QB','QB',.50,.69],['FB','FB',.58,.76],['RB','RB',.66,.83],['X','WR',.08,.62]]
-};
-const defTemplates={
-'4-3 Over':[['DE','DL',.28,.53],['DT','DL',.42,.52],['NT','DL',.54,.52],['DE','DL',.72,.53],['WILL','LB',.30,.43],['MIKE','LB',.50,.42],['SAM','LB',.70,.43],['CB','CB',.08,.35],['CB','CB',.92,.35],['FS','S',.50,.22],['SS','S',.72,.30]],
-'3-4 Odd':[['DE','DL',.36,.52],['NT','DL',.50,.52],['DE','DL',.64,.52],['OLB','LB',.22,.46],['ILB','LB',.43,.42],['ILB','LB',.57,.42],['OLB','LB',.78,.46],['CB','CB',.08,.34],['CB','CB',.92,.34],['FS','S',.50,.22],['SS','S',.68,.30]],
-'Nickel 2-4-5':[['DE','DL',.32,.52],['DT','DL',.45,.52],['DT','DL',.55,.52],['DE','DL',.68,.52],['LB','LB',.42,.42],['LB','LB',.58,.42],['CB','CB',.07,.34],['CB','CB',.93,.34],['NB','CB',.25,.36],['FS','S',.45,.22],['SS','S',.62,.25]],
-'Bear Front':[['DE','DL',.28,.52],['DT','DL',.39,.52],['NT','DL',.50,.52],['DT','DL',.61,.52],['DE','DL',.72,.52],['MIKE','LB',.50,.42],['SAM','LB',.75,.43],['CB','CB',.08,.35],['CB','CB',.92,.35],['FS','S',.45,.22],['SS','S',.62,.27]],
-'Goal Line':[['DE','DL',.25,.52],['DT','DL',.36,.52],['NT','DL',.50,.52],['DT','DL',.64,.52],['DE','DL',.75,.52],['LB','LB',.35,.43],['LB','LB',.50,.42],['LB','LB',.65,.43],['CB','CB',.13,.36],['CB','CB',.87,.36],['S','S',.50,.28]],
-Dime:[['DE','DL',.34,.52],['DT','DL',.46,.52],['DT','DL',.54,.52],['DE','DL',.66,.52],['LB','LB',.50,.43],['CB','CB',.07,.34],['CB','CB',.93,.34],['NB','CB',.25,.36],['DB','CB',.75,.36],['FS','S',.42,.22],['SS','S',.60,.24]]};
-function init(){suspendHistory=true;refreshFormations();loadFormation('Shotgun');suggestDefense();refreshSaved();refreshCustomFormations();draw();suspendHistory=false;historyStack=[];redoStack=[];}
-function mkPlayer(arr,i){return{id:i,label:arr[0],pos:arr[1],role:arr[1],x:arr[2]*W,y:arr[3]*H,ox:arr[2]*W,oy:arr[3]*H,assignment:'',color:colors[arr[1]]||'#999',animX:arr[2]*W,animY:arr[3]*H}}
-function setCoordinator(side){document.getElementById('tab-offense')?.classList.toggle('active',side==='offense');document.getElementById('tab-defense')?.classList.toggle('active',side==='defense');document.querySelectorAll('[data-coach]').forEach(el=>{const v=el.getAttribute('data-coach');el.classList.toggle('hidden-by-coach',!(v==='both'||v===side));});status((side==='offense'?'Offensive':'Defensive')+' coordinator workspace active.','success')}
-function normalizeSpacing(list){const MIN=34;for(let pass=0;pass<8;pass++){for(let i=0;i<list.length;i++){for(let j=i+1;j<list.length;j++){let a=list[i],b=list[j],dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy)||0.01;if(d<MIN){let push=(MIN-d)/2+1,nx=dx/d,ny=dy/d;if(Math.abs(dx)<4&&Math.abs(dy)<4){nx=(i%2?-1:1);ny=.25}a.x-=nx*push;b.x+=nx*push;a.y-=ny*push;b.y+=ny*push;[a,b].forEach(p=>{p.x=Math.max(28,Math.min(W-28,p.x));p.y=Math.max(28,Math.min(H-28,p.y));});}}}}list.forEach(p=>{p.ox=p.x;p.oy=p.y;p.animX=p.x;p.animY=p.y});return list}
-function cloneState(){return JSON.parse(JSON.stringify({currentFormation,players,defenders,routes,blocks,motions,ballPath,selected,playName:document.getElementById('playName')?.value||''}))}
-function applyState(st){suspendHistory=true;currentFormation=st.currentFormation||currentFormation;players=st.players||[];defenders=st.defenders||[];routes=st.routes||[];blocks=st.blocks||[];motions=st.motions||[];ballPath=st.ballPath||null;selected=st.selected||{side:'offense',id:null};if(document.getElementById('playName'))document.getElementById('playName').value=st.playName||'';buildList();renderEditor();draw();suspendHistory=false}
-function pushHistory(label='Change'){if(suspendHistory)return;historyStack.push(cloneState());if(historyStack.length>80)historyStack.shift();redoStack=[]}
-function undoStep(){if(!historyStack.length){status('Nothing to undo.','error');return}redoStack.push(cloneState());applyState(historyStack.pop());status('Undid last step.','success')}
-function redoStep(){if(!redoStack.length){status('Nothing to redo.','error');return}historyStack.push(cloneState());applyState(redoStack.pop());status('Redid step.','success')}
-function loadFormation(f,btn){if(players.length&&!suspendHistory)pushHistory('Load formation');currentFormation=f;players=normalizeSpacing(formations[f].map(mkPlayer));routes=[];blocks=[];motions=[];ballPath=null;selected={side:'offense',id:null};document.querySelectorAll('#formationBtns .btn').forEach(b=>b.classList.toggle('active',b.textContent===f));if(btn)btn.classList.add('active');buildList();renderEditor();draw();status('Loaded '+f+'.','success')}
 
-function refreshFormations(){document.getElementById('formationBtns').innerHTML=Object.keys(formations).map((f,i)=>`<button class="btn ${f===currentFormation?'active':''}" onclick="loadFormation('${f}',this)">${f}</button>`).join('');refreshCustomFormations&&refreshCustomFormations()}
-function formationSnapshot(){return players.map(p=>[p.label,p.pos,p.x/W,p.y/H])}
-function saveFormation(){let name=prompt('Name this custom formation:',currentFormation+' Custom');if(!name)return;let bank=JSON.parse(localStorage.getItem('pdpro.customFormations.v4')||'{}');bank[name]=formationSnapshot();localStorage.setItem('pdpro.customFormations.v4',JSON.stringify(bank));formations[name]=bank[name];refreshFormations();status('Saved custom formation: '+name,'success')}
-function refreshCustomFormations(){const el=document.getElementById('customFormations');if(!el)return;let bank=JSON.parse(localStorage.getItem('pdpro.customFormations.v4')||'{}');Object.assign(formations,bank);el.innerHTML='<option value="">Load custom formation...</option>'+Object.keys(bank).map(k=>`<option value="${k}">${k}</option>`).join('')}
-function loadCustomFormation(name){if(!name)return;refreshCustomFormations();loadFormation(name);document.getElementById('customFormations').value=''}
-function offenseProfile(){let wr=players.filter(p=>p.pos==='WR').length,te=players.filter(p=>p.pos==='TE').length,rb=players.filter(p=>p.pos==='RB'||p.pos==='FB').length,qb=players.find(p=>p.pos==='QB');let gun=qb&&qb.y>LOS+40;let heavy=te+rb>=3||currentFormation.includes('Heavy')||currentFormation.includes('Power');let empty=rb===0&&wr>=4;let bunch=players.filter(p=>p.pos==='WR'||p.pos==='TE').some(a=>players.filter(b=>b!==a&&['WR','TE'].includes(b.pos)&&Math.abs(a.x-b.x)<55&&Math.abs(a.y-b.y)<45).length>=2);let trips=(players.filter(p=>['WR','TE'].includes(p.pos)&&p.x>W*.5).length>=3)||(players.filter(p=>['WR','TE'].includes(p.pos)&&p.x<W*.5).length>=3);return{wr,te,rb,gun,heavy,empty,bunch,trips}}
-function suggestDefense(){const o=offenseProfile();let front='4-3 Over',cov='Cover 3',why=[];if(o.empty||o.wr>=5){front='Dime';cov='Cover 4';why.push('empty/5-wide forces extra DBs and protects vertical seams')}else if(o.wr>=4||o.trips){front='Nickel 2-4-5';cov=o.trips?'Cover 3':'Man Free';why.push('spread/trips needs nickel spacing and apex help')}else if(o.heavy){front='Bear Front';cov='Cover 3';why.push('heavy personnel calls for extra bodies in interior gaps')}else if(currentFormation.includes('Flexbone')||currentFormation.includes('Wing')||currentFormation.includes('Wildcat')){front='3-4 Odd';cov='Man Free';why.push('option/wing looks need force players and assignment discipline')}else if(currentFormation.includes('I-Form')||currentFormation.includes('Ace')){front='4-3 Over';cov='Cover 3';why.push('balanced pro-style sets fit base 4-3 with sound run support')}else{front='Nickel 2-4-5';cov='Cover 3';why.push('shotgun spacing usually demands nickel personnel with zone eyes')}
-document.getElementById('defFront').value=front;document.getElementById('coverage').value=cov;autoDefense();coach(`AI defensive recommendation\n\nOffense: ${currentFormation}\nProfile: ${o.wr} WR, ${o.te} TE, ${o.rb} back(s), ${o.gun?'gun/pistol depth':'under-center depth'}\nRecommended: ${front} / ${cov}\n\nWhy: ${why.join('; ')}. This is a starting shell, not a rule. Drag defenders, edit leverage/depth, or switch coverage after the recommendation.`)}
-function autoDefense(){pushHistory('Set defense');const front=document.getElementById('defFront').value;defenders=normalizeSpacing((defTemplates[front]||defTemplates['4-3 Over']).map((d,i)=>({id:i,label:d[0],pos:d[1],role:d[1],x:d[2]*W,y:d[3]*H,ox:d[2]*W,oy:d[3]*H,assignment:document.getElementById('coverage').value,color:colors[d[1]]||colors.DEF,animX:d[2]*W,animY:d[3]*H})));draw();coach(`Defense generated: ${front} / ${document.getElementById('coverage').value}\n\nYou can drag any defender and edit exact labels/roles from the player editor. This lets a coach start with an AI shell, then customize leverage, depth, blitzes, and disguise.`)}
-function buildList(){const el=document.getElementById('playerList');el.innerHTML=players.map(p=>`<div class="player-row ${selected.side==='offense'&&selected.id===p.id?'selected':''}" onclick="selectObj('offense',${p.id})"><div class="dot" style="background:${p.color}">${p.label}</div><div><b>${p.label}</b> <span class="small">${p.pos}</span><div class="small">${p.assignment||'No assignment'}</div></div><span class="small">${routeCount(p.id)}</span></div>`).join('')}
-function routeCount(id){let n=routes.filter(r=>r.pid===id).length+blocks.filter(r=>r.pid===id).length+motions.filter(r=>r.pid===id).length;return n?n+'x':''}
-function selectObj(side,id){selected={side,id};buildList();renderEditor();draw()}
-function obj(){return selected.side==='defense'?defenders.find(d=>d.id===selected.id):players.find(p=>p.id===selected.id)}
-function renderEditor(){const p=obj(),el=document.getElementById('editor');if(!p){el.className='hint';el.innerHTML='Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.';return}el.className='';el.innerHTML=`<div class="editor-grid"><label>Label</label><input class="input" value="${p.label}" oninput="editSel('label',this.value)"><label>Position</label><input class="input" value="${p.pos}" oninput="editSel('pos',this.value)"><label>Role</label><input class="input" value="${p.role||''}" oninput="editSel('role',this.value)"><label>Assign</label><input class="input" value="${p.assignment||''}" oninput="editSel('assignment',this.value)"><label>Color</label><input class="input" type="color" value="${p.color}" oninput="editSel('color',this.value)"><label>X / Y</label><input class="input" value="${Math.round(p.x)}, ${Math.round(p.y)}" onchange="setXY(this.value)"></div><button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete Selected</button>`}
-function editSel(k,v){const p=obj();if(!p)return;pushHistory('Edit player');p[k]=v;buildList();draw()} function setXY(v){const p=obj();if(!p)return;const [x,y]=v.split(',').map(n=>Number(n.trim()));if(!isNaN(x)&&!isNaN(y)){pushHistory('Move player');p.x=x;p.y=y;p.ox=x;p.oy=y;draw()}}
-function deleteSelected(){if(!obj())return;pushHistory('Delete player');if(selected.side==='defense')defenders=defenders.filter(d=>d.id!==selected.id);else players=players.filter(p=>p.id!==selected.id);selected={side:'offense',id:null};buildList();renderEditor();draw()}
-function addPlayer(){pushHistory('Add player');const id=Math.max(-1,...players.map(p=>p.id))+1;players.push({id,label:'NEW',pos:'WR',role:'Custom',x:W*.5,y:H*.78,ox:W*.5,oy:H*.78,assignment:'',color:colors.WR,animX:W*.5,animY:H*.78});selectObj('offense',id)}
-function setMode(m){mode=m;document.querySelectorAll('[id^=mode-]').forEach(b=>b.classList.remove('active'));document.getElementById('mode-'+m).classList.add('active');canvas.style.cursor=m==='select'?'default':'crosshair'}
-function pos(e){const r=canvas.getBoundingClientRect();return{x:(e.clientX-r.left)*W/r.width,y:(e.clientY-r.top)*H/r.height}} function hit(list,x,y,rad=18){return list.find(p=>Math.hypot(p.x-x,p.y-y)<rad)}
-canvas.onmousedown=e=>{if(anim)return;const m=pos(e);const off=hit(players,m.x,m.y),def=hit(defenders,m.x,m.y);if(mode==='select'||mode==='def'){if(def){selectObj('defense',def.id);pushHistory('Move defender');drag=def}else if(off){selectObj('offense',off.id);pushHistory('Move player');drag=off}else{selected={side:'offense',id:null};renderEditor();buildList();draw()}return} if(mode==='ball'){const rb=players.find(p=>p.pos==='RB'||p.label==='RB')||obj(); if(!rb){status('Add or select a RB first.','error');return} pushHistory('Set RB target');selected={side:'offense',id:rb.id}; ballPath=[{x:rb.x,y:rb.y},m]; routes=routes.filter(r=>!(r.pid===rb.id&&r.kind==='carry')); routes.push({pid:rb.id,type:'run',kind:'carry',pts:ballPath,auto:true}); rb.assignment='Ball carrier: '+document.getElementById('runScheme').value; buildList();autoRun(false);return} const p=obj(); if(!p||selected.side!=='offense'){status('Select an offensive player first.','error');return} drawing=true;drawPts=[{x:p.x,y:p.y}];};
-canvas.onmousemove=e=>{const m=pos(e);if(drag){drag.x=m.x;drag.y=m.y;drag.ox=m.x;drag.oy=m.y;draw();return} if(drawing){drawPts.push(m);if(drawPts.length>3)drawPts=simplify(drawPts,7);draw()}}; canvas.onmouseup=e=>{if(drag){drag=null;renderEditor();return} if(!drawing)return;drawing=false;if(drawPts.length>2){pushHistory('Add assignment');const type=mode==='motion'?'motion':mode==='block'?'block':'route';const arr=type==='motion'?motions:type==='block'?blocks:routes;arr.push({pid:selected.id,type,pts:simplify(drawPts,9),manual:true});const p=obj(); if(p)p.assignment=type==='route'?'Manual route':type==='block'?'Manual block':'Motion';buildList();status('Assignment added.','success')}drawPts=[];draw()}; canvas.onmouseleave=()=>{drag=null;if(drawing){drawing=false;drawPts=[];draw()}};
-function simplify(pts,d){let out=[pts[0]];for(let i=1;i<pts.length;i++){let a=out[out.length-1],b=pts[i];if(Math.hypot(a.x-b.x,a.y-b.y)>=d)out.push(b)}return out}
-function autoRun(reset=true){pushHistory('Auto run');if(reset)blocks=blocks.filter(b=>b.manual);const scheme=document.getElementById('runScheme').value;let rb=players.find(p=>p.pos==='RB'||p.label==='RB')||players.find(p=>p.pos==='QB');if(!rb){status('No RB/QB found.','error');return}let target=ballPath?ballPath[1]:{x:scheme.includes('Outside')?W*.78:scheme==='Counter'?W*.35:W*.54,y:H*.39};ballPath=[{x:rb.x,y:rb.y},target];routes=routes.filter(r=>!(r.pid===rb.id&&r.kind==='carry'));routes.push({pid:rb.id,type:'run',kind:'carry',pts:ballPath,auto:true});const dir=target.x>W*.5?1:-1;const ol=players.filter(p=>p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label));ol.forEach((p,i)=>{let tx=p.x+dir*(scheme.includes('Zone')?28:scheme==='Power'?18:10),ty=p.y-55-(i%2)*6; if(scheme==='Duo'){tx=p.x;ty=p.y-45} if(scheme==='Trap'&&['LG','RG'].includes(p.label)){tx=target.x-dir*25;ty=target.y+10} if(scheme==='Counter'&&['TE','FB'].includes(p.pos)){tx=target.x;ty=target.y}blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:tx,y:ty}],auto:true});p.assignment=`${scheme}: ${scheme.includes('Zone')?'zone step/combo':'gap responsibility'} ${dir>0?'right':'left'}`});players.filter(p=>['TE','FB','WR'].includes(p.pos)&&p.id!==rb.id).forEach(p=>{let tx=p.x+(p.x<target.x?35:-35),ty=p.y-40;blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:tx,y:ty}],auto:true});p.assignment=p.pos==='WR'?'Crack/stalk support':'Lead/kick support'});players.filter(p=>!routes.some(r=>r.pid===p.id)&&!blocks.some(b=>b.pid===p.id)).forEach(p=>{if(p.pos==='QB'){routes.push({pid:p.id,type:'route',kind:'handoff',pts:[{x:p.x,y:p.y},{x:rb.x,y:rb.y},{x:p.x-dir*30,y:p.y-18}],auto:true});p.assignment='Handoff mesh / carry fake';}else{p.assignment=p.assignment||'Hold spacing / stalk if defender triggers';}});rb.assignment=`Carry to ${Math.round(target.x)},${Math.round(target.y)} — ${scheme}`;buildList();draw();coach(`Run concept generated: ${scheme}\n\nBall target: ${Math.round(target.x)}, ${Math.round(target.y)}. The line was assigned ${scheme.includes('Zone')?'zone/combo tracks':'gap-style leverage'} based on the aiming point. Every offensive player now has either a carry, block, mesh/fake, route, stalk, or spacing assignment, and every red block animates during Run Play.`)}
-function autoPassPro(){pushHistory('Auto pass pro');blocks=blocks.filter(b=>b.manual);const scheme=document.getElementById('passScheme').value,slide=scheme.includes('Left')?-1:scheme.includes('Right')?1:0;players.filter(p=>p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label)).forEach((p,i)=>{let lane=slide?slide:(p.x<W*.5?-1:p.x>W*.5?1:0);let depth=scheme.includes('Man')?34:scheme.includes('Full')?48:40;blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:p.x+lane*30,y:p.y-depth}],auto:true});p.assignment=scheme+': protect inside-out'});players.filter(p=>['RB','FB','TE'].includes(p.pos)).forEach(p=>{if(scheme==='Max Protect'||p.pos==='RB'){blocks.push({pid:p.id,type:'block',pts:[{x:p.x,y:p.y},{x:p.x+(p.x<W*.5?-38:38),y:p.y-52}],auto:true});p.assignment=scheme+': scan/check release'}});buildList();draw();coach(`Pass protection generated: ${scheme}\n\nThe OL receives slide/man rules, backs and tight ends receive scan support where appropriate. You can still hand-draw a different pickup for any player.`)}
-function addQuickPassConcept(){pushHistory('Add pass concept');routes=routes.filter(r=>!r.autoConcept);const wrs=players.filter(p=>['WR','TE','RB'].includes(p.pos));wrs.forEach((p,i)=>{let dx=p.x<W*.5?-1:1,depth=[105,70,120,45,30][i%5];routes.push({pid:p.id,type:'route',autoConcept:true,pts:[{x:p.x,y:p.y},{x:p.x+dx*(i%2?40:0),y:p.y-depth},{x:p.x+dx*(i%2?95:35),y:p.y-depth-10}]});p.assignment=['Go/clear','Out','Dig','Flat','Option'][i%5]});buildList();draw();coach('Quick pass concept installed: vertical clear-outs, underneath answers, and a middle-window route. Pair with pass protection, then adjust stems manually.')}
-function clearBlocking(){pushHistory('Clear blocks');blocks=[];players.forEach(p=>{if(p.assignment&&(p.assignment.includes('Protect')||p.assignment.includes('support')||p.assignment.includes('responsibility')))p.assignment=''});buildList();draw();status('Blocking cleared.','success')}
-function clearSelectedAssignment(){const p=obj();if(!p){status('Select a player first.','error');return}pushHistory('Clear selected assignment');routes=routes.filter(r=>r.pid!==p.id);blocks=blocks.filter(b=>b.pid!==p.id);motions=motions.filter(m=>m.pid!==p.id);if(ballPath&&ballPath[0]&&Math.hypot(ballPath[0].x-p.x,ballPath[0].y-p.y)<25)ballPath=null;p.assignment='';buildList();draw();status('Cleared selected player assignments.','success')}
-function autoPlayAction(){pushHistory('Play action');const run=document.getElementById('runScheme').value,concept=document.getElementById('passConcept')?.value||'Boot Sail';let qb=players.find(p=>p.pos==='QB')||players.find(p=>p.label==='QB'),rb=players.find(p=>p.pos==='RB'||p.label==='RB')||players.find(p=>p.pos==='FB');if(!qb||!rb){status('Need a QB and RB for play action.','error');return}blocks=blocks.filter(b=>b.manual);routes=routes.filter(r=>!r.autoConcept&&!r.playAction&&r.kind!=='carry');motions=motions.filter(m=>!m.playAction);const dir=rb.x>qb.x?1:-1,mesh={x:(qb.x+rb.x)/2,y:(qb.y+rb.y)/2-8},fakeTarget=ballPath?ballPath[1]:{x:qb.x+dir*95,y:LOS-95};ballPath=[{x:rb.x,y:rb.y},mesh,{x:fakeTarget.x,y:fakeTarget.y}];motions.push({pid:rb.id,type:'motion',playAction:true,pts:[{x:rb.x,y:rb.y},mesh,{x:fakeTarget.x,y:fakeTarget.y}],auto:true});routes.push({pid:qb.id,type:'route',playAction:true,pts:[{x:qb.x,y:qb.y},mesh,{x:qb.x-dir*70,y:qb.y-25},{x:qb.x-dir*112,y:qb.y-45}],auto:true});players.filter(p=>p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label)).forEach((p,i)=>{blocks.push({pid:p.id,type:'block',playAction:true,pts:[{x:p.x,y:p.y},{x:p.x+dir*(18+(i%2)*7),y:p.y-42}],auto:true});p.assignment='Play-action '+run+': sell run, protect edge'});players.filter(p=>['TE','WR','FB'].includes(p.pos)&&p.id!==rb.id).forEach((p,i)=>{let side=p.x<W*.5?-1:1,depth=[120,75,45,95][i%4],wide=[35,110,70,15][i%4];routes.push({pid:p.id,type:'route',playAction:true,auto:true,pts:[{x:p.x,y:p.y},{x:p.x+side*20,y:p.y-depth*.55},{x:p.x+side*wide,y:p.y-depth}]});p.assignment=['Deep cross/post','Sail/out','Flat leak','Over route'][i%4]+' off play-action'});rb.assignment='Play-action fake: '+run;qb.assignment='Fake mesh, boot, read '+concept;buildList();draw();coach(`Play-action pass installed\n\nRun action: ${run}. Pass concept: ${concept}. The RB now sells the mesh/aiming point, the QB boots away, the OL sells run before protecting, and eligible receivers get layered routes. Use Undo if you hate the install, or Clear Selected to remove only one player’s fake, route, block, or motion.`)}
-function draw(){ctx.clearRect(0,0,W,H);drawField();drawDefense();drawLines(motions,'#3498db',false);drawLines(routes,'#f5c842',false);drawLines(blocks,'#e74c3c',true);if(ballPath)drawPath(ballPath,'#d8892b',false,5);if(drawing&&drawPts.length>1)drawPath(drawPts,mode==='block'?'#e74c3c':mode==='motion'?'#3498db':'#f5c842',true,2);drawPeople(defenders,true);drawPeople(players,false)}
-function drawField(){for(let i=0;i<10;i++){ctx.fillStyle=i%2?'#285215':'#2a5518';ctx.fillRect(0,i*H/10,W,H/10)}ctx.strokeStyle='rgba(255,255,255,.18)';ctx.lineWidth=1;for(let i=0;i<=10;i++){let y=i*H/10;ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke()}ctx.strokeStyle='rgba(255,220,0,.65)';ctx.setLineDash([8,5]);ctx.lineWidth=2;ctx.beginPath();ctx.moveTo(0,LOS);ctx.lineTo(W,LOS);ctx.stroke();ctx.setLineDash([]);ctx.fillStyle='rgba(255,220,0,.55)';ctx.font='700 11px Barlow Condensed';ctx.fillText('LINE OF SCRIMMAGE',8,LOS-5);ctx.fillStyle='rgba(255,255,255,.05)';ctx.fillRect(0,0,W,H*.08);ctx.fillStyle='rgba(255,255,255,.075)';ctx.font='900 22px Barlow Condensed';ctx.textAlign='center';ctx.fillText('END ZONE',W/2,H*.057);ctx.textAlign='left'}
-function drawDefense(){drawPeople(defenders,true)} function drawPeople(list,isDef){list.forEach(p=>{const x=anim?p.animX||p.x:p.x,y=anim?p.animY||p.y:p.y,r=isDef?12:15,sel=selected.id===p.id&&selected.side===(isDef?'defense':'offense');if(sel){ctx.beginPath();ctx.arc(x,y,r+6,0,Math.PI*2);ctx.fillStyle=(p.color||'#fff')+'44';ctx.fill()}ctx.beginPath();ctx.arc(x+2,y+2,r,0,Math.PI*2);ctx.fillStyle='rgba(0,0,0,.45)';ctx.fill();ctx.beginPath();ctx.arc(x,y,r,0,Math.PI*2);ctx.fillStyle=p.color||'#999';ctx.fill();ctx.strokeStyle=sel?'#fff':isDef?'#ff7878':'rgba(0,0,0,.55)';ctx.lineWidth=sel?2.5:1.3;ctx.stroke();ctx.fillStyle=isDef?'#ffd0d0':'#050505';ctx.font=`900 ${isDef?9:10}px Barlow Condensed`;ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText(p.label,x,y);ctx.textBaseline='alphabetic'});ctx.textAlign='left'}
-function drawLines(arr,color,dash){arr.forEach(a=>drawPath(a.pts,color,dash,2.6))}function drawPath(pts,color,dash,lw){if(!pts||pts.length<2)return;ctx.strokeStyle=color;ctx.lineWidth=lw;if(dash)ctx.setLineDash([7,5]);else ctx.setLineDash([]);ctx.beginPath();ctx.moveTo(pts[0].x,pts[0].y);for(let i=1;i<pts.length;i++)ctx.lineTo(pts[i].x,pts[i].y);ctx.stroke();ctx.setLineDash([]);arrow(pts[pts.length-2],pts[pts.length-1],color)}function arrow(a,b,c){let ang=Math.atan2(b.y-a.y,b.x-a.x),s=9;ctx.fillStyle=c;ctx.beginPath();ctx.moveTo(b.x,b.y);ctx.lineTo(b.x-s*Math.cos(ang-.45),b.y-s*Math.sin(ang-.45));ctx.lineTo(b.x-s*Math.cos(ang+.45),b.y-s*Math.sin(ang+.45));ctx.closePath();ctx.fill()}
-function runPlay(){if(anim)return;const all=[...motions,...routes,...blocks];if(!all.length){status('Add routes, blocking, or a ball path first.','error');return}anim=true;let start=performance.now();players.forEach(p=>{p.animX=p.x;p.animY=p.y});const tracks={};players.forEach(p=>{let playerActions=all.filter(a=>a.pid===p.id);let pts=[];playerActions.forEach(a=>{let seg=a.pts&&a.pts.length?a.pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}];if(a.type==='block'){const last=seg[seg.length-1];const settle={x:last.x+(last.x-seg[0].x)*.18,y:last.y+(last.y-seg[0].y)*.18};seg=[seg[0],last,settle];}pts=pts.concat(pts.length?seg.slice(1):seg)});tracks[p.id]=pts.length?pts:[{x:p.x,y:p.y},{x:p.x,y:p.y}]});function ptAt(pts,e){if(pts.length<2)return pts[0]||{x:0,y:0};let idx=Math.min(pts.length-2,Math.floor(e*(pts.length-1))),local=(e*(pts.length-1))-idx,a=pts[idx],b=pts[idx+1]||a;return{x:a.x+(b.x-a.x)*local,y:a.y+(b.y-a.y)*local}}function step(t){let prog=Math.min((t-start)/3200,1),e=prog<.5?2*prog*prog:-1+(4-2*prog)*prog;players.forEach(p=>{let pt=ptAt(tracks[p.id],e);p.animX=pt.x;p.animY=pt.y});draw();if(prog<1)raf=requestAnimationFrame(step);else setTimeout(()=>stopPlay(true),450)}raf=requestAnimationFrame(step);status('Running full 11-player play animation...','loading')}
-function stopPlay(done){anim=false;if(raf)cancelAnimationFrame(raf);players.forEach(p=>{p.animX=p.x;p.animY=p.y});draw();status(done?'Play complete.':'Stopped.',done?'success':'')}
-function smartAnalyze(){const run=document.getElementById('runScheme').value,pass=document.getElementById('passScheme').value,front=document.getElementById('defFront').value,cov=document.getElementById('coverage').value;let rb=players.find(p=>p.pos==='RB'||p.label==='RB');let hasRun=!!ballPath;let hasPA=routes.some(r=>r.playAction)||motions.some(m=>m.playAction);let routeN=routes.filter(r=>r.kind!=='carry').length;let blockN=blocks.length;coach(`Integrated Coach Model\n\nFormation: ${currentFormation}\nDefense: ${front} / ${cov}\nRun plan: ${hasRun?run+' to '+Math.round(ballPath[1].x)+','+Math.round(ballPath[1].y):'No RB aiming point yet'}\nPass pro: ${pass}\nAssignments: ${routeN} route(s), ${blockN} block(s).\n\nRead: ${hasRun?'The run game is now modeled from the ball-carrier aiming point, so the blocking scheme can be adjusted around the landmark instead of generic arrows.':'Set the RB target first to let the system generate a real run fit.'}\n\nWeakness check: ${cov.includes('Zero')?'Zero pressure requires hot answers and immediate throw rules.':cov.includes('Cover 3')?'Cover 3 can be stressed with seams, flats, and flood concepts.':cov.includes('Man')?'Man Free rewards rubs, motion, and crossing leverage.':'Use route distribution to attack spacing between zones.'}\n\nNext best step: drag defenders to the look you expect, regenerate protection or run blocks, then manually adjust any player whose rule you want to coach differently.`)} function coach(t){document.getElementById('coach').textContent=t}
-function status(t,c){const e=document.getElementById('status');e.textContent=t;e.className='status '+(c||'')}
-function serialize(){return{name:document.getElementById('playName').value||'Untitled Play',formation:currentFormation,players,defenders,routes,blocks,motions,ballPath,date:Date.now()}} function savePlay(){let arr=JSON.parse(localStorage.getItem('pdpro.v6')||'[]'),p=serialize();arr=arr.filter(x=>x.name!==p.name);arr.unshift(p);localStorage.setItem('pdpro.v6',JSON.stringify(arr.slice(0,30)));refreshSaved();status('Saved '+p.name+'.','success')} function refreshSaved(){let s=document.getElementById('saved'),arr=JSON.parse(localStorage.getItem('pdpro.v6')||'[]');s.innerHTML='<option value="">Load saved play...</option>'+arr.map((p,i)=>`<option value="${i}">${p.name} · ${new Date(p.date).toLocaleDateString()}</option>`).join('')} function loadSaved(i){if(i==='')return;let p=JSON.parse(localStorage.getItem('pdpro.v6')||'[]')[+i];if(!p)return;Object.assign(window,{players:p.players,defenders:p.defenders,routes:p.routes,blocks:p.blocks,motions:p.motions,ballPath:p.ballPath,currentFormation:p.formation});document.getElementById('playName').value=p.name;selected={side:'offense',id:null};buildList();renderEditor();draw();status('Loaded '+p.name+'.','success')}
-function resetAll(){pushHistory('Reset all');loadFormation(currentFormation);autoDefense()} function exportPNG(){let a=document.createElement('a'),n=(document.getElementById('playName').value||'play-designer-pro').toLowerCase().replace(/[^a-z0-9]+/g,'-');a.download=n+'.png';a.href=canvas.toDataURL('image/png');a.click();status('PNG exported.','success')}
-['touchstart','touchmove','touchend','touchcancel'].forEach(ev=>canvas.addEventListener(ev,e=>e.preventDefault(),{passive:false}));canvas.addEventListener('touchstart',e=>{let t=e.touches[0];if(t)canvas.dispatchEvent(new MouseEvent('mousedown',{clientX:t.clientX,clientY:t.clientY}))});canvas.addEventListener('touchmove',e=>{let t=e.touches[0];if(t)canvas.dispatchEvent(new MouseEvent('mousemove',{clientX:t.clientX,clientY:t.clientY}))});canvas.addEventListener('touchend',e=>{let t=e.changedTouches[0];if(t)canvas.dispatchEvent(new MouseEvent('mouseup',{clientX:t.clientX,clientY:t.clientY}))});document.addEventListener('keydown',e=>{if(['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName))return;let k=e.key.toLowerCase();if((e.metaKey||e.ctrlKey)&&k==='z'){e.preventDefault();undoStep();return}if((e.metaKey||e.ctrlKey)&&k==='y'){e.preventDefault();redoStep();return}if(k==='r')setMode('route');if(k==='b')setMode('block');if(k==='d')setMode('def');if(k==='s')setMode('select');if(k==='p')autoPlayAction()});init();
+<script>
+// ─────────────────────────────────────────────
+// CONSTANTS & STATE
+// ─────────────────────────────────────────────
+const canvas = document.getElementById('field');
+const ctx = canvas.getContext('2d');
+const W = canvas.width, H = canvas.height;
+const LOS = H * .62;
+
+let mode = 'select';
+let selected = { side: 'offense', id: null };
+let players = [], defenders = [], routes = [], blocks = [], motions = [];
+let ballPath = null, drag = null, drawing = false, drawPts = [];
+let anim = false, raf = null;
+let currentFormation = 'Shotgun';
+let historyStack = [], redoStack = [];
+let suspendHistory = false;
+let coordinatorSide = 'offense';
+
+const PLAYER_RADIUS = 15;
+const DEF_RADIUS = 12;
+const MIN_PLAYER_DIST = 32; // minimum px between player centers
+
+const colors = {
+  QB:'#c8a84b', RB:'#e74c3c', WR:'#3498db', TE:'#9b59b6',
+  OL:'#95a5a6', FB:'#e67e22', DEF:'#8b0000', S:'#b71c1c',
+  CB:'#c0392b', LB:'#a93226', DL:'#7b241c',
+};
+
+// ─────────────────────────────────────────────
+// FORMATION DATA — carefully spaced, no overlaps
+// Each entry: [label, posType, xFraction, yFraction]
+// OL spacing: centers at .50, guards at .41/.59, tackles at .32/.68
+// Receivers: separated by meaningful gaps
+// ─────────────────────────────────────────────
+const formations = {
+'Shotgun': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.76],['RB','RB',.63,.79],
+  ['X','WR',.08,.62],['SL','WR',.24,.64],['SR','WR',.76,.64],['Z','WR',.92,.62]
+],
+'I-Form': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.68],['FB','FB',.50,.75],['TB','RB',.50,.84],
+  ['X','WR',.08,.62],['Z','WR',.92,.62],['Y','TE',.79,.63]
+],
+'Spread 4-Wide': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],
+  ['X','WR',.06,.62],['H','WR',.20,.64],['Y','WR',.80,.64],['Z','WR',.94,.62],
+  ['RB','RB',.62,.79]
+],
+'Pistol': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.70],['RB','RB',.50,.81],
+  ['X','WR',.08,.62],['SL','WR',.24,.64],['SR','WR',.76,.64],['Z','WR',.92,.62]
+],
+'Empty 5-Wide': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],
+  ['X','WR',.06,.62],['H','WR',.19,.64],['Y','WR',.50,.80],['F','WR',.81,.64],['Z','WR',.94,.62]
+],
+'Trips Right': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],['RB','RB',.42,.79],
+  ['X','WR',.07,.62],
+  ['Y','TE',.76,.63],['H','WR',.85,.65],['Z','WR',.95,.62]
+],
+'Trips Left': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],['RB','RB',.58,.79],
+  ['Z','WR',.93,.62],
+  ['X','WR',.05,.62],['H','WR',.15,.65],['Y','TE',.24,.63]
+],
+'Bunch Right': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],['RB','RB',.42,.79],
+  ['X','WR',.08,.62],
+  ['Y','TE',.78,.63],['H','WR',.87,.69],['Z','WR',.92,.57]
+],
+'Bunch Left': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.74],['RB','RB',.58,.79],
+  ['Z','WR',.92,.62],
+  ['X','WR',.08,.57],['H','WR',.13,.69],['Y','TE',.22,.63]
+],
+'Ace 12': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.68],['RB','RB',.50,.78],
+  ['X','WR',.08,.62],['Z','WR',.92,.62],
+  ['Y','TE',.77,.63],['U','TE',.23,.63]
+],
+'Wing-T': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.68],['FB','FB',.50,.76],
+  ['HB','RB',.38,.81],['WB','RB',.76,.65],
+  ['X','WR',.08,.62],['Y','TE',.72,.63]
+],
+'Flexbone': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.68],['FB','FB',.50,.77],
+  ['AB','RB',.33,.70],['AB2','RB',.67,.70],
+  ['X','WR',.08,.62],['Z','WR',.92,.62]
+],
+'Power I': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.68],['FB','FB',.50,.73],
+  ['HB','RB',.50,.82],['TB','RB',.50,.90],
+  ['X','WR',.08,.62],['Y','TE',.79,.63]
+],
+'Wildcat': [
+  ['LT','OL',.28,.62],['LG','OL',.38,.62],['C','OL',.50,.62],['RG','OL',.62,.62],['RT','OL',.72,.62],
+  ['WC','RB',.50,.72],['RB','RB',.36,.78],
+  ['X','WR',.07,.62],['H','WR',.19,.64],
+  ['Y','TE',.80,.63],['Z','WR',.93,.62]
+],
+'Beast Heavy': [
+  ['LT','OL',.24,.62],['LG','OL',.34,.62],['C','OL',.44,.62],['RG','OL',.54,.62],['RT','OL',.64,.62],
+  ['TE','TE',.74,.63],['WB','RB',.83,.66],
+  ['QB','QB',.50,.69],['FB','FB',.57,.77],['RB','RB',.65,.84],
+  ['X','WR',.08,.62]
+],
+'Singleback 2TE': [
+  ['LT','OL',.32,.62],['LG','OL',.41,.62],['C','OL',.50,.62],['RG','OL',.59,.62],['RT','OL',.68,.62],
+  ['QB','QB',.50,.69],['RB','RB',.50,.79],
+  ['X','WR',.08,.62],['Z','WR',.92,.62],
+  ['Y','TE',.79,.63],['H','TE',.21,.63]
+]
+};
+
+// ─────────────────────────────────────────────
+// DEFENSIVE TEMPLATES
+// ─────────────────────────────────────────────
+const defTemplates = {
+'4-3 Over': [
+  ['DE','DL',.27,.53],['DT','DL',.40,.52],['NT','DL',.55,.52],['DE','DL',.73,.53],
+  ['WILL','LB',.29,.43],['MIKE','LB',.50,.42],['SAM','LB',.71,.43],
+  ['CB','CB',.07,.35],['CB','CB',.93,.35],['FS','S',.50,.22],['SS','S',.72,.30]
+],
+'4-3 Under': [
+  ['DE','DL',.27,.53],['DT','DL',.38,.52],['NT','DL',.52,.52],['DE','DL',.68,.53],
+  ['WILL','LB',.35,.43],['MIKE','LB',.52,.42],['SAM','LB',.72,.43],
+  ['CB','CB',.07,.35],['CB','CB',.93,.35],['FS','S',.50,.22],['SS','S',.30,.30]
+],
+'3-4 Odd': [
+  ['DE','DL',.36,.52],['NT','DL',.50,.51],['DE','DL',.64,.52],
+  ['OLB','LB',.21,.46],['ILB','LB',.42,.42],['ILB','LB',.58,.42],['OLB','LB',.79,.46],
+  ['CB','CB',.07,.34],['CB','CB',.93,.34],['FS','S',.50,.22],['SS','S',.69,.30]
+],
+'Nickel 2-4-5': [
+  ['DE','DL',.31,.52],['DT','DL',.44,.52],['DT','DL',.56,.52],['DE','DL',.69,.52],
+  ['LB','LB',.41,.42],['LB','LB',.59,.42],
+  ['CB','CB',.07,.34],['CB','CB',.93,.34],['NB','CB',.24,.36],
+  ['FS','S',.44,.22],['SS','S',.63,.25]
+],
+'Bear Front': [
+  ['DE','DL',.27,.52],['DT','DL',.37,.52],['NT','DL',.50,.51],['DT','DL',.62,.52],['DE','DL',.73,.52],
+  ['MIKE','LB',.50,.43],['SAM','LB',.76,.43],
+  ['CB','CB',.07,.35],['CB','CB',.93,.35],
+  ['FS','S',.44,.22],['SS','S',.63,.27]
+],
+'Goal Line': [
+  ['DE','DL',.24,.52],['DT','DL',.36,.52],['NT','DL',.50,.51],['DT','DL',.64,.52],['DE','DL',.76,.52],
+  ['LB','LB',.35,.43],['LB','LB',.50,.42],['LB','LB',.65,.43],
+  ['CB','CB',.13,.36],['CB','CB',.87,.36],['S','S',.50,.28]
+],
+'Dime': [
+  ['DE','DL',.33,.52],['DT','DL',.45,.52],['DT','DL',.55,.52],['DE','DL',.67,.52],
+  ['LB','LB',.50,.43],
+  ['CB','CB',.06,.34],['CB','CB',.94,.34],['NB','CB',.22,.36],['DB','CB',.78,.36],
+  ['FS','S',.41,.22],['SS','S',.61,.24]
+],
+'Quarter': [
+  ['DT','DL',.44,.52],['DT','DL',.56,.52],
+  ['CB','CB',.06,.34],['CB','CB',.94,.34],
+  ['NB','CB',.20,.37],['DB','CB',.50,.40],['NB','CB',.80,.37],
+  ['FS','S',.35,.22],['SS','S',.65,.22],['FS','S',.50,.16],['LB','LB',.50,.43]
+]
+};
+
+// ─────────────────────────────────────────────
+// SPACING ENGINE — physics-based push, multiple passes
+// ─────────────────────────────────────────────
+function normalizeSpacing(list) {
+  const MIN = MIN_PLAYER_DIST;
+  const MARGIN = 20; // stay off canvas edge
+
+  // First, pin OL players to a clean horizontal grid
+  const ol = list.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label));
+  if (ol.length >= 5) {
+    // Sort by x, then enforce clean spacing
+    ol.sort((a, b) => a.x - b.x);
+    const cCenter = ol[Math.floor(ol.length / 2)];
+    const olSpacing = 36;
+    // Re-assign clean grid positions for the 5-man line
+    const midIdx = Math.floor(ol.length / 2);
+    ol.forEach((p, i) => {
+      p.x = cCenter.x + (i - midIdx) * olSpacing;
+      // Keep y on LOS
+    });
+  }
+
+  // Then run iterative repulsion for ALL players
+  for (let pass = 0; pass < 20; pass++) {
+    let moved = false;
+    for (let i = 0; i < list.length; i++) {
+      for (let j = i + 1; j < list.length; j++) {
+        const a = list[i], b = list[j];
+        const dx = b.x - a.x, dy = b.y - a.y;
+        const d = Math.hypot(dx, dy) || 0.01;
+        if (d < MIN) {
+          const push = (MIN - d) / 2 + 0.5;
+          let nx = dx / d, ny = dy / d;
+          // If perfectly stacked, push horizontally
+          if (Math.abs(dx) < 2 && Math.abs(dy) < 2) {
+            nx = (i % 2 === 0) ? -1 : 1;
+            ny = 0;
+          }
+          // Don't push OL off their grid y (only move x/y carefully)
+          const aIsOL = a.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(a.label);
+          const bIsOL = b.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(b.label);
+          if (!aIsOL) { a.x -= nx * push; a.y -= ny * push * 0.4; }
+          if (!bIsOL) { b.x += nx * push; b.y += ny * push * 0.4; }
+          moved = true;
+        }
+      }
+    }
+    if (!moved) break;
+  }
+
+  // Clamp to field
+  list.forEach(p => {
+    p.x = Math.max(MARGIN, Math.min(W - MARGIN, p.x));
+    p.y = Math.max(MARGIN, Math.min(H - MARGIN, p.y));
+    p.ox = p.x; p.oy = p.y;
+    p.animX = p.x; p.animY = p.y;
+  });
+
+  return list;
+}
+
+// ─────────────────────────────────────────────
+// PLAYER FACTORY
+// ─────────────────────────────────────────────
+function mkPlayer(arr, i) {
+  return {
+    id: i, label: arr[0], pos: arr[1], role: arr[1],
+    x: arr[2] * W, y: arr[3] * H,
+    ox: arr[2] * W, oy: arr[3] * H,
+    assignment: '',
+    color: colors[arr[1]] || '#999',
+    animX: arr[2] * W, animY: arr[3] * H
+  };
+}
+
+// ─────────────────────────────────────────────
+// FORMATION LOADING
+// ─────────────────────────────────────────────
+function loadFormation(f) {
+  if (players.length && !suspendHistory) pushHistory('Load formation');
+  currentFormation = f;
+  players = normalizeSpacing(formations[f].map(mkPlayer));
+  routes = []; blocks = []; motions = []; ballPath = null;
+  selected = { side: 'offense', id: null };
+  document.querySelectorAll('#formationBtns .btn').forEach(b =>
+    b.classList.toggle('active', b.textContent.trim() === f));
+  buildList(); renderEditor(); draw();
+  status('Loaded ' + f + '.', 'success');
+}
+
+function refreshFormations() {
+  document.getElementById('formationBtns').innerHTML =
+    Object.keys(formations).map(f =>
+      `<button class="btn${f === currentFormation ? ' active' : ''}" onclick="loadFormation('${f}')">${f}</button>`
+    ).join('');
+  refreshCustomFormations();
+}
+
+function formationSnapshot() {
+  return players.map(p => [p.label, p.pos, p.x / W, p.y / H]);
+}
+
+function saveFormation() {
+  const name = prompt('Name this custom formation:', currentFormation + ' Custom');
+  if (!name) return;
+  let bank = JSON.parse(localStorage.getItem('pdpro.customFormations.v7') || '{}');
+  bank[name] = formationSnapshot();
+  localStorage.setItem('pdpro.customFormations.v7', JSON.stringify(bank));
+  formations[name] = bank[name];
+  refreshFormations();
+  status('Saved custom formation: ' + name, 'success');
+}
+
+function refreshCustomFormations() {
+  const el = document.getElementById('customFormations');
+  if (!el) return;
+  let bank = JSON.parse(localStorage.getItem('pdpro.customFormations.v7') || '{}');
+  Object.assign(formations, bank);
+  el.innerHTML = '<option value="">Load custom formation...</option>' +
+    Object.keys(bank).map(k => `<option value="${k}">${k}</option>`).join('');
+}
+
+function loadCustomFormation(name) {
+  if (!name) return;
+  refreshCustomFormations();
+  loadFormation(name);
+  document.getElementById('customFormations').value = '';
+}
+
+// ─────────────────────────────────────────────
+// HISTORY
+// ─────────────────────────────────────────────
+function cloneState() {
+  return JSON.parse(JSON.stringify({
+    currentFormation, players, defenders, routes, blocks, motions,
+    ballPath, selected, playName: document.getElementById('playName')?.value || ''
+  }));
+}
+
+function applyState(st) {
+  suspendHistory = true;
+  currentFormation = st.currentFormation || currentFormation;
+  players = st.players || []; defenders = st.defenders || [];
+  routes = st.routes || []; blocks = st.blocks || [];
+  motions = st.motions || []; ballPath = st.ballPath || null;
+  selected = st.selected || { side: 'offense', id: null };
+  if (document.getElementById('playName')) document.getElementById('playName').value = st.playName || '';
+  buildList(); renderEditor(); draw();
+  suspendHistory = false;
+}
+
+function pushHistory(label = 'Change') {
+  if (suspendHistory) return;
+  historyStack.push(cloneState());
+  if (historyStack.length > 80) historyStack.shift();
+  redoStack = [];
+}
+
+function undoStep() {
+  if (!historyStack.length) { status('Nothing to undo.', 'error'); return; }
+  redoStack.push(cloneState());
+  applyState(historyStack.pop());
+  status('Undid last step.', 'success');
+}
+
+function redoStep() {
+  if (!redoStack.length) { status('Nothing to redo.', 'error'); return; }
+  historyStack.push(cloneState());
+  applyState(redoStack.pop());
+  status('Redid step.', 'success');
+}
+
+// ─────────────────────────────────────────────
+// COORDINATOR MODE
+// ─────────────────────────────────────────────
+function setCoordinator(side) {
+  coordinatorSide = side;
+  document.getElementById('tab-offense')?.classList.toggle('active', side === 'offense');
+  document.getElementById('tab-defense')?.classList.toggle('active', side === 'defense');
+  document.querySelectorAll('[data-coach]').forEach(el => {
+    const v = el.getAttribute('data-coach');
+    el.classList.toggle('hidden-by-coach', !(v === 'both' || v === side));
+  });
+  status((side === 'offense' ? 'Offensive' : 'Defensive') + ' coordinator workspace active.', 'success');
+}
+
+// ─────────────────────────────────────────────
+// OFFENSE PROFILE ANALYZER (used by AI coach)
+// ─────────────────────────────────────────────
+function offenseProfile() {
+  const wr = players.filter(p => p.pos === 'WR').length;
+  const te = players.filter(p => p.pos === 'TE').length;
+  const rb = players.filter(p => p.pos === 'RB' || p.pos === 'FB').length;
+  const qb = players.find(p => p.pos === 'QB');
+  const gun = qb && qb.y > LOS + 35;
+  const heavy = te + rb >= 3;
+  const empty = rb === 0 && wr >= 4;
+  const spread = wr >= 4;
+
+  // Count receivers per side of center
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+  const recL = players.filter(p => ['WR','TE'].includes(p.pos) && p.x < center.x).length;
+  const recR = players.filter(p => ['WR','TE'].includes(p.pos) && p.x >= center.x).length;
+  const trips = recL >= 3 || recR >= 3;
+  const bunch = checkBunch();
+
+  // Motion indicators
+  const hasMotion = motions.length > 0;
+  const hasPlayAction = routes.some(r => r.playAction) || motions.some(m => m.playAction);
+
+  // Run tendency
+  const hasRun = !!ballPath;
+  const runScheme = document.getElementById('runScheme').value;
+  const passScheme = document.getElementById('passScheme').value;
+  const routeCount = routes.filter(r => r.kind !== 'carry').length;
+  const blockCount = blocks.length;
+
+  return { wr, te, rb, qb, gun, heavy, empty, spread, trips, bunch,
+           hasMotion, hasPlayAction, hasRun, runScheme, passScheme,
+           routeCount, blockCount, recL, recR };
+}
+
+function checkBunch() {
+  const eligible = players.filter(p => ['WR','TE'].includes(p.pos));
+  for (const a of eligible) {
+    const nearby = eligible.filter(b => b !== a &&
+      Math.abs(a.x - b.x) < 60 && Math.abs(a.y - b.y) < 50);
+    if (nearby.length >= 2) return true;
+  }
+  return false;
+}
+
+// ─────────────────────────────────────────────
+// SMART DEFENSE SUGGESTER
+// ─────────────────────────────────────────────
+function suggestDefense() {
+  const o = offenseProfile();
+  let front = '4-3 Over', cov = 'Cover 3';
+  const reasons = [];
+  const counters = [];
+
+  if (o.empty || o.wr >= 5) {
+    front = 'Dime'; cov = 'Cover 4';
+    reasons.push('5-wide / empty forces a 6-DB dime shell — must match routes vertically');
+    counters.push('Zero-gap stunts from DTs to create instant pressure without blitzing LBs');
+  } else if (o.spread && o.trips) {
+    front = 'Nickel 2-4-5'; cov = 'Cover 3';
+    reasons.push('Trips overload demands a cover-3 sky with the boundary CB rotating down to bracket the #3 receiver');
+    counters.push('Apex LB must align inside-out on #2 to take away the sit route in the flat');
+  } else if (o.bunch) {
+    front = 'Nickel 2-4-5'; cov = 'Man Free';
+    reasons.push('Bunch formations create rub/pick concepts — man coverage risks illegal contact issues, but Free Safety over-top keeps it legal');
+    counters.push('Trail technique on #2 from bunch, bracket #1 with safety help, take away the shoot route');
+  } else if (o.spread) {
+    front = 'Nickel 2-4-5'; cov = 'Cover 3';
+    reasons.push('Spread sets with 4 WRs force at least 5 DBs — nickel with zone is the base answer');
+    counters.push('Fire zones (3-under, 3-deep) let you generate pressure while keeping 3 deep zones');
+  } else if (o.heavy) {
+    front = 'Bear Front'; cov = 'Cover 3';
+    reasons.push('Heavy / 2-TE / FB sets threaten power run — Bear front fills all A/B gaps and takes away inside zone');
+    counters.push('Walk SS into box pre-snap, hold CB alignment to keep pitch responsibility vs. bootleg');
+  } else if (currentFormation.includes('Flexbone') || currentFormation.includes('Wing') || currentFormation.includes('Wildcat') || currentFormation.includes('Option')) {
+    front = '3-4 Odd'; cov = 'Man Free';
+    reasons.push('Option/Wing-T requires assignment-sound run fits — 3-4 gives flexible force players to each side');
+    counters.push('Assign dive key, QB key, and pitch key before the snap — do not guess, declare');
+  } else if (currentFormation.includes('I-Form') || currentFormation.includes('Ace') || currentFormation.includes('Singleback')) {
+    front = '4-3 Over'; cov = 'Cover 3';
+    reasons.push('Pro-style 2-back / 2-TE sets are run-balanced — base 4-3 Over with Cover 3 provides run support and secondary depth');
+    counters.push('SAM must handle TE releases into the flat — keep him on the LOS in press or he becomes a conflict player');
+  } else {
+    front = 'Nickel 2-4-5'; cov = 'Cover 3';
+    reasons.push('Shotgun/pistol spread usually requires nickel personnel to match receiver count');
+    counters.push('Cover 3 buzz with a cloud corner over the #1 trips receiver creates a 4-under bracket effect');
+  }
+
+  document.getElementById('defFront').value = front;
+  document.getElementById('coverage').value = cov;
+  autoDefense();
+
+  coach(buildDefenseCoachText(o, front, cov, reasons, counters));
+}
+
+function buildDefenseCoachText(o, front, cov, reasons, counters) {
+  return `DEFENSIVE RECOMMENDATION
+─────────────────────────
+Formation scouted: ${currentFormation}
+Personnel: ${o.wr} WR · ${o.te} TE · ${o.rb} RB/FB · ${o.gun ? 'Shotgun/Pistol' : 'Under Center'}
+${o.trips ? 'Alignment: TRIPS to ' + (o.recR >= 3 ? 'right' : 'left') : ''}${o.bunch ? 'Alignment: BUNCH' : ''}${o.heavy ? 'Personnel: HEAVY (run-first)' : ''}${o.empty ? 'Personnel: EMPTY / no back' : ''}
+
+RECOMMENDATION: ${front} / ${cov}
+
+WHY THIS CALL:
+${reasons.map(r => '• ' + r).join('\n')}
+
+KEY ADJUSTMENT:
+${counters.map(c => '▶ ' + c).join('\n')}
+
+NEXT STEP: Drag defenders to disguise the shell pre-snap. Edit individual leverage, depth, and assignment from the Player Editor. Run "Set Selected" to rebuild from the template at any time.`;
+}
+
+function autoDefense() {
+  pushHistory('Set defense');
+  const front = document.getElementById('defFront').value;
+  const cov = document.getElementById('coverage').value;
+  defenders = normalizeSpacing(
+    (defTemplates[front] || defTemplates['4-3 Over']).map((d, i) => ({
+      id: i, label: d[0], pos: d[1], role: d[1],
+      x: d[2] * W, y: d[3] * H,
+      ox: d[2] * W, oy: d[3] * H,
+      assignment: cov,
+      color: colors[d[1]] || colors.DEF,
+      animX: d[2] * W, animY: d[3] * H
+    }))
+  );
+  draw();
+  status('Defense set: ' + front + ' / ' + cov, 'success');
+}
+
+// ─────────────────────────────────────────────
+// RUN GAME ENGINE
+// ─────────────────────────────────────────────
+function autoRun(reset = true) {
+  pushHistory('Auto run');
+  if (reset) blocks = blocks.filter(b => b.manual);
+
+  const scheme = document.getElementById('runScheme').value;
+  const dirSel = document.getElementById('runDir').value;
+
+  let rb = players.find(p => p.pos === 'RB' || p.label === 'TB' || p.label === 'HB')
+        || players.find(p => p.pos === 'QB');
+  if (!rb) { status('No RB found.', 'error'); return; }
+
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+
+  // Determine direction
+  let dir;
+  if (dirSel === 'left') dir = -1;
+  else if (dirSel === 'right') dir = 1;
+  else if (dirSel === 'middle') dir = 0;
+  else {
+    // Auto: pick based on scheme and formation
+    if (scheme === 'QB Keeper') {
+      const qb = players.find(p => p.pos === 'QB');
+      dir = qb ? (qb.x > center.x ? 1 : -1) : 1;
+    } else {
+      // Pick the side with fewer defenders
+      const defL = defenders.filter(d => d.x < W * .5).length;
+      const defR = defenders.filter(d => d.x >= W * .5).length;
+      dir = defL <= defR ? -1 : 1;
+    }
+  }
+
+  // Compute aiming point
+  let targetX, targetY;
+  if (ballPath && ballPath.length >= 2 && dirSel === 'auto') {
+    targetX = ballPath[ballPath.length - 1].x;
+    targetY = ballPath[ballPath.length - 1].y;
+    dir = targetX > center.x ? 1 : -1;
+  } else {
+    switch (scheme) {
+      case 'Inside Zone':
+      case 'Duo':
+        targetX = center.x + dir * 28; targetY = LOS - 85; break;
+      case 'Outside Zone':
+      case 'Stretch':
+      case 'Toss Sweep':
+        targetX = center.x + dir * 160; targetY = LOS - 60; break;
+      case 'Power':
+      case 'Counter':
+      case 'Pin-Pull':
+        targetX = center.x + dir * 55; targetY = LOS - 75; break;
+      case 'Trap':
+        targetX = center.x + dir * 22; targetY = LOS - 90; break;
+      case 'Draw':
+        targetX = center.x; targetY = LOS - 95; break;
+      case 'QB Keeper':
+        const qb2 = players.find(p => p.pos === 'QB');
+        targetX = (qb2 ? qb2.x : center.x) + dir * 90; targetY = LOS - 55; break;
+      case 'Option':
+        targetX = center.x + dir * 130; targetY = LOS - 50; break;
+      default:
+        targetX = center.x + dir * 60; targetY = LOS - 80;
+    }
+  }
+
+  ballPath = [{ x: rb.x, y: rb.y }, { x: targetX, y: targetY }];
+  routes = routes.filter(r => !(r.pid === rb.id && r.kind === 'carry'));
+  routes.push({ pid: rb.id, type: 'run', kind: 'carry', pts: ballPath, auto: true });
+
+  // Assign OL
+  const ol = players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label));
+  ol.sort((a, b) => a.x - b.x);
+
+  ol.forEach((p, i) => {
+    let tx, ty;
+    const isRight = p.x > center.x;
+    const isPlayside = (dir > 0 && isRight) || (dir < 0 && !isRight) || dir === 0;
+
+    if (scheme === 'Inside Zone' || scheme === 'Duo') {
+      tx = p.x + dir * (isPlayside ? 30 : 12); ty = p.y - 52;
+    } else if (scheme === 'Outside Zone' || scheme === 'Stretch') {
+      tx = p.x + dir * (isPlayside ? 42 : 18); ty = p.y - 45;
+    } else if (scheme === 'Power') {
+      if (p.label === (dir > 0 ? 'LG' : 'RG')) {
+        // Pulling guard → leads through hole
+        tx = targetX - dir * 18; ty = targetY + 15;
+      } else {
+        tx = p.x + dir * (isPlayside ? 20 : 8); ty = p.y - 50;
+      }
+    } else if (scheme === 'Counter') {
+      if (p.label === (dir > 0 ? 'RG' : 'LG') || p.label === (dir > 0 ? 'RT' : 'LT')) {
+        tx = targetX; ty = targetY + 12; // pulling
+      } else {
+        tx = p.x - dir * 8; ty = p.y - 48; // down blocks
+      }
+    } else if (scheme === 'Trap') {
+      if (p.label === (dir > 0 ? 'LG' : 'RG')) {
+        tx = center.x + dir * 38; ty = p.y - 38; // trapping guard
+      } else {
+        tx = p.x; ty = p.y - 46;
+      }
+    } else if (scheme === 'Draw') {
+      tx = p.x; ty = p.y - 44;
+    } else {
+      tx = p.x + dir * 20; ty = p.y - 50;
+    }
+
+    blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+    p.assignment = `${scheme}: ${isPlayside ? 'playside' : 'backside'} ${getOLTech(scheme, p.label, dir, isPlayside)}`;
+  });
+
+  // TE blocking assignments
+  players.filter(p => p.pos === 'TE').forEach(p => {
+    const isPlayside = (dir > 0 && p.x > center.x) || (dir < 0 && p.x < center.x);
+    const tx = p.x + dir * (isPlayside ? 32 : 14);
+    const ty = p.y - 48;
+    blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+    p.assignment = isPlayside ? `${scheme}: lead block / kick-out` : `${scheme}: down block / seal`;
+  });
+
+  // FB lead block
+  const fb = players.find(p => p.pos === 'FB' || p.label === 'FB');
+  if (fb && scheme !== 'Draw' && scheme !== 'QB Keeper') {
+    const tx = targetX - dir * 22;
+    const ty = targetY + 10;
+    blocks.push({ pid: fb.id, type: 'block', pts: [{ x: fb.x, y: fb.y }, { x: tx, y: ty }], auto: true });
+    fb.assignment = `${scheme}: lead through the hole, kick-out force`;
+  }
+
+  // WR stalk / crack
+  players.filter(p => p.pos === 'WR').forEach(p => {
+    const isPlayside = (dir > 0 && p.x > center.x) || (dir < 0 && p.x < center.x);
+    const tx = p.x + (isPlayside ? dir * 28 : dir * 8);
+    const ty = p.y - 45;
+    blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+    p.assignment = isPlayside ? `${scheme}: stalk/crack the OB support` : `${scheme}: cut-off backside pursuit`;
+  });
+
+  // QB handoff mesh
+  const qb = players.find(p => p.pos === 'QB');
+  if (qb && scheme !== 'QB Keeper') {
+    routes.push({
+      pid: qb.id, type: 'route', kind: 'handoff', auto: true,
+      pts: [{ x: qb.x, y: qb.y }, { x: rb.x, y: rb.y }, { x: qb.x - dir * 28, y: qb.y - 15 }]
+    });
+    qb.assignment = `${scheme}: mesh handoff to ${rb.label}, boot fake`;
+  } else if (qb && scheme === 'QB Keeper') {
+    routes.push({
+      pid: qb.id, type: 'run', kind: 'carry', auto: true,
+      pts: [{ x: qb.x, y: qb.y }, { x: targetX, y: targetY }]
+    });
+    qb.assignment = `QB Keeper: keep and run edge ${dir > 0 ? 'right' : 'left'}`;
+  }
+
+  rb.assignment = `${scheme}: ${dir === 0 ? 'up the middle' : dir > 0 ? 'hit right' : 'hit left'}, aim ${Math.round(targetX)},${Math.round(targetY)}`;
+
+  buildList(); draw();
+  coach(buildRunCoachText(scheme, dir, rb, ol, targetX, targetY));
+}
+
+function getOLTech(scheme, label, dir, isPlayside) {
+  if (scheme === 'Inside Zone' || scheme === 'Outside Zone') return 'zone/combo step';
+  if (scheme === 'Power' && label === (dir > 0 ? 'LG' : 'RG')) return 'PULL → lead through hole';
+  if (scheme === 'Counter' && ['LG','RG','LT','RT'].includes(label)) return 'PULL → kick-out';
+  if (scheme === 'Trap' && label === (dir > 0 ? 'LG' : 'RG')) return 'TRAP the backside DT';
+  return isPlayside ? 'down block / drive' : 'cut-off / backside seal';
+}
+
+function buildRunCoachText(scheme, dir, rb, ol, tx, ty) {
+  const dirLabel = dir === 0 ? 'middle' : dir > 0 ? 'right' : 'left';
+  const coverage = document.getElementById('coverage').value;
+  const front = document.getElementById('defFront').value;
+
+  const schemeNotes = {
+    'Inside Zone': `Inside Zone attacks the A/B-gap with combo blocks. The RB reads the first down lineman from the center outward, pressing the line of scrimmage until a lane opens.`,
+    'Outside Zone': `Outside Zone stretches the defense horizontally. The RB aims for the outside hip of the RT/TE, then cuts back once the defense over-pursues.`,
+    'Power': `Power sends a pulling guard through the C/D gap as the lead blocker. The playside blocks down and the ballcarrier runs off the kick-out block.`,
+    'Counter': `Counter shows action one way, then pulls two OL players the other direction. Best against over-aggressive linebackers who crash to flow.`,
+    'Duo': `Duo is a downhill double-team play — both OL players on the POA drive the DL backward. No pulls, no reads — just physical downfield blocking.`,
+    'Trap': `Trap blocks down on the playside, then the backside guard pulls to kick-out the unblocked DT. Works best when the DT charges upfield.`,
+    'Draw': `Draw sets up like a pass, freezes linebackers, then hands to the RB into a vacated middle. Most effective vs. heavy pass-rush fronts.`,
+    'Toss Sweep': `Toss Sweep uses a tossed pitch to get the RB outside quickly. WRs crack the force player, and OT/TE seal the edge.`,
+    'QB Keeper': `QB Keeper reads the edge player — if he crashes inside, QB bounces; if he holds, QB cuts. Best with a mobile QB.`,
+    'Option': `Triple Option gives the QB read-keys at every level. Mesh the dive, read the DE for the keep, read the OLB for the pitch.`,
+  };
+
+  const note = schemeNotes[scheme] || `The ${scheme} scheme attacks the ${dirLabel} side with coordinated OL movement.`;
+
+  return `RUN CONCEPT: ${scheme.toUpperCase()}
+─────────────────────────
+Direction: ${dirLabel.toUpperCase()} | Aiming point: (${Math.round(tx)}, ${Math.round(ty)})
+Carrier: ${rb.label} | Defense: ${front} / ${coverage}
+
+SCHEME DETAILS:
+${note}
+
+OL ASSIGNMENTS:
+${ol.map(p => `• ${p.label}: ${p.assignment || 'not assigned'}`).join('\n')}
+
+MATCHUP NOTES:
+${coverage.includes('4') || coverage.includes('Quarters') ? `▶ Cover 4 rolls safeties shallow — edge runs may face safety alley support quickly. Attack the B-gap first.` : ''}
+${coverage.includes('Cover 3') ? `▶ Cover 3 leaves the flat to a hook-curl zone. RB flare and TE seam can compliment this run series.` : ''}
+${coverage.includes('Blitz') || coverage.includes('Zero') ? `▶ Pressure look — check to a quick screen or draw if linebackers walk up. Protect the edge in pass pro first.` : ''}
+${front.includes('Bear') ? `▶ Bear Front fills all interior gaps — counter or toss to the edge is your best answer here.` : ''}
+${front.includes('Goal Line') ? `▶ Goal Line = heavy fronts in interior. Power or Duo at a gap opened by motion is most effective.` : ''}
+
+NEXT STEP: Use "Play Action Pass" to attach a PA fake to this run concept, or adjust the aiming point by switching to RB Target mode.`;
+}
+
+// ─────────────────────────────────────────────
+// PASS PROTECTION ENGINE
+// ─────────────────────────────────────────────
+function autoPassPro() {
+  pushHistory('Auto pass pro');
+  blocks = blocks.filter(b => b.manual);
+  const scheme = document.getElementById('passScheme').value;
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+  const slide = scheme.includes('Left') ? -1 : scheme.includes('Right') ? 1 : 0;
+
+  const ol = players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label));
+  ol.forEach((p, i) => {
+    let tx, ty;
+    const isRight = p.x > center.x;
+    if (scheme.includes('BOB')) {
+      // Big-on-big: each OL takes the man aligned over them
+      tx = p.x + (isRight ? 18 : -18); ty = p.y - 42;
+    } else if (scheme.includes('Turnback')) {
+      // Turnback: everyone sets toward the center
+      tx = p.x + (p.x < center.x ? 24 : -24); ty = p.y - 38;
+    } else if (scheme.includes('Full Slide')) {
+      tx = p.x + slide * 36; ty = p.y - 46;
+    } else if (scheme.includes('Half-Slide')) {
+      const playside = (slide > 0 && isRight) || (slide < 0 && !isRight);
+      tx = p.x + (playside ? slide * 30 : slide * 10); ty = p.y - 42;
+    } else if (scheme === 'Man Protection') {
+      tx = p.x + (isRight ? 12 : -12); ty = p.y - 38;
+    } else { // Max Protect
+      tx = p.x + (isRight ? 8 : -8); ty = p.y - 34;
+    }
+    blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+    p.assignment = scheme + ': ' + (scheme.includes('Slide') ? 'slide ' + (slide > 0 ? '→' : '←') : 'man assignment') + ', inside-out';
+  });
+
+  // Backs and TEs
+  players.filter(p => ['RB','FB','TE'].includes(p.pos)).forEach(p => {
+    if (scheme === 'Max Protect') {
+      const tx = p.x + (p.x < center.x ? -38 : 38); const ty = p.y - 52;
+      blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+      p.assignment = 'Max Protect: scan for blitzers, check release';
+    } else if (p.pos === 'RB' || p.pos === 'FB') {
+      const tx = p.x + (slide !== 0 ? -slide * 40 : p.x < center.x ? -38 : 38); const ty = p.y - 50;
+      blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
+      p.assignment = scheme + ': scan the hot side, pick up edge rusher';
+    }
+    // TE: release to flat by default unless Max Protect
+  });
+
+  buildList(); draw();
+  coach(`PASS PROTECTION: ${scheme.toUpperCase()}
+─────────────────────────
+${getPassProBreakdown(scheme)}
+
+OL RULES:
+${players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)).map(p => `• ${p.label}: ${p.assignment}`).join('\n')}
+
+COACHING POINT: The protection will auto-animate when you hit Run. You can still hand-draw an override for any OL player. If the defense shows a blitz look, adjust the back's pickup direction manually.`);
+}
+
+function getPassProBreakdown(scheme) {
+  const breakdowns = {
+    'Half-Slide Left': 'The backside (right) OL uses BOB rules. The playside (left) OL slides toward the protected edge. The back scans the unprotected side for late blitzers.',
+    'Half-Slide Right': 'The backside (left) OL uses BOB rules. The playside (right) OL slides away from the protected edge.',
+    'Full Slide Left': 'Entire OL slides left as a unit, leaving the right edge on its own. The back must pick up the backside edge rusher or the QB must hot-throw.',
+    'Full Slide Right': 'Entire OL slides right as a unit. Back protects the left edge.',
+    'Man Protection': 'Each OL is responsible for one specific rusher — no help, no communication. High-risk, clean-pocket scheme. Best with experienced, stout OL.',
+    'Max Protect': 'All five OL plus both backs/TEs stay in to protect. Only 2-3 receivers release. QB gets maximum time, but it is easy to cover with limited routes.',
+    'BOB (Big-on-Big)': 'Each OL handles the lineman aligned directly across from them. Backs handle linebackers. Clean, physical, old-school.',
+    'Turnback': 'OL sets back toward the center, allowing the QB to quickly roll opposite. Matches well with bootleg and sprint-out play designs.',
+  };
+  return breakdowns[scheme] || 'Standard protection rules apply.';
+}
+
+// ─────────────────────────────────────────────
+// PASS CONCEPT QUICK INSTALL
+// ─────────────────────────────────────────────
+function addQuickPassConcept() {
+  pushHistory('Add pass concept');
+  routes = routes.filter(r => !r.autoConcept);
+  const concept = document.getElementById('passConcept').value;
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+  const receivers = players.filter(p => ['WR','TE','RB'].includes(p.pos));
+
+  const conceptRoutes = {
+    'Flood': ['Go','Comeback/Out','Flat'],
+    'Levels': ['In/Dig','Curl','Flat'],
+    'Y-Cross': ['Cross','Seam','Flat'],
+    'Boot Sail': ['Sail/Wheel','Cross','Flat'],
+    'Mesh': ['Under','Under','Wheel'],
+    'Smash': ['Hitch','Corner','Flat'],
+    'Four Verts': ['Go','Go','Go'],
+    'Yankee': ['Post','Deep Cross','Flat'],
+    'Drive': ['In','Underneath','Swing'],
+    'Spacing': ['Hitch','Flat','Seam'],
+  };
+  const names = conceptRoutes[concept] || ['Go','Out','Flat'];
+
+  receivers.forEach((p, i) => {
+    const side = p.x < center.x ? -1 : 1;
+    const routeName = names[i % names.length];
+    let pts;
+    if (routeName === 'Go') {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 12, y: p.y - 80 }, { x: p.x + side * 18, y: p.y - 160 }];
+    } else if (routeName === 'Corner') {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 20, y: p.y - 70 }, { x: p.x + side * 60, y: p.y - 110 }];
+    } else if (routeName === 'Post') {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 15, y: p.y - 70 }, { x: W * .5 + side * 20, y: p.y - 120 }];
+    } else if (routeName.includes('Cross') || routeName === 'In' || routeName.includes('Dig')) {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 10, y: p.y - 50 }, { x: p.x + side * 80, y: p.y - 55 }];
+    } else if (routeName === 'Out' || routeName.includes('Comeback')) {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 8, y: p.y - 65 }, { x: p.x + side * 45, y: p.y - 68 }];
+    } else if (routeName === 'Flat' || routeName === 'Swing') {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 55, y: p.y - 18 }, { x: p.x + side * 75, y: p.y - 8 }];
+    } else if (routeName === 'Seam') {
+      pts = [{ x: p.x, y: p.y }, { x: center.x + side * 55, y: p.y - 60 }, { x: center.x + side * 50, y: p.y - 130 }];
+    } else if (routeName === 'Curl' || routeName === 'Hitch') {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 15, y: p.y - 60 }, { x: p.x, y: p.y - 55 }];
+    } else if (routeName.includes('Sail') || routeName.includes('Wheel')) {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 40, y: p.y - 30 }, { x: p.x + side * 60, y: p.y - 110 }];
+    } else {
+      pts = [{ x: p.x, y: p.y }, { x: p.x + side * 30, y: p.y - 60 }, { x: p.x + side * 50, y: p.y - 90 }];
+    }
+    routes.push({ pid: p.id, type: 'route', autoConcept: true, pts });
+    p.assignment = routeName + ' — ' + concept;
+  });
+
+  buildList(); draw();
+  coach(`PASS CONCEPT: ${concept.toUpperCase()}
+─────────────────────────
+${getConceptBreakdown(concept)}
+
+RECEIVER ROUTES:
+${receivers.map((p, i) => `• ${p.label} (${p.pos}): ${p.assignment}`).join('\n')}
+
+COACHING POINT: Pair with your protection scheme to complete the play design. Manually adjust any route stem by selecting the player and redrawing in Route mode.`);
+}
+
+function getConceptBreakdown(concept) {
+  const c = {
+    'Flood': 'Three-level horizontal stretch to one side: deep corner, intermediate out, and a flat. Attacks Cover 3 and Tampa 2.',
+    'Levels': 'Three receivers at different depths on the same side. Creates a high/low conflict for the zone defender and stresses Cover 2.',
+    'Y-Cross': 'TE crosses underneath safeties while outside routes clear vertically. Attacks man coverage and Cover 3 curl-flat defenders.',
+    'Boot Sail': 'QB boots away from the run fake. Three-level stretch to the open side: go, sail, and flat. Attacks Cover 3 boundary side.',
+    'Mesh': 'Two crossing routes beneath the safeties running under each other at 5-6 yards. Creates natural pick on man coverage. High-percentage concept.',
+    'Smash': 'Hitch-corner combo: corner attacks the CB, hitch sits in front of it. Forces the CB to choose — both answers leave a throw open.',
+    'Four Verts': 'Four vertical routes stretch the defense from sideline to sideline. Attacks Cover 2 safeties and forces one-on-one outside.',
+    'Yankee': 'Post-cross combo: deep post over one safety, deep cross under the other. Creates a rub effect and attacks Cover 2/Cover 4.',
+    'Drive': 'Low-level crossing routes with a front runner and trail runner. Creates picks, natural depth separations, and flat answer.',
+    'Spacing': 'Three hitches at staggered depths — one deep, one intermediate, one quick flat. Dinks the ball quickly into zone windows.',
+  };
+  return c[concept] || `${concept} attacks the defense with coordinated route combinations.`;
+}
+
+// ─────────────────────────────────────────────
+// PLAY ACTION ENGINE
+// ─────────────────────────────────────────────
+function autoPlayAction() {
+  pushHistory('Play action');
+  const runScheme = document.getElementById('runScheme').value;
+  const concept = document.getElementById('passConcept').value;
+  const qb = players.find(p => p.pos === 'QB');
+  const rb = players.find(p => p.pos === 'RB' || p.label === 'TB') || players.find(p => p.pos === 'FB');
+  if (!qb || !rb) { status('Need a QB and RB for play action.', 'error'); return; }
+
+  blocks = blocks.filter(b => b.manual);
+  routes = routes.filter(r => !r.autoConcept && !r.playAction && r.kind !== 'carry');
+  motions = motions.filter(m => !m.playAction);
+
+  const dir = rb.x > qb.x ? 1 : -1;
+  const mesh = { x: (qb.x + rb.x) / 2, y: (qb.y + rb.y) / 2 - 10 };
+  const fakeTarget = ballPath ? ballPath[ballPath.length - 1] : { x: qb.x + dir * 95, y: LOS - 90 };
+
+  ballPath = [{ x: rb.x, y: rb.y }, mesh, { x: fakeTarget.x, y: fakeTarget.y }];
+  motions.push({ pid: rb.id, type: 'motion', playAction: true, auto: true, pts: [{ x: rb.x, y: rb.y }, mesh, { x: fakeTarget.x, y: fakeTarget.y }] });
+
+  // QB boot route
+  routes.push({
+    pid: qb.id, type: 'route', playAction: true, auto: true,
+    pts: [{ x: qb.x, y: qb.y }, mesh, { x: qb.x - dir * 70, y: qb.y - 28 }, { x: qb.x - dir * 115, y: qb.y - 50 }]
+  });
+
+  // OL sell-run blocks
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
+  players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)).forEach((p, i) => {
+    blocks.push({ pid: p.id, type: 'block', playAction: true, auto: true,
+      pts: [{ x: p.x, y: p.y }, { x: p.x + dir * (16 + i % 2 * 8), y: p.y - 40 }] });
+    p.assignment = `PA ${runScheme}: sell run, then set to protect`;
+  });
+
+  // Receivers layered
+  players.filter(p => ['TE','WR','FB'].includes(p.pos) && p.id !== rb.id).forEach((p, i) => {
+    const side = p.x < center.x ? -1 : 1;
+    const depths = [120, 75, 45, 95, 60];
+    const wides = [30, 90, 60, 15, 50];
+    const assigns = ['Deep post/corner off PA','Sail/wheel to boundary','Flat leak','Over route','Checkdown'];
+    routes.push({ pid: p.id, type: 'route', playAction: true, auto: true,
+      pts: [{ x: p.x, y: p.y }, { x: p.x + side * 18, y: p.y - depths[i % 5] * .55 }, { x: p.x + side * wides[i % 5], y: p.y - depths[i % 5] }] });
+    p.assignment = assigns[i % 5] + ' off play-action';
+  });
+
+  rb.assignment = `PA fake: sell ${runScheme} mesh`;
+  qb.assignment = `Fake mesh, boot ${dir > 0 ? 'left' : 'right'}, read ${concept}`;
+
+  buildList(); draw();
+  coach(`PLAY ACTION: ${runScheme.toUpperCase()} → ${concept.toUpperCase()}
+─────────────────────────
+The RB sells the ${runScheme} mesh/fake. The QB fakes the handoff, then boots ${dir > 0 ? 'left' : 'right'} with a 3-level ${concept} concept on the backside.
+
+OL: Sell the run scheme, then slide protect — do NOT release downfield or it becomes an ineligible receiver penalty on a pass.
+
+WHY THIS WORKS:
+• Linebackers who key the run action will drop their coverage responsibility for a step, creating throwing windows.
+• The boot puts the QB on the move, making the pass rush angle longer and harder to maintain.
+• The ${concept} concept on the backside gives the QB 3 clear reads.
+
+PROGRESSION: Read the safety rotation. If Cover 3, the deep route is open. If Cover 2, the sail and flat create a high-low on the cornerback.`);
+}
+
+// ─────────────────────────────────────────────
+// SMART ANALYZE (full integrated coach)
+// ─────────────────────────────────────────────
+function smartAnalyze() {
+  const o = offenseProfile();
+  const front = document.getElementById('defFront').value;
+  const cov = document.getElementById('coverage').value;
+  const hasRun = !!ballPath;
+  const routeN = routes.filter(r => r.kind !== 'carry').length;
+  const blockN = blocks.length;
+  const motionN = motions.length;
+
+  // Real coverage stress analysis
+  const covStress = analyzeCoverageStress(cov, o);
+  const runFit = analyzeRunFit(o.runScheme, front, cov);
+  const matchupAdvantage = findMatchupAdvantage(o, front, cov);
+
+  coach(`INTEGRATED COACH ANALYSIS
+─────────────────────────
+OFFENSE: ${currentFormation} (${o.wr} WR, ${o.te} TE, ${o.rb} RB/FB)
+DEFENSE: ${front} / ${cov}
+${o.gun ? 'QB Depth: Shotgun/Pistol' : 'QB Depth: Under Center'}
+${o.trips ? '⚠ TRIPS alignment detected' : ''}${o.bunch ? '⚠ BUNCH alignment detected' : ''}${o.empty ? '⚠ EMPTY — no back in protection' : ''}
+
+PLAY DESIGN STATE:
+• Routes drawn: ${routeN}
+• Blocks assigned: ${blockN}
+• Motions: ${motionN}
+• Ball path: ${hasRun ? 'YES (' + o.runScheme + ')' : 'None — use RB Target mode or Auto Run'}
+
+RUN GAME FIT:
+${runFit}
+
+COVERAGE STRESS POINTS:
+${covStress}
+
+MATCHUP ADVANTAGE:
+${matchupAdvantage}
+
+${o.empty ? 'EMPTY PROTECTION WARNING:\nWith no back in protection, the QB must identify the hot receiver before the snap. Any blitz = immediate hot throw. Confirm the protection call covers at least 5 rushers.\n' : ''}
+COACHING RECOMMENDATION:
+${getCoachRecommendation(o, front, cov, hasRun, routeN, blockN)}`);
+}
+
+function analyzeCoverageStress(cov, o) {
+  const stressMap = {
+    'Cover 3': `• Attack the seams between the corner and safety — 10-15 yards, between hash and numbers\n• Flood to the field side creates a 3-on-2 vs. the hook-curl defender\n• Double-move routes (slant-go, in-out) beat the flat-footed corner\n• Short motion to the boundary pulls the CB and opens the alley run game`,
+    'Cover 2': `• Four verticals splits the safeties — the post between the hash and the numbers is open\n• Smash concept (hitch-corner) attacks the flat-footed corner\n• Seam routes between the CB and Safety create a high-low stretch\n• Run game is effective into CB-force gaps — safeties are too deep to support`,
+    'Man Free': `• Pick/rub routes (mesh, drive) create natural traffic on crossing routes\n• Motion pre-snap identifies man coverage and shifts the CB's leverage\n• Back out of the backfield vs. a LB is a favorable matchup — look at the swing/wheel\n• Speed releases — no cushion to work with, so attack quickly at the snap`,
+    'Cover 4': `• Load the box — Cover 4 brings safeties to the flat, so the post and dig are open\n• Trips into the boundary forces bracket coverage, opening the backside single receiver\n• Run game benefits from two-high safety shells — hit gaps before safeties can converge\n• Four verts creates a 4-on-4 that the safeties cannot cover from depth`,
+    'Zero Blitz': `• Hot receivers must be declared pre-snap — quick outs, slants, and tunnel screens\n• Every WR needs a hot route adjustment vs. the pressure look\n• Rub and mesh concepts can neutralize man leverage even with immediate pressure\n• Screen game is highly effective — take the free yards when they come free`,
+    'Tampa 2': `• The Mike LB drops deep into the post window — attack the seam between MIKE and the safety\n• Dig routes (10-12 yards) find the void between the LB drop and the corner flat\n• TE seam is the killer route — threaded inside the LB and between the safeties\n• Flood weak creates a 3-on-2 on the boundary CB and hook zone`,
+    'Cover 6': `• Field side plays like Cover 4 (press-bracket); boundary side plays like Cover 2\n• Attack the boundary corner with a smash concept — he has flat responsibility and post help\n• The field side post is protected, so bend the route to the corner window\n• Identify which side is the '4' and which is the '2' before the snap`,
+    'Quarters': `• Pattern-match coverage — routes must create conflict reads, not just vertical stems\n• Levels concept at 6 and 12 yards forces the defender to choose sit or carry\n• Bunch releases create confusion in the pattern-match key reads\n• Run game is wide open — safeties are in pure pass coverage`,
+  };
+  return stressMap[cov] || `• Attack spacing gaps and mix depths to create coverage conflicts\n• Look for 3-on-2 overloads in any coverage shell`;
+}
+
+function analyzeRunFit(scheme, front, cov) {
+  if (!scheme) return '• No run scheme selected yet. Choose from the Run Game panel.';
+  const frontFits = {
+    'Inside Zone': { good: ['3-4 Odd', 'Cover 4', 'Nickel 2-4-5'], bad: ['Bear Front', 'Goal Line'] },
+    'Outside Zone': { good: ['Cover 3', 'Cover 4', '4-3 Over'], bad: ['Bear Front', 'Nickel 2-4-5'] },
+    'Power': { good: ['Nickel 2-4-5', 'Cover 4', 'Dime', 'Quarter'], bad: ['Bear Front', 'Goal Line'] },
+    'Counter': { good: ['4-3 Over', 'Cover 3', 'Man Free'], bad: ['3-4 Odd'] },
+  };
+  const fit = frontFits[scheme];
+  if (fit) {
+    const goodMatch = fit.good.includes(front) ? `✓ ${scheme} fits well vs. ${front} — exploit the defensive structure.` : '';
+    const badMatch = fit.bad.includes(front) ? `⚠ ${front} is specifically designed to stop ${scheme}. Consider a counter or check.` : '';
+    return (goodMatch || badMatch || `• ${scheme} vs. ${front} is a neutral matchup. Execution determines the outcome.`) + '\n• ' +
+      (cov.includes('Cover 2') || cov.includes('Quarters') ? 'Two-high shell allows safeties to support the run quickly — avoid slow-developing runs.' :
+       cov.includes('Cover 3') ? 'Cover 3 with single-high is run-support sound — expect the SS to be a force player.' :
+       'Coverage shell has limited run impact — focus on OL technique vs. the front.');
+  }
+  return `• ${scheme} vs. ${front}: study the gap assignment chart and identify the weakest interior gap.`;
+}
+
+function findMatchupAdvantage(o, front, cov) {
+  const advantages = [];
+  if (o.te >= 2 && front.includes('Dime')) advantages.push('▶ 2 TEs vs. Dime = run-block advantage — the extra DB cannot handle a physical TE at the point of attack');
+  if (o.empty && !cov.includes('Cover 4') && !cov.includes('Dime')) advantages.push('▶ Empty formation stresses non-4-DB shells — you have more receivers than they have DBs');
+  if (o.bunch && cov.includes('Man')) advantages.push('▶ Bunch alignment creates natural picks on man coverage — exploit this immediately');
+  if (o.trips && cov.includes('Cover 3')) advantages.push('▶ Trips into Cover 3 forces the CB into a 2-on-1 — the #3 in the flat is almost always open');
+  if (o.heavy && (front.includes('Nickel') || front.includes('Dime'))) advantages.push('▶ Heavy personnel vs. sub package = run the ball — they are undersized for this fight');
+  if (o.spread && front.includes('Goal Line')) advantages.push('▶ Spread vs. Goal Line = massive mismatch — they cannot cover your receivers with LBs');
+  if (advantages.length === 0) advantages.push('▶ No obvious structural mismatch — win through execution, route precision, and leverage');
+  return advantages.join('\n');
+}
+
+function getCoachRecommendation(o, front, cov, hasRun, routeN, blockN) {
+  if (!hasRun && routeN === 0 && blockN === 0) {
+    return '1. Start by generating a run scheme or pass concept using the left panel buttons.\n2. Then click Coach again for a full integrated breakdown.';
+  }
+  const steps = [];
+  if (!hasRun) steps.push('• Set an RB aiming point (RB Target mode or Auto Run) to anchor the run game analysis');
+  if (blockN === 0) steps.push('• Generate protection — pass pro or run blocks — to complete the assignment picture');
+  if (routeN === 0 && hasRun) steps.push('• Add a play-action pass concept to make this a complete formation package');
+  if (steps.length > 0) return steps.join('\n');
+  return '✓ Full play design is active. Hit ▶ Run to see the 11-player animation. Adjust individual routes/blocks by selecting a player and redrawing in the appropriate mode.';
+}
+
+// ─────────────────────────────────────────────
+// PLAYER LIST & EDITOR
+// ─────────────────────────────────────────────
+function buildList() {
+  const el = document.getElementById('playerList');
+  el.innerHTML = players.map(p =>
+    `<div class="player-row ${selected.side === 'offense' && selected.id === p.id ? 'selected' : ''}" onclick="selectObj('offense',${p.id})">
+      <div class="dot" style="background:${p.color}">${p.label.slice(0,3)}</div>
+      <div><b>${p.label}</b> <span class="small">${p.pos}</span>
+      <div class="small">${p.assignment || '<span style="color:#555">No assignment</span>'}</div></div>
+      <span class="small">${routeCount(p.id)}</span>
+    </div>`
+  ).join('');
+}
+
+function routeCount(id) {
+  const n = routes.filter(r => r.pid === id).length +
+            blocks.filter(b => b.pid === id).length +
+            motions.filter(m => m.pid === id).length;
+  return n ? `<span style="color:var(--gold)">${n}×</span>` : '';
+}
+
+function selectObj(side, id) {
+  selected = { side, id };
+  buildList();
+  renderEditor();
+  draw();
+}
+
+function obj() {
+  return selected.side === 'defense'
+    ? defenders.find(d => d.id === selected.id)
+    : players.find(p => p.id === selected.id);
+}
+
+function renderEditor() {
+  const p = obj();
+  const el = document.getElementById('editor');
+  if (!p) {
+    el.className = 'hint';
+    el.innerHTML = 'Select any offensive or defensive player to customize name, position, role, assignment, color, and exact field location.';
+    return;
+  }
+  el.className = '';
+  el.innerHTML = `
+    <div class="editor-grid">
+      <label>Label</label><input class="input" value="${p.label}" oninput="editSel('label',this.value)">
+      <label>Position</label><input class="input" value="${p.pos}" oninput="editSel('pos',this.value)">
+      <label>Role</label><input class="input" value="${p.role||''}" oninput="editSel('role',this.value)">
+      <label>Assign</label><input class="input" value="${p.assignment||''}" oninput="editSel('assignment',this.value)">
+      <label>Color</label><input class="input" type="color" value="${p.color}" oninput="editSel('color',this.value)">
+      <label>X / Y</label><input class="input" value="${Math.round(p.x)}, ${Math.round(p.y)}" onchange="setXY(this.value)">
+    </div>
+    <button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete Player</button>`;
+}
+
+function editSel(k, v) {
+  const p = obj();
+  if (!p) return;
+  pushHistory('Edit player');
+  p[k] = v;
+  if (k === 'color') p.color = v;
+  buildList(); draw();
+}
+
+function setXY(v) {
+  const p = obj();
+  if (!p) return;
+  const [x, y] = v.split(',').map(n => Number(n.trim()));
+  if (!isNaN(x) && !isNaN(y)) {
+    pushHistory('Move player');
+    p.x = x; p.y = y; p.ox = x; p.oy = y;
+    draw();
+  }
+}
+
+function deleteSelected() {
+  if (!obj()) return;
+  pushHistory('Delete player');
+  if (selected.side === 'defense') defenders = defenders.filter(d => d.id !== selected.id);
+  else players = players.filter(p => p.id !== selected.id);
+  selected = { side: 'offense', id: null };
+  buildList(); renderEditor(); draw();
+}
+
+function addPlayer() {
+  pushHistory('Add player');
+  const id = Math.max(-1, ...players.map(p => p.id)) + 1;
+  players.push({ id, label: 'NEW', pos: 'WR', role: 'Custom',
+    x: W * .5, y: H * .78, ox: W * .5, oy: H * .78,
+    assignment: '', color: colors.WR, animX: W * .5, animY: H * .78 });
+  selectObj('offense', id);
+}
+
+function clearBlocking() {
+  pushHistory('Clear blocks');
+  blocks = [];
+  players.forEach(p => {
+    if (p.assignment && (p.assignment.includes('Protect') || p.assignment.includes('support') ||
+        p.assignment.includes('block') || p.assignment.includes('Block') || p.assignment.includes('responsibility')))
+      p.assignment = '';
+  });
+  buildList(); draw();
+  status('Blocking cleared.', 'success');
+}
+
+function clearSelectedAssignment() {
+  const p = obj();
+  if (!p) { status('Select a player first.', 'error'); return; }
+  pushHistory('Clear selected assignment');
+  routes = routes.filter(r => r.pid !== p.id);
+  blocks = blocks.filter(b => b.pid !== p.id);
+  motions = motions.filter(m => m.pid !== p.id);
+  if (ballPath && ballPath[0] && Math.hypot(ballPath[0].x - p.x, ballPath[0].y - p.y) < 25) ballPath = null;
+  p.assignment = '';
+  buildList(); draw();
+  status('Cleared selected player assignments.', 'success');
+}
+
+// ─────────────────────────────────────────────
+// MODE & INPUT HANDLING
+// ─────────────────────────────────────────────
+function setMode(m) {
+  mode = m;
+  document.querySelectorAll('[id^=mode-]').forEach(b => b.classList.remove('active'));
+  document.getElementById('mode-' + m).classList.add('active');
+  canvas.style.cursor = m === 'select' || m === 'def' ? 'default' : 'crosshair';
+}
+
+function pos(e) {
+  const r = canvas.getBoundingClientRect();
+  return { x: (e.clientX - r.left) * W / r.width, y: (e.clientY - r.top) * H / r.height };
+}
+
+function hit(list, x, y, rad = 20) {
+  return list.find(p => Math.hypot(p.x - x, p.y - y) < rad);
+}
+
+canvas.onmousedown = e => {
+  if (anim) return;
+  const m = pos(e);
+  const off = hit(players, m.x, m.y);
+  const def = hit(defenders, m.x, m.y);
+
+  if (mode === 'select' || mode === 'def') {
+    if (def) { selectObj('defense', def.id); pushHistory('Move defender'); drag = def; }
+    else if (off) { selectObj('offense', off.id); pushHistory('Move player'); drag = off; }
+    else { selected = { side: 'offense', id: null }; renderEditor(); buildList(); draw(); }
+    return;
+  }
+
+  if (mode === 'ball') {
+    const rb = players.find(p => p.pos === 'RB' || p.label === 'RB' || p.label === 'TB')
+              || players.find(p => p.pos === 'QB');
+    if (!rb) { status('Add or select a RB first.', 'error'); return; }
+    pushHistory('Set RB target');
+    selected = { side: 'offense', id: rb.id };
+    ballPath = [{ x: rb.x, y: rb.y }, m];
+    routes = routes.filter(r => !(r.pid === rb.id && r.kind === 'carry'));
+    routes.push({ pid: rb.id, type: 'run', kind: 'carry', pts: ballPath, auto: true });
+    rb.assignment = 'Ball carrier target set';
+    buildList();
+    return;
+  }
+
+  const p = obj();
+  if (!p || selected.side !== 'offense') { status('Select an offensive player first.', 'error'); return; }
+  drawing = true;
+  drawPts = [{ x: p.x, y: p.y }];
+};
+
+canvas.onmousemove = e => {
+  const m = pos(e);
+  if (drag) { drag.x = m.x; drag.y = m.y; drag.ox = m.x; drag.oy = m.y; draw(); return; }
+  if (drawing) { drawPts.push(m); if (drawPts.length > 3) drawPts = simplify(drawPts, 7); draw(); }
+};
+
+canvas.onmouseup = e => {
+  if (drag) { drag = null; renderEditor(); return; }
+  if (!drawing) return;
+  drawing = false;
+  if (drawPts.length > 2) {
+    pushHistory('Add assignment');
+    const type = mode === 'motion' ? 'motion' : mode === 'block' ? 'block' : 'route';
+    const arr = type === 'motion' ? motions : type === 'block' ? blocks : routes;
+    arr.push({ pid: selected.id, type, pts: simplify(drawPts, 9), manual: true });
+    const p = obj();
+    if (p) p.assignment = type === 'route' ? 'Manual route' : type === 'block' ? 'Manual block' : 'Pre-snap motion';
+    buildList();
+    status('Assignment added.', 'success');
+  }
+  drawPts = []; draw();
+};
+
+canvas.onmouseleave = () => {
+  drag = null;
+  if (drawing) { drawing = false; drawPts = []; draw(); }
+};
+
+function simplify(pts, d) {
+  let out = [pts[0]];
+  for (let i = 1; i < pts.length; i++) {
+    const a = out[out.length - 1], b = pts[i];
+    if (Math.hypot(a.x - b.x, a.y - b.y) >= d) out.push(b);
+  }
+  return out;
+}
+
+// ─────────────────────────────────────────────
+// ANIMATION ENGINE
+// ─────────────────────────────────────────────
+function runPlay() {
+  if (anim) return;
+  const all = [...motions, ...routes, ...blocks];
+  if (!all.length) { status('Add routes, blocking, or a ball path first.', 'error'); return; }
+
+  anim = true;
+  const progEl = document.getElementById('animProgress');
+  if (progEl) progEl.classList.add('active');
+
+  let start = performance.now();
+  players.forEach(p => { p.animX = p.x; p.animY = p.y; });
+
+  const tracks = {};
+  players.forEach(p => {
+    const playerActions = all.filter(a => a.pid === p.id);
+    let pts = [];
+    playerActions.forEach(a => {
+      let seg = a.pts && a.pts.length ? a.pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+      if (a.type === 'block') {
+        const last = seg[seg.length - 1];
+        const settle = { x: last.x + (last.x - seg[0].x) * .15, y: last.y + (last.y - seg[0].y) * .15 };
+        seg = [seg[0], last, settle];
+      }
+      pts = pts.concat(pts.length ? seg.slice(1) : seg);
+    });
+    tracks[p.id] = pts.length ? pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+  });
+
+  function ptAt(pts, e) {
+    if (pts.length < 2) return pts[0] || { x: 0, y: 0 };
+    const idx = Math.min(pts.length - 2, Math.floor(e * (pts.length - 1)));
+    const local = (e * (pts.length - 1)) - idx;
+    const a = pts[idx], b = pts[idx + 1] || a;
+    return { x: a.x + (b.x - a.x) * local, y: a.y + (b.y - a.y) * local };
+  }
+
+  function step(t) {
+    const prog = Math.min((t - start) / 3400, 1);
+    const e = prog < .5 ? 2 * prog * prog : -1 + (4 - 2 * prog) * prog; // ease in-out
+    players.forEach(p => { const pt = ptAt(tracks[p.id], e); p.animX = pt.x; p.animY = pt.y; });
+    draw();
+    if (prog < 1) raf = requestAnimationFrame(step);
+    else setTimeout(() => stopPlay(true), 500);
+  }
+
+  raf = requestAnimationFrame(step);
+  status('Running 11-player animation...', 'loading');
+}
+
+function stopPlay(done = false) {
+  anim = false;
+  if (raf) cancelAnimationFrame(raf);
+  players.forEach(p => { p.animX = p.x; p.animY = p.y; });
+  const progEl = document.getElementById('animProgress');
+  if (progEl) progEl.classList.remove('active');
+  draw();
+  status(done ? 'Play animation complete.' : 'Stopped.', done ? 'success' : '');
+}
+
+// ─────────────────────────────────────────────
+// DRAW ENGINE
+// ─────────────────────────────────────────────
+function draw() {
+  ctx.clearRect(0, 0, W, H);
+  drawField();
+  drawLines(motions, '#3498db', false);
+  drawLines(routes, '#f5c842', false);
+  drawLines(blocks, '#e74c3c', true);
+  if (ballPath) drawPath(ballPath, '#d8892b', false, 5);
+  if (drawing && drawPts.length > 1) {
+    drawPath(drawPts, mode === 'block' ? '#e74c3c' : mode === 'motion' ? '#3498db' : '#f5c842', true, 2);
+  }
+  drawPeople(defenders, true);
+  drawPeople(players, false);
+}
+
+function drawField() {
+  for (let i = 0; i < 10; i++) {
+    ctx.fillStyle = i % 2 ? '#285215' : '#2a5518';
+    ctx.fillRect(0, i * H / 10, W, H / 10);
+  }
+  // Yard lines
+  ctx.strokeStyle = 'rgba(255,255,255,.15)';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 10; i++) {
+    const y = i * H / 10;
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke();
+  }
+  // Hash marks
+  ctx.strokeStyle = 'rgba(255,255,255,.3)';
+  ctx.lineWidth = 1.5;
+  for (let i = 0; i <= 10; i++) {
+    const y = i * H / 10;
+    for (const hx of [W * .33, W * .67]) {
+      ctx.beginPath(); ctx.moveTo(hx - 6, y); ctx.lineTo(hx + 6, y); ctx.stroke();
+    }
+  }
+  // LOS
+  ctx.strokeStyle = 'rgba(255,220,0,.7)';
+  ctx.setLineDash([10, 6]);
+  ctx.lineWidth = 2;
+  ctx.beginPath(); ctx.moveTo(0, LOS); ctx.lineTo(W, LOS); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle = 'rgba(255,220,0,.6)';
+  ctx.font = '700 10px Barlow Condensed';
+  ctx.fillText('LINE OF SCRIMMAGE', 8, LOS - 5);
+  // End zone
+  ctx.fillStyle = 'rgba(255,255,255,.04)';
+  ctx.fillRect(0, 0, W, H * .08);
+  ctx.fillStyle = 'rgba(255,255,255,.07)';
+  ctx.font = '900 20px Barlow Condensed';
+  ctx.textAlign = 'center';
+  ctx.fillText('END ZONE', W / 2, H * .055);
+  ctx.textAlign = 'left';
+}
+
+function drawPeople(list, isDef) {
+  list.forEach(p => {
+    const x = anim ? p.animX || p.x : p.x;
+    const y = anim ? p.animY || p.y : p.y;
+    const r = isDef ? DEF_RADIUS : PLAYER_RADIUS;
+    const sel = selected.id === p.id && selected.side === (isDef ? 'defense' : 'offense');
+
+    // Selection halo
+    if (sel) {
+      ctx.beginPath(); ctx.arc(x, y, r + 7, 0, Math.PI * 2);
+      ctx.fillStyle = (p.color || '#fff') + '33'; ctx.fill();
+      ctx.strokeStyle = p.color || '#fff'; ctx.lineWidth = 1.5; ctx.stroke();
+    }
+
+    // Shadow
+    ctx.beginPath(); ctx.arc(x + 2, y + 2, r, 0, Math.PI * 2);
+    ctx.fillStyle = 'rgba(0,0,0,.45)'; ctx.fill();
+
+    // Body
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2);
+    ctx.fillStyle = p.color || '#999'; ctx.fill();
+    ctx.strokeStyle = sel ? '#fff' : isDef ? '#ff8080' : 'rgba(0,0,0,.6)';
+    ctx.lineWidth = sel ? 2.5 : 1.5; ctx.stroke();
+
+    // Label
+    ctx.fillStyle = isDef ? '#ffe0e0' : '#060606';
+    ctx.font = `900 ${isDef ? 9 : p.label.length > 3 ? 8 : 10}px Barlow Condensed`;
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(p.label.slice(0, 4), x, y);
+    ctx.textBaseline = 'alphabetic';
+  });
+  ctx.textAlign = 'left';
+}
+
+function drawLines(arr, color, dash) {
+  arr.forEach(a => drawPath(a.pts, color, dash, 2.8));
+}
+
+function drawPath(pts, color, dash, lw) {
+  if (!pts || pts.length < 2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = lw;
+  ctx.setLineDash(dash ? [7, 5] : []);
+  ctx.beginPath();
+  ctx.moveTo(pts[0].x, pts[0].y);
+  for (let i = 1; i < pts.length; i++) ctx.lineTo(pts[i].x, pts[i].y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  if (pts.length >= 2) arrow(pts[pts.length - 2], pts[pts.length - 1], color);
+}
+
+function arrow(a, b, c) {
+  const ang = Math.atan2(b.y - a.y, b.x - a.x), s = 10;
+  ctx.fillStyle = c;
+  ctx.beginPath();
+  ctx.moveTo(b.x, b.y);
+  ctx.lineTo(b.x - s * Math.cos(ang - .42), b.y - s * Math.sin(ang - .42));
+  ctx.lineTo(b.x - s * Math.cos(ang + .42), b.y - s * Math.sin(ang + .42));
+  ctx.closePath(); ctx.fill();
+}
+
+// ─────────────────────────────────────────────
+// UTILITY FUNCTIONS
+// ─────────────────────────────────────────────
+function coach(t) {
+  document.getElementById('coach').textContent = t;
+}
+
+function status(t, c) {
+  const e = document.getElementById('status');
+  e.textContent = t;
+  e.className = 'status ' + (c || '');
+}
+
+function switchRTab(tab) {
+  document.querySelectorAll('.rtab').forEach((el, i) => {
+    const tabs = ['editor','plays','legend'];
+    el.classList.toggle('active', tabs[i] === tab);
+  });
+  document.querySelectorAll('.rtab-content').forEach(el => {
+    el.classList.toggle('active', el.id === 'rtab-' + tab);
+  });
+}
+
+// ─────────────────────────────────────────────
+// SAVE / LOAD / EXPORT
+// ─────────────────────────────────────────────
+function serialize() {
+  return {
+    name: document.getElementById('playName').value || 'Untitled Play',
+    formation: currentFormation, players, defenders,
+    routes, blocks, motions, ballPath, date: Date.now()
+  };
+}
+
+function savePlay() {
+  let arr = JSON.parse(localStorage.getItem('pdpro.v7') || '[]');
+  const p = serialize();
+  arr = arr.filter(x => x.name !== p.name);
+  arr.unshift(p);
+  localStorage.setItem('pdpro.v7', JSON.stringify(arr.slice(0, 30)));
+  refreshSaved();
+  status('Saved ' + p.name + '.', 'success');
+}
+
+function refreshSaved() {
+  const s = document.getElementById('saved');
+  const arr = JSON.parse(localStorage.getItem('pdpro.v7') || '[]');
+  s.innerHTML = '<option value="">Load saved play...</option>' +
+    arr.map((p, i) => `<option value="${i}">${p.name} · ${new Date(p.date).toLocaleDateString()}</option>`).join('');
+}
+
+function loadSaved(i) {
+  if (i === '') return;
+  const p = JSON.parse(localStorage.getItem('pdpro.v7') || '[]')[+i];
+  if (!p) return;
+  players = p.players || []; defenders = p.defenders || [];
+  routes = p.routes || []; blocks = p.blocks || [];
+  motions = p.motions || []; ballPath = p.ballPath || null;
+  currentFormation = p.formation || currentFormation;
+  document.getElementById('playName').value = p.name;
+  selected = { side: 'offense', id: null };
+  buildList(); renderEditor(); draw();
+  status('Loaded ' + p.name + '.', 'success');
+}
+
+function copyJSON() {
+  try {
+    navigator.clipboard.writeText(JSON.stringify(serialize(), null, 2));
+    status('Copied play JSON to clipboard.', 'success');
+  } catch (e) { status('Copy failed — use Save instead.', 'error'); }
+}
+
+function resetAll() {
+  pushHistory('Reset all');
+  routes = []; blocks = []; motions = []; ballPath = null;
+  loadFormation(currentFormation);
+  autoDefense();
+}
+
+function exportPNG() {
+  const a = document.createElement('a');
+  const n = (document.getElementById('playName').value || 'play-designer-pro').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.download = n + '.png';
+  a.href = canvas.toDataURL('image/png');
+  a.click();
+  status('PNG exported.', 'success');
+}
+
+// ─────────────────────────────────────────────
+// TOUCH EVENTS
+// ─────────────────────────────────────────────
+['touchstart','touchmove','touchend','touchcancel'].forEach(ev =>
+  canvas.addEventListener(ev, e => e.preventDefault(), { passive: false }));
+canvas.addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  if (t) canvas.dispatchEvent(new MouseEvent('mousedown', { clientX: t.clientX, clientY: t.clientY }));
+});
+canvas.addEventListener('touchmove', e => {
+  const t = e.touches[0];
+  if (t) canvas.dispatchEvent(new MouseEvent('mousemove', { clientX: t.clientX, clientY: t.clientY }));
+});
+canvas.addEventListener('touchend', e => {
+  const t = e.changedTouches[0];
+  if (t) canvas.dispatchEvent(new MouseEvent('mouseup', { clientX: t.clientX, clientY: t.clientY }));
+});
+
+// ─────────────────────────────────────────────
+// KEYBOARD SHORTCUTS
+// ─────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (['INPUT','SELECT','TEXTAREA'].includes(e.target.tagName)) return;
+  const k = e.key.toLowerCase();
+  if ((e.metaKey || e.ctrlKey) && k === 'z') { e.preventDefault(); undoStep(); return; }
+  if ((e.metaKey || e.ctrlKey) && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); redoStep(); return; }
+  if (k === 'r') setMode('route');
+  if (k === 'b') setMode('block');
+  if (k === 'd') setMode('def');
+  if (k === 's') setMode('select');
+  if (k === 'm') setMode('motion');
+  if (k === 'p') autoPlayAction();
+  if (k === 'escape') stopPlay();
+  if (k === ' ') { e.preventDefault(); anim ? stopPlay() : runPlay(); }
+});
+
+// ─────────────────────────────────────────────
+// INIT
+// ─────────────────────────────────────────────
+function init() {
+  suspendHistory = true;
+  refreshFormations();
+  loadFormation('Shotgun');
+  suggestDefense();
+  refreshSaved();
+  refreshCustomFormations();
+  draw();
+  suspendHistory = false;
+  historyStack = []; redoStack = [];
+}
+
+init();
 </script>
 </body>
 </html>
