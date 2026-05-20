@@ -268,10 +268,10 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
 
     <div class="section">
       <div class="label">Defense Movement</div>
-      <p class="hint" style="margin-bottom:9px">Select a defender on the field, then draw their path in any draw mode. Or use AI reactions during animation.</p>
+      <p class="hint" style="margin-bottom:9px">By default defenders <b style="color:var(--text)">only move if you draw a custom path</b> for them. Enable AI mode to add smart reactions for all defenders automatically.</p>
       <select id="defReactionMode" class="select" style="margin-bottom:7px">
-        <option value="ai">AI Reactions (auto)</option>
-        <option value="custom">Custom Paths Only</option>
+        <option value="custom">Custom Paths Only (default)</option>
+        <option value="ai">AI Reactions (all defenders)</option>
         <option value="both">AI + Custom Overrides</option>
       </select>
       <div class="grid2">
@@ -1151,68 +1151,172 @@ function getConceptBreakdown(concept) {
 }
 
 // ─────────────────────────────────────────────
-// PLAY ACTION ENGINE
+// PLAY ACTION ENGINE — rebuilt
 // ─────────────────────────────────────────────
 function autoPlayAction() {
   pushHistory('Play action');
   const runScheme = document.getElementById('runScheme').value;
-  const concept = document.getElementById('passConcept').value;
   const qb = players.find(p => p.pos === 'QB');
-  const rb = players.find(p => p.pos === 'RB' || p.label === 'TB') || players.find(p => p.pos === 'FB');
+  const rb = players.find(p => p.pos === 'RB' || p.label === 'TB' || p.label === 'HB')
+          || players.find(p => p.pos === 'FB');
   if (!qb || !rb) { status('Need a QB and RB for play action.', 'error'); return; }
 
-  blocks = blocks.filter(b => b.manual);
-  routes = routes.filter(r => !r.autoConcept && !r.playAction && r.kind !== 'carry');
+  // Clear previous auto content, keep manual drawings
+  blocks  = blocks.filter(b => b.manual);
+  routes  = routes.filter(r => !r.autoConcept && !r.playAction && r.kind !== 'carry');
   motions = motions.filter(m => !m.playAction);
+  ballPath = null;
 
-  const dir = rb.x > qb.x ? 1 : -1;
-  const mesh = { x: (qb.x + rb.x) / 2, y: (qb.y + rb.y) / 2 - 10 };
-  const fakeTarget = ballPath ? ballPath[ballPath.length - 1] : { x: qb.x + dir * 95, y: LOS - 90 };
+  const center = players.find(p => p.label === 'C') || { x: W * .5 };
 
-  ballPath = [{ x: rb.x, y: rb.y }, mesh, { x: fakeTarget.x, y: fakeTarget.y }];
-  motions.push({ pid: rb.id, type: 'motion', playAction: true, auto: true, pts: [{ x: rb.x, y: rb.y }, mesh, { x: fakeTarget.x, y: fakeTarget.y }] });
+  // ── Determine fake direction (toward heaviest OL side = stronger run side)
+  const olLeft  = players.filter(p => ['LT','LG'].includes(p.label)).length;
+  const olRight = players.filter(p => ['RT','RG'].includes(p.label)).length;
+  const fakeDir = rb.x < center.x ? -1 : 1; // fake toward where the RB is
 
-  // QB boot route
+  // ── 1. RB sells fake into line
+  const fakeMesh  = { x: center.x + fakeDir * 22, y: LOS + 18 };  // mesh point just past LOS
+  const fakePush  = { x: center.x + fakeDir * 42, y: LOS + 32 };  // sells into the hole
+  const fakeAbort = { x: center.x + fakeDir * 30, y: LOS + 22 };  // stops, play fake
+  motions.push({
+    pid: rb.id, type: 'motion', playAction: true, auto: true,
+    pts: [{ x: rb.x, y: rb.y }, fakeMesh, fakePush, fakeAbort]
+  });
+  rb.assignment = `PA fake: sell ${runScheme} into the ${fakeDir > 0 ? 'right' : 'left'} side`;
+
+  // ── 2. QB: under-center drop → 5-step drop behind OL → throw
+  // Pick the best receiver (furthest downfield route, or first WR/TE available)
+  const eligibleReceivers = players.filter(p => ['WR','TE'].includes(p.pos));
+  if (!eligibleReceivers.length) { status('No WR or TE found for play action target.', 'error'); return; }
+
+  // Score receivers: prefer ones on the opposite side from the fake (boot/nakeds open backside)
+  const scored = eligibleReceivers.map(p => {
+    const isBackside = (fakeDir > 0 && p.x < center.x) || (fakeDir < 0 && p.x > center.x);
+    const depth = center.y - p.y; // positive = upfield
+    return { p, score: depth * 1.0 + (isBackside ? 80 : 0) };
+  }).sort((a, b) => b.score - a.score);
+
+  const primaryTarget = scored[0].p;
+  const secondaryTarget = scored[1]?.p || null;
+
+  // QB 5-step drop: behind the center, straight back
+  const dropX = qb.x;
+  const dropY = qb.y + 55; // 5-step drop depth behind LOS
+  const throwRelease = { x: qb.x + (primaryTarget.x > center.x ? 14 : -14), y: qb.y + 40 }; // step-up in pocket
+
   routes.push({
     pid: qb.id, type: 'route', playAction: true, auto: true,
-    pts: [{ x: qb.x, y: qb.y }, mesh, { x: qb.x - dir * 70, y: qb.y - 28 }, { x: qb.x - dir * 115, y: qb.y - 50 }]
+    // snap → fake toward mesh → 5-step drop → set feet → [throw shown separately]
+    pts: [
+      { x: qb.x, y: qb.y },
+      { x: qb.x + fakeDir * 12, y: qb.y + 8 },   // jab toward fake
+      { x: qb.x,               y: qb.y + 22 },    // first step back
+      { x: dropX,              y: dropY },          // 5-step depth
+      { x: throwRelease.x,     y: throwRelease.y } // step up to throw
+    ]
   });
+  qb.assignment = `PA ${runScheme}: fake mesh, 5-step drop, throw to ${primaryTarget.label}`;
 
-  // OL sell-run blocks
-  const center = players.find(p => p.label === 'C') || { x: W * .5 };
-  players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)).forEach((p, i) => {
-    blocks.push({ pid: p.id, type: 'block', playAction: true, auto: true,
-      pts: [{ x: p.x, y: p.y }, { x: p.x + dir * (16 + i % 2 * 8), y: p.y - 40 }] });
-    p.assignment = `PA ${runScheme}: sell run, then set to protect`;
+  // ── 3. Primary receiver: short stem then break open
+  const recSide = primaryTarget.x < center.x ? -1 : 1;
+  const recDepth = Math.max(50, center.y - primaryTarget.y + 30); // at least 50px upfield from start
+  const stemY = primaryTarget.y - recDepth * 0.45;
+  const breakX = primaryTarget.x + recSide * 55;
+  const catchX = primaryTarget.x + recSide * 75;
+  const catchY = primaryTarget.y - recDepth;
+
+  routes.push({
+    pid: primaryTarget.id, type: 'route', playAction: true, auto: true,
+    pts: [
+      { x: primaryTarget.x, y: primaryTarget.y },
+      { x: primaryTarget.x + recSide * 8,  y: stemY },          // vertical stem
+      { x: breakX,                          y: stemY + 12 },     // break point
+      { x: catchX,                          y: catchY }           // catch point
+    ]
   });
+  primaryTarget.assignment = `PA primary: stem → break open at ~${Math.round(recDepth / 5)}yds`;
 
-  // Receivers layered
-  players.filter(p => ['TE','WR','FB'].includes(p.pos) && p.id !== rb.id).forEach((p, i) => {
+  // ── 4. Secondary receiver: clear-out or checkdown on same/opposite side
+  if (secondaryTarget) {
+    const secSide = secondaryTarget.x < center.x ? -1 : 1;
+    routes.push({
+      pid: secondaryTarget.id, type: 'route', playAction: true, auto: true,
+      pts: [
+        { x: secondaryTarget.x, y: secondaryTarget.y },
+        { x: secondaryTarget.x + secSide * 15, y: secondaryTarget.y - 55 },
+        { x: secondaryTarget.x + secSide * 40, y: secondaryTarget.y - 95 }
+      ]
+    });
+    secondaryTarget.assignment = `PA secondary: clear-out / vert to hold safety`;
+  }
+
+  // ── 5. Other receivers: leak routes / checkdowns
+  eligibleReceivers.filter(p => p.id !== primaryTarget.id && p.id !== (secondaryTarget?.id)).forEach((p, i) => {
     const side = p.x < center.x ? -1 : 1;
-    const depths = [120, 75, 45, 95, 60];
-    const wides = [30, 90, 60, 15, 50];
-    const assigns = ['Deep post/corner off PA','Sail/wheel to boundary','Flat leak','Over route','Checkdown'];
-    routes.push({ pid: p.id, type: 'route', playAction: true, auto: true,
-      pts: [{ x: p.x, y: p.y }, { x: p.x + side * 18, y: p.y - depths[i % 5] * .55 }, { x: p.x + side * wides[i % 5], y: p.y - depths[i % 5] }] });
-    p.assignment = assigns[i % 5] + ' off play-action';
+    const leaked = [
+      [{ x: p.x, y: p.y }, { x: p.x + side * 40, y: p.y - 20 }, { x: p.x + side * 65, y: p.y - 12 }], // flat leak
+      [{ x: p.x, y: p.y }, { x: p.x, y: p.y - 35 }, { x: p.x + side * 30, y: p.y - 35 }],              // out
+    ];
+    routes.push({ pid: p.id, type: 'route', playAction: true, auto: true, pts: leaked[i % 2] });
+    p.assignment = i % 2 === 0 ? 'PA: flat leak / checkdown' : 'PA: out route / hot';
   });
 
-  rb.assignment = `PA fake: sell ${runScheme} mesh`;
-  qb.assignment = `Fake mesh, boot ${dir > 0 ? 'left' : 'right'}, read ${concept}`;
+  // ── 6. OL: down-blocks then set pass pro
+  players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)).forEach((p, i) => {
+    const isPlayside = (fakeDir > 0 && p.x >= center.x) || (fakeDir < 0 && p.x <= center.x);
+    // drive step toward fake then kick back to set
+    blocks.push({
+      pid: p.id, type: 'block', playAction: true, auto: true,
+      pts: [
+        { x: p.x, y: p.y },
+        { x: p.x + fakeDir * (isPlayside ? 16 : 8), y: p.y - 14 }, // sell run
+        { x: p.x + fakeDir * (isPlayside ? 10 : 4), y: p.y - 36 }  // set in pocket
+      ]
+    });
+    p.assignment = `PA ${runScheme}: ${isPlayside ? 'down-block sell, hold' : 'protect backside, BOB'}`;
+  });
+
+  // ── 7. Store throw arc as a special ballPath (QB release → parabolic → receiver catch)
+  // This is the football-in-the-air path
+  const throwMidX = (throwRelease.x + catchX) / 2;
+  const throwMidY = Math.min(throwRelease.y, catchY) - 55; // arc peak above both points
+  ballPath = [
+    { x: throwRelease.x, y: throwRelease.y },
+    { x: throwMidX, y: throwMidY },
+    { x: catchX, y: catchY }
+  ];
+  // Tag it so the animation knows it's a throw arc (delayed — starts at ~60% through animation)
+  ballPath._isThrow = true;
+  ballPath._throwDelay = 0.58; // fraction into animation when throw starts
+  ballPath._targetId = primaryTarget.id;
 
   buildList(); draw();
-  coach(`PLAY ACTION: ${runScheme.toUpperCase()} → ${concept.toUpperCase()}
+  coach(`PLAY ACTION: ${runScheme.toUpperCase()} FAKE → THROW TO ${primaryTarget.label.toUpperCase()}
 ─────────────────────────
-The RB sells the ${runScheme} mesh/fake. The QB fakes the handoff, then boots ${dir > 0 ? 'left' : 'right'} with a 3-level ${concept} concept on the backside.
+SEQUENCE:
+1. Snap — QB jabs toward ${fakeDir > 0 ? 'right' : 'left'} side to sell ${runScheme} action
+2. RB takes fake handoff into the ${fakeDir > 0 ? 'right' : 'left'} side (defenders see ball in line)
+3. QB takes 5-step drop, sets feet at depth
+4. ${primaryTarget.label} (${primaryTarget.pos}) runs stem → breaks open: primary read
+${secondaryTarget ? `5. ${secondaryTarget.label} clears deep to hold the safety\n` : ''}${scored.length > 2 ? `6. ${scored.slice(2).map(s=>s.p.label).join(', ')} leak to flat and checkdown\n` : ''}
+WHY IT WORKS:
+• The ${runScheme} fake freezes linebackers for 1-2 steps — that's the window
+• ${primaryTarget.label} breaks into the void LBs vacated
+• 5-step drop gives receivers time to get depth and separate
+• Football 🏈 travels as a throw arc in the animation — watch the spiral
 
-OL: Sell the run scheme, then slide protect — do NOT release downfield or it becomes an ineligible receiver penalty on a pass.
+HIT OR MISS:
+• If defense is in ${document.getElementById('coverage').value}, the ${primaryTarget.label} break should be OPEN
+• Checkdown is ${eligibleReceivers[eligibleReceivers.length-1]?.label || 'RB'} in the flat if the primary is covered`);
+}
 
-WHY THIS WORKS:
-• Linebackers who key the run action will drop their coverage responsibility for a step, creating throwing windows.
-• The boot puts the QB on the move, making the pass rush angle longer and harder to maintain.
-• The ${concept} concept on the backside gives the QB 3 clear reads.
-
-PROGRESSION: Read the safety rotation. If Cover 3, the deep route is open. If Cover 2, the sail and flat create a high-low on the cornerback.`);
+// Helper: interpolate a parabolic arc given t (0→1)
+function arcPt(p0, p1, p2, t) {
+  const u = 1 - t;
+  return {
+    x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x,
+    y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y
+  };
 }
 
 // ─────────────────────────────────────────────
@@ -1559,12 +1663,10 @@ function computeDefenderTracks() {
   const front = document.getElementById('defFront').value;
   const center = players.find(p => p.label === 'C') || { x: W * .5 };
 
-  // Detect play type from routes/motions/ballPath
   const hasRun = !!ballPath || routes.some(r => r.kind === 'carry');
   const hasPass = routes.some(r => r.kind !== 'carry' && r.type === 'route');
   const isPlayAction = routes.some(r => r.playAction) || motions.some(m => m.playAction);
 
-  // Determine run direction
   let runDir = 0;
   if (hasRun && ballPath && ballPath.length >= 2) {
     runDir = ballPath[ballPath.length - 1].x > center.x ? 1 : -1;
@@ -1573,93 +1675,85 @@ function computeDefenderTracks() {
   const defTracks = {};
 
   defenders.forEach(d => {
-    // 1. Check for manually drawn custom path first
+    // Check for a manually drawn custom path
     const customPath = defRoutes.find(r => r.did === d.id);
-    if (customPath && (reactionMode === 'custom' || reactionMode === 'both')) {
+
+    if (customPath) {
+      // Always use custom path if one exists
       defTracks[d.id] = customPath.pts;
       return;
     }
-    if (reactionMode === 'custom') {
-      // no AI, no custom = stay put
-      defTracks[d.id] = [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
-      return;
-    }
 
-    // 2. AI reaction based on role and play type
-    let pts = [{ x: d.x, y: d.y }];
-    const pos = d.pos;
+    // No custom path — check if AI mode is on
+    if (reactionMode === 'ai' || reactionMode === 'both') {
+      // Build AI reaction path
+      let pts = [{ x: d.x, y: d.y }];
+      const pos = d.pos;
 
-    if (pos === 'DL') {
-      if (hasRun) {
-        // Flow hard toward the run
-        const flowX = d.x + runDir * 45 + (d.x > center.x ? 12 : -12);
-        const flowY = d.y + 28; // downhill
-        pts.push({ x: d.x + runDir * 18, y: d.y + 10 });
-        pts.push({ x: flowX, y: flowY });
-      } else {
-        // Pass rush — drive upfield toward QB
-        const qb = players.find(p => p.pos === 'QB');
-        const targetX = qb ? qb.x + (d.x - qb.x) * 0.15 : d.x;
-        const targetY = qb ? qb.y - 8 : LOS + 50;
-        pts.push({ x: d.x + (d.x > center.x ? 18 : -18), y: d.y + 16 });
-        pts.push({ x: targetX, y: targetY });
-      }
-    } else if (pos === 'LB') {
-      if (hasRun) {
-        // Fill run gap — downhill to the hole
-        const fillX = center.x + runDir * 38 + (d.x - center.x) * 0.3;
-        const fillY = LOS + 15;
-        pts.push({ x: d.x + runDir * 20, y: d.y + 12 });
-        pts.push({ x: fillX, y: fillY });
-      } else if (isPlayAction) {
-        // LBs bite on run fake, then recover
-        pts.push({ x: d.x + runDir * 28, y: d.y + 14 }); // bite step
-        pts.push({ x: d.x + runDir * 10, y: d.y + 5 });  // recover
-        const dropX = getDropTarget(d, coverage, center).x;
-        const dropY = getDropTarget(d, coverage, center).y;
-        pts.push({ x: dropX, y: dropY });
-      } else {
-        // Drop into coverage zone
-        const drop = getDropTarget(d, coverage, center);
-        pts.push({ x: d.x, y: d.y - 8 }); // read step
-        pts.push({ x: drop.x, y: drop.y });
-      }
-    } else if (pos === 'CB') {
-      // Find nearest WR to cover
-      const nearestWR = findNearestReceiver(d, players);
-      if (nearestWR) {
-        const wrRoute = routes.find(r => r.pid === nearestWR.id && r.type === 'route');
-        if (wrRoute && wrRoute.pts && wrRoute.pts.length > 1) {
-          // Trail receiver through their route
-          const routeMid = wrRoute.pts[Math.floor(wrRoute.pts.length / 2)];
-          const routeEnd = wrRoute.pts[wrRoute.pts.length - 1];
-          if (coverage.includes('Man') || coverage.includes('Zero')) {
-            pts.push({ x: nearestWR.x + (d.x - nearestWR.x) * 0.4, y: nearestWR.y - 10 });
-            pts.push({ x: routeMid.x + (d.x - nearestWR.x) * 0.2, y: routeMid.y });
-            pts.push({ x: routeEnd.x, y: routeEnd.y + 12 }); // trail by 12px
+      if (pos === 'DL') {
+        if (hasRun) {
+          const flowX = d.x + runDir * 45 + (d.x > center.x ? 12 : -12);
+          const flowY = d.y + 28;
+          pts.push({ x: d.x + runDir * 18, y: d.y + 10 });
+          pts.push({ x: flowX, y: flowY });
+        } else {
+          const qb = players.find(p => p.pos === 'QB');
+          const targetX = qb ? qb.x + (d.x - qb.x) * 0.15 : d.x;
+          const targetY = qb ? qb.y - 8 : LOS + 50;
+          pts.push({ x: d.x + (d.x > center.x ? 18 : -18), y: d.y + 16 });
+          pts.push({ x: targetX, y: targetY });
+        }
+      } else if (pos === 'LB') {
+        if (hasRun) {
+          const fillX = center.x + runDir * 38 + (d.x - center.x) * 0.3;
+          const fillY = LOS + 15;
+          pts.push({ x: d.x + runDir * 20, y: d.y + 12 });
+          pts.push({ x: fillX, y: fillY });
+        } else if (isPlayAction) {
+          pts.push({ x: d.x + runDir * 28, y: d.y + 14 });
+          pts.push({ x: d.x + runDir * 10, y: d.y + 5 });
+          const drop = getDropTarget(d, coverage, center);
+          pts.push({ x: drop.x, y: drop.y });
+        } else {
+          const drop = getDropTarget(d, coverage, center);
+          pts.push({ x: d.x, y: d.y - 8 });
+          pts.push({ x: drop.x, y: drop.y });
+        }
+      } else if (pos === 'CB') {
+        const nearestWR = findNearestReceiver(d, players);
+        if (nearestWR) {
+          const wrRoute = routes.find(r => r.pid === nearestWR.id && r.type === 'route');
+          if (wrRoute && wrRoute.pts && wrRoute.pts.length > 1) {
+            const routeMid = wrRoute.pts[Math.floor(wrRoute.pts.length / 2)];
+            const routeEnd = wrRoute.pts[wrRoute.pts.length - 1];
+            if (coverage.includes('Man') || coverage.includes('Zero')) {
+              pts.push({ x: nearestWR.x + (d.x - nearestWR.x) * 0.4, y: nearestWR.y - 10 });
+              pts.push({ x: routeMid.x + (d.x - nearestWR.x) * 0.2, y: routeMid.y });
+              pts.push({ x: routeEnd.x, y: routeEnd.y + 12 });
+            } else {
+              const drop = getCBZoneDrop(d, coverage, center);
+              pts.push({ x: d.x, y: d.y - 12 });
+              pts.push({ x: drop.x, y: drop.y });
+            }
           } else {
-            // Zone — drop to coverage landmark
             const drop = getCBZoneDrop(d, coverage, center);
             pts.push({ x: d.x, y: d.y - 12 });
             pts.push({ x: drop.x, y: drop.y });
           }
         } else {
-          // No route found — bail to zone landmark
-          const drop = getCBZoneDrop(d, coverage, center);
-          pts.push({ x: d.x, y: d.y - 12 });
-          pts.push({ x: drop.x, y: drop.y });
+          pts.push({ x: d.x, y: d.y - 20 });
         }
-      } else {
-        pts.push({ x: d.x, y: d.y - 20 });
+      } else if (pos === 'S') {
+        const rotDrop = getSafetyDrop(d, coverage, center, hasRun, runDir);
+        pts.push({ x: d.x, y: d.y - 6 });
+        pts.push({ x: rotDrop.x, y: rotDrop.y });
       }
-    } else if (pos === 'S') {
-      // Safety rotates based on coverage shell
-      const rotDrop = getSafetyDrop(d, coverage, center, hasRun, runDir);
-      pts.push({ x: d.x, y: d.y - 6 }); // read step
-      pts.push({ x: rotDrop.x, y: rotDrop.y });
-    }
 
-    defTracks[d.id] = pts.length > 1 ? pts : [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
+      defTracks[d.id] = pts.length > 1 ? pts : [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
+    } else {
+      // Custom-only mode, no custom path drawn → defender stays put
+      defTracks[d.id] = [{ x: d.x, y: d.y }, { x: d.x, y: d.y }];
+    }
   });
 
   return defTracks;
@@ -1751,7 +1845,7 @@ function previewDefReactions() {
 }
 
 function drawWithPreview(tracks) {
-  draw(); // normal draw first
+  drawFrame(null); // normal draw first
   if (!tracks) return;
   defenders.forEach(d => {
     const pts = tracks[d.id];
@@ -1795,6 +1889,13 @@ function runPlay() {
   // Build defensive tracks
   const defTracks = computeDefenderTracks();
 
+  // Check if this is a play-action with a throw arc
+  const isThrowPlay = ballPath && ballPath._isThrow;
+  const throwDelay  = isThrowPlay ? (ballPath._throwDelay || 0.58) : 0;
+
+  // Football in-air position (null = not in flight yet)
+  let footballPos = null;
+
   function ptAt(pts, e) {
     if (pts.length < 2) return pts[0] || { x: 0, y: 0 };
     const idx = Math.min(pts.length - 2, Math.floor(e * (pts.length - 1)));
@@ -1806,13 +1907,24 @@ function runPlay() {
   function step(t) {
     const prog = Math.min((t - start) / 3400, 1);
     const e = prog < .5 ? 2 * prog * prog : -1 + (4 - 2 * prog) * prog;
+
     players.forEach(p => { const pt = ptAt(offTracks[p.id], e); p.animX = pt.x; p.animY = pt.y; });
     defenders.forEach(d => {
       const pts = defTracks[d.id] || [{ x: d.x, y: d.y }];
       const pt = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], e);
       d.animX = pt.x; d.animY = pt.y;
     });
-    draw();
+
+    // Throw arc: compute football position after the throw delay
+    if (isThrowPlay && prog >= throwDelay) {
+      const throwT = Math.min((prog - throwDelay) / (1 - throwDelay), 1);
+      const p0 = ballPath[0], p1 = ballPath[1], p2 = ballPath[2];
+      footballPos = arcPt(p0, p1, p2, throwT);
+    } else {
+      footballPos = null;
+    }
+
+    drawFrame(footballPos);
     if (prog < 1) raf = requestAnimationFrame(step);
     else setTimeout(() => stopPlay(true), 500);
   }
@@ -1828,28 +1940,91 @@ function stopPlay(done = false) {
   defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
-  draw();
+  drawFrame(null);
   status(done ? 'Play animation complete.' : 'Stopped.', done ? 'success' : '');
 }
 
 // ─────────────────────────────────────────────
 // DRAW ENGINE
 // ─────────────────────────────────────────────
-function draw() {
+function draw() { drawFrame(null); }
+
+function drawFrame(footballPos) {
   ctx.clearRect(0, 0, W, H);
   drawField();
   drawLines(motions, '#3498db', false);
   drawLines(routes, '#f5c842', false);
   drawLines(blocks, '#e74c3c', true);
-  if (ballPath) drawPath(ballPath, '#d8892b', false, 5);
-  // Draw defender custom paths (white/ghost color, dashed)
+
+  // Draw the ballPath: for throw plays show a dashed arc; for run plays show the orange path
+  if (ballPath) {
+    if (ballPath._isThrow) {
+      // Draw dashed throw arc line (static, shows intended trajectory)
+      drawThrowArc(ballPath[0], ballPath[1], ballPath[2], 'rgba(255,180,40,.45)');
+    } else {
+      drawPath(ballPath, '#d8892b', false, 5);
+    }
+  }
+
+  // Draw defender custom paths
   defRoutes.forEach(dr => drawPath(dr.pts, '#ff9090', true, 2.2));
+
   if (drawing && drawPts.length > 1) {
     const isDefDraw = selected.side === 'defense' && selected.id !== null;
     drawPath(drawPts, isDefDraw ? '#ff9090' : mode === 'block' ? '#e74c3c' : mode === 'motion' ? '#3498db' : '#f5c842', true, 2);
   }
+
   drawPeople(defenders, true);
   drawPeople(players, false);
+
+  // Draw football in flight (on top of everything)
+  if (footballPos) {
+    drawFootball(footballPos.x, footballPos.y);
+  }
+}
+
+function drawThrowArc(p0, p1, p2, color) {
+  if (!p0 || !p1 || !p2) return;
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2.5;
+  ctx.setLineDash([8, 5]);
+  ctx.beginPath();
+  ctx.moveTo(p0.x, p0.y);
+  // Bezier curve through the arc peak
+  ctx.quadraticCurveTo(p1.x, p1.y, p2.x, p2.y);
+  ctx.stroke();
+  ctx.setLineDash([]);
+  // Arrow at catch point
+  arrow({ x: p1.x * 0.5 + p2.x * 0.5, y: p1.y * 0.5 + p2.y * 0.5 }, p2, color);
+}
+
+function drawFootball(x, y) {
+  ctx.save();
+  // Outer shape — brown ellipse
+  ctx.beginPath();
+  ctx.ellipse(x, y, 11, 6, -0.45, 0, Math.PI * 2);
+  ctx.fillStyle = '#8B4513';
+  ctx.fill();
+  ctx.strokeStyle = '#fff';
+  ctx.lineWidth = 1;
+  ctx.stroke();
+  // White laces stripe
+  ctx.beginPath();
+  ctx.moveTo(x - 3, y - 1);
+  ctx.lineTo(x + 3, y + 1);
+  ctx.strokeStyle = 'rgba(255,255,255,.9)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
+  // Small lace hash marks
+  for (let i = -2; i <= 2; i += 2) {
+    ctx.beginPath();
+    ctx.moveTo(x + i * 0.8 - 1, y + i * 0.4 - 2);
+    ctx.lineTo(x + i * 0.8 + 1, y + i * 0.4 + 2);
+    ctx.strokeStyle = 'rgba(255,255,255,.75)';
+    ctx.lineWidth = 1;
+    ctx.stroke();
+  }
+  ctx.restore();
 }
 
 function drawField() {
