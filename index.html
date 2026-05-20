@@ -110,15 +110,14 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
 
     <div class="section" data-coach="both">
       <div class="label">Drawing Mode</div>
-      <div class="mode-bar">
-        <button class="btn active" id="mode-select" onclick="setMode('select')" title="Select/move (S)">🖱</button>
+      <div class="mode-bar" style="grid-template-columns:repeat(5,1fr)">
+        <button class="btn active" id="mode-select" onclick="setMode('select')" title="Select/move players (S)">🖱</button>
         <button class="btn" id="mode-route" onclick="setMode('route')" title="Draw route (R)">🟡</button>
         <button class="btn" id="mode-block" onclick="setMode('block')" title="Draw block (B)">🟥</button>
         <button class="btn" id="mode-ball" onclick="setMode('ball')" title="Set RB aiming point">🏈</button>
-        <button class="btn" id="mode-def" onclick="setMode('def')" title="Move defenders (D)">🛡</button>
         <button class="btn" id="mode-motion" onclick="setMode('motion')" title="Draw pre-snap motion (M)">➡</button>
       </div>
-      <p class="hint" style="margin-top:7px">Select a player first, then draw. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">M</span> motion · <span class="kbd">D</span> def · <span class="kbd">S</span> select</p>
+      <p class="hint" style="margin-top:7px">Select moves both offense and defense. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">M</span> motion · <span class="kbd">S</span> select</p>
     </div>
 
     <div class="section" data-coach="offense">
@@ -279,8 +278,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
           <span class="kbd">R</span> draw route &nbsp;
           <span class="kbd">B</span> draw block &nbsp;
           <span class="kbd">M</span> pre-snap motion &nbsp;
-          <span class="kbd">D</span> move defenders &nbsp;
-          <span class="kbd">S</span> select/move<br><br>
+          <span class="kbd">S</span> select/move (offense + defense)<br><br>
           <span class="kbd">Ctrl+Z</span> undo &nbsp;
           <span class="kbd">Ctrl+Y</span> redo &nbsp;
           <span class="kbd">P</span> play action &nbsp;
@@ -380,8 +378,8 @@ const formations = {
 ],
 'Empty 5-Wide': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
-  ['QB','QB',.50,.74],
-  ['X','WR',.06,.62],['H','WR',.20,.64],['Y','WR',.50,.64],['F','WR',.80,.64],['Z','WR',.94,.62]
+  ['QB','QB',.50,.75],
+  ['X','WR',.05,.62],['H','WR',.17,.64],['Y','WR',.38,.64],['F','WR',.63,.64],['Z','WR',.83,.62]
 ],
 'Trips Right': [
   ['LT','OL',.30,.62],['LG','OL',.40,.62],['C','OL',.50,.62],['RG','OL',.60,.62],['RT','OL',.70,.62],
@@ -588,19 +586,33 @@ function flipFormation() {
   pushHistory('Flip formation');
   flipped = !flipped;
 
-  // Mirror all player x positions
+  const isOL = p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label);
+
+  // Flip skill players only — OL never moves
   players.forEach(p => {
-    p.x  = mirrorX(p.x);  p.ox  = p.x;  p.animX = p.x;
+    if (isOL(p)) return;
+    p.x = mirrorX(p.x); p.ox = p.x; p.animX = p.x;
   });
-  // Mirror all defender x positions
-  defenders.forEach(d => {
-    d.x  = mirrorX(d.x);  d.ox  = d.x;  d.animX = d.x;
+
+  // Flip defenders only when in Defense coordinator mode
+  if (coordinatorSide === 'defense') {
+    defenders.forEach(d => {
+      d.x = mirrorX(d.x); d.ox = d.x; d.animX = d.x;
+    });
+    defRoutes.forEach(r => { r.pts = flipPts(r.pts); });
+  }
+
+  // Flip all offensive path data (routes, blocks, motions, ball)
+  // but only for non-OL players
+  routes.forEach(r => {
+    const owner = players.find(p => p.id === r.pid);
+    if (owner && !isOL(owner)) r.pts = flipPts(r.pts);
   });
-  // Mirror all path data
-  routes.forEach(r   => { r.pts = flipPts(r.pts); });
-  blocks.forEach(b   => { b.pts = flipPts(b.pts); });
-  motions.forEach(m  => { m.pts = flipPts(m.pts); });
-  defRoutes.forEach(r => { r.pts = flipPts(r.pts); });
+  blocks.forEach(b => {
+    const owner = players.find(p => p.id === b.pid);
+    if (owner && !isOL(owner)) b.pts = flipPts(b.pts);
+  });
+  motions.forEach(m => { m.pts = flipPts(m.pts); });
   if (ballPath) ballPath = flipPts(ballPath);
 
   updateFlipButton();
@@ -1071,28 +1083,42 @@ function autoPassPro() {
   const center = players.find(p => p.label === 'C') || { x: W * .5 };
   const slide = scheme.includes('Left') ? -1 : scheme.includes('Right') ? 1 : 0;
 
+  const qb = players.find(p => p.pos === 'QB') || { x: center.x, y: LOS + 60 };
   const ol = players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label));
+  ol.sort((a, b) => a.x - b.x); // left to right: LT LG C RG RT
+
   ol.forEach((p, i) => {
+    const isRight  = p.x >= center.x;
+    const distFromCenter = Math.abs(p.x - center.x);
+    // Angle increases the further from center — tackles kick out most
+    const outAngle = distFromCenter / (W * 0.5); // 0 at center, ~0.4 at tackle
+
     let tx, ty;
-    const isRight = p.x > center.x;
-    if (scheme.includes('BOB')) {
-      // Big-on-big: each OL takes the man aligned over them
-      tx = p.x + (isRight ? 18 : -18); ty = p.y - 42;
+
+    if (scheme.includes('BOB') || scheme === 'Man Protection') {
+      // Each OL sets back and slightly out — slight horseshoe
+      tx = p.x + (isRight ? outAngle * 28 : -outAngle * 28);
+      ty = p.y + 36 + outAngle * 18; // drop back, tackles deeper
     } else if (scheme.includes('Turnback')) {
-      // Turnback: everyone sets toward the center
-      tx = p.x + (p.x < center.x ? 24 : -24); ty = p.y - 38;
+      // All set back toward center (QB rolling away)
+      tx = p.x + (isRight ? -18 : 18);
+      ty = p.y + 32;
     } else if (scheme.includes('Full Slide')) {
-      tx = p.x + slide * 36; ty = p.y - 46;
+      // Whole line slides direction but still drops back into pocket
+      tx = p.x + slide * 22;
+      ty = p.y + 34 + outAngle * 12;
     } else if (scheme.includes('Half-Slide')) {
       const playside = (slide > 0 && isRight) || (slide < 0 && !isRight);
-      tx = p.x + (playside ? slide * 30 : slide * 10); ty = p.y - 42;
-    } else if (scheme === 'Man Protection') {
-      tx = p.x + (isRight ? 12 : -12); ty = p.y - 38;
-    } else { // Max Protect
-      tx = p.x + (isRight ? 8 : -8); ty = p.y - 34;
+      tx = p.x + (playside ? slide * 18 : 0);
+      ty = p.y + 34 + outAngle * 14;
+    } else {
+      // Max Protect — tightest pocket, drop straight back
+      tx = p.x + (isRight ? outAngle * 14 : -outAngle * 14);
+      ty = p.y + 38 + outAngle * 10;
     }
+
     blocks.push({ pid: p.id, type: 'block', pts: [{ x: p.x, y: p.y }, { x: tx, y: ty }], auto: true });
-    p.assignment = scheme + ': ' + (scheme.includes('Slide') ? 'slide ' + (slide > 0 ? '→' : '←') : 'man assignment') + ', inside-out';
+    p.assignment = scheme + ': ' + (i === 0 ? 'LT — kick set outside' : i === 1 ? 'LG — angle set inside-out' : i === 2 ? 'C — anchor, no movement' : i === 3 ? 'RG — angle set inside-out' : 'RT — kick set outside');
   });
 
   // Backs and TEs
@@ -1616,8 +1642,9 @@ function clearSelectedAssignment() {
 function setMode(m) {
   mode = m;
   document.querySelectorAll('[id^=mode-]').forEach(b => b.classList.remove('active'));
-  document.getElementById('mode-' + m).classList.add('active');
-  canvas.style.cursor = m === 'select' || m === 'def' ? 'default' : 'crosshair';
+  const btn = document.getElementById('mode-' + m);
+  if (btn) btn.classList.add('active');
+  canvas.style.cursor = m === 'select' ? 'default' : 'crosshair';
 }
 
 function pos(e) {
@@ -1635,7 +1662,7 @@ canvas.onmousedown = e => {
   const off = hit(players, m.x, m.y);
   const def = hit(defenders, m.x, m.y);
 
-  if (mode === 'select' || mode === 'def') {
+  if (mode === 'select') {
     if (def) { selectObj('defense', def.id); pushHistory('Move defender'); drag = def; }
     else if (off) { selectObj('offense', off.id); pushHistory('Move player'); drag = off; }
     else { selected = { side: 'offense', id: null }; renderEditor(); buildList(); draw(); }
@@ -2588,7 +2615,6 @@ document.addEventListener('keydown', e => {
   if ((e.metaKey || e.ctrlKey) && (k === 'y' || (e.shiftKey && k === 'z'))) { e.preventDefault(); redoStep(); return; }
   if (k === 'r') setMode('route');
   if (k === 'b') setMode('block');
-  if (k === 'd') setMode('def');
   if (k === 's') setMode('select');
   if (k === 'm') setMode('motion');
   if (k === 'p') autoPlayAction();
