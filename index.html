@@ -203,7 +203,9 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
       <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
       <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
       <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
-      <button class="btn" onclick="savePlay()">💾 Save</button>
+      <button class="btn" onclick="saveToSession()">📌 Keep</button>
+      <button class="btn green" onclick="savePlay()">💾 Save</button>
+      <button class="btn blue" onclick="openPlayFile()">📂 Open</button>
       <button class="btn" onclick="exportPNG()">📸 PNG</button>
       <button class="btn" onclick="resetAll()">↺ Reset</button>
       <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach for full analysis.</span>
@@ -225,12 +227,28 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
       </div>
 
       <div class="rtab-content" id="rtab-plays">
-        <div class="label">Saved Plays</div>
-        <select class="select" id="saved" onchange="loadSaved(this.value)">
-          <option value="">Load saved play...</option>
-        </select>
+        <div class="label">Save & Open Plays</div>
+
+        <div style="background:#1a1408;border:1px solid #3a2e10;border-radius:6px;padding:9px;margin-bottom:10px">
+          <div style="font-size:11px;color:var(--gold);font-weight:700;margin-bottom:5px">💾 FILE SAVES (permanent)</div>
+          <p class="hint" style="margin-bottom:8px">Downloads a <code style="color:var(--gold)">.pdpro</code> file you can reload anytime, share with coaches, or store in a playbook folder.</p>
+          <div class="grid2">
+            <button class="btn green full" onclick="savePlay()">💾 Save .pdpro</button>
+            <button class="btn blue full" onclick="openPlayFile()">📂 Open .pdpro</button>
+          </div>
+        </div>
+
+        <div style="background:#0d1a0d;border:1px solid #1a3a1a;border-radius:6px;padding:9px;margin-bottom:10px">
+          <div style="font-size:11px;color:#49b564;font-weight:700;margin-bottom:5px">⚡ SESSION MEMORY (this tab only)</div>
+          <p class="hint" style="margin-bottom:8px">Quick-save to an in-page list. Gone when you close the tab — use for rapid iteration during a session.</p>
+          <button class="btn full" onclick="saveToSession()" style="margin-bottom:7px">+ Quick Save to Session</button>
+          <select class="select" id="saved" onchange="loadSaved(this.value)">
+            <option value="">No session plays yet...</option>
+          </select>
+        </div>
+
         <div class="divider"></div>
-        <div class="label" style="margin-top:8px">Export / Share</div>
+        <div class="label" style="margin-top:8px">Export</div>
         <div class="grid2">
           <button class="btn full" onclick="exportPNG()">📸 PNG</button>
           <button class="btn full" onclick="copyJSON()">📋 Copy JSON</button>
@@ -2154,51 +2172,141 @@ function switchRTab(tab) {
 // ─────────────────────────────────────────────
 // SAVE / LOAD / EXPORT
 // ─────────────────────────────────────────────
+
+// Serialize — store ballPath throw metadata properly (not as array props)
 function serialize() {
+  const bp = ballPath ? {
+    pts: ballPath,
+    isThrow: !!ballPath._isThrow,
+    throwDelay: ballPath._throwDelay || 0,
+    targetId: ballPath._targetId || null
+  } : null;
+
   return {
+    version: 7,
     name: document.getElementById('playName').value || 'Untitled Play',
-    formation: currentFormation, players, defenders,
-    routes, blocks, motions, defRoutes, ballPath, date: Date.now()
+    formation: currentFormation,
+    players, defenders, routes, blocks, motions, defRoutes,
+    ballPath: bp,
+    date: Date.now()
   };
 }
 
-function savePlay() {
-  let arr = JSON.parse(localStorage.getItem('pdpro.v7') || '[]');
-  const p = serialize();
-  arr = arr.filter(x => x.name !== p.name);
-  arr.unshift(p);
-  localStorage.setItem('pdpro.v7', JSON.stringify(arr.slice(0, 30)));
-  refreshSaved();
-  status('Saved ' + p.name + '.', 'success');
+// Restore from serialized object
+function deserialize(data) {
+  players      = data.players      || [];
+  defenders    = data.defenders    || [];
+  routes       = data.routes       || [];
+  blocks       = data.blocks       || [];
+  motions      = data.motions      || [];
+  defRoutes    = data.defRoutes    || [];
+  currentFormation = data.formation || 'Shotgun';
+
+  // Restore ballPath with throw metadata
+  if (data.ballPath) {
+    const bp = data.ballPath.pts || data.ballPath; // handle both formats
+    ballPath = bp;
+    if (data.ballPath.isThrow) {
+      ballPath._isThrow    = true;
+      ballPath._throwDelay = data.ballPath.throwDelay || 0.58;
+      ballPath._targetId   = data.ballPath.targetId   || null;
+    }
+  } else {
+    ballPath = null;
+  }
+
+  document.getElementById('playName').value = data.name || '';
+  selected = { side: 'offense', id: null };
+  buildList(); renderEditor(); draw();
 }
 
-function refreshSaved() {
-  const s = document.getElementById('saved');
-  const arr = JSON.parse(localStorage.getItem('pdpro.v7') || '[]');
-  s.innerHTML = '<option value="">Load saved play...</option>' +
-    arr.map((p, i) => `<option value="${i}">${p.name} · ${new Date(p.date).toLocaleDateString()}</option>`).join('');
+// ── Download as .pdpro file ──────────────────
+function savePlay() {
+  const data = serialize();
+  const json = JSON.stringify(data, null, 2);
+  const blob = new Blob([json], { type: 'application/json' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const safeName = (data.name || 'play').toLowerCase().replace(/[^a-z0-9]+/g, '-');
+  a.href     = url;
+  a.download = safeName + '.pdpro';
+  a.click();
+  URL.revokeObjectURL(url);
+  status('Downloaded "' + data.name + '.pdpro" — load it back with Open.', 'success');
+  refreshSavedList(); // also keep in session list
 }
+
+// ── Session memory (in-page only, lost on refresh — user has .pdpro for persistence) ──
+const sessionPlays = [];
+
+function saveToSession() {
+  const data = serialize();
+  const existing = sessionPlays.findIndex(p => p.name === data.name);
+  if (existing >= 0) sessionPlays[existing] = data;
+  else sessionPlays.unshift(data);
+  refreshSavedList();
+  status('Saved "' + data.name + '" to session. Hit 💾 Save to download a .pdpro file.', 'success');
+}
+
+function refreshSavedList() {
+  const s = document.getElementById('saved');
+  if (!s) return;
+  if (!sessionPlays.length) {
+    s.innerHTML = '<option value="">No session plays yet...</option>';
+    return;
+  }
+  s.innerHTML = '<option value="">Load session play...</option>' +
+    sessionPlays.map((p, i) =>
+      `<option value="${i}">${p.name} · ${new Date(p.date).toLocaleTimeString()}</option>`
+    ).join('');
+}
+// Keep old name working
+function refreshSaved() { refreshSavedList(); }
 
 function loadSaved(i) {
   if (i === '') return;
-  const p = JSON.parse(localStorage.getItem('pdpro.v7') || '[]')[+i];
-  if (!p) return;
-  players = p.players || []; defenders = p.defenders || [];
-  routes = p.routes || []; blocks = p.blocks || [];
-  motions = p.motions || []; ballPath = p.ballPath || null;
-  defRoutes = p.defRoutes || [];
-  currentFormation = p.formation || currentFormation;
-  document.getElementById('playName').value = p.name;
-  selected = { side: 'offense', id: null };
-  buildList(); renderEditor(); draw();
-  status('Loaded ' + p.name + '.', 'success');
+  const data = sessionPlays[+i];
+  if (!data) return;
+  deserialize(data);
+  status('Loaded "' + data.name + '".', 'success');
 }
 
+// ── Open .pdpro file ─────────────────────────
+function openPlayFile() {
+  const input = document.createElement('input');
+  input.type   = 'file';
+  input.accept = '.pdpro,.json';
+  input.onchange = e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        const data = JSON.parse(ev.target.result);
+        deserialize(data);
+        // Also add to session list so it shows in the dropdown
+        const existing = sessionPlays.findIndex(p => p.name === data.name);
+        if (existing >= 0) sessionPlays[existing] = data;
+        else sessionPlays.unshift(data);
+        refreshSavedList();
+        status('Opened "' + data.name + '" successfully.', 'success');
+      } catch(err) {
+        status('Could not read file — make sure it\'s a .pdpro save file.', 'error');
+      }
+    };
+    reader.readAsText(file);
+  };
+  input.click();
+}
+
+// ── Copy JSON to clipboard ───────────────────
 function copyJSON() {
   try {
     navigator.clipboard.writeText(JSON.stringify(serialize(), null, 2));
     status('Copied play JSON to clipboard.', 'success');
-  } catch (e) { status('Copy failed — use Save instead.', 'error'); }
+  } catch (e) {
+    status('Copy not supported — use 💾 Save to download instead.', 'error');
+  }
 }
 
 function clearDefPaths() {
