@@ -3315,35 +3315,50 @@ function canvasToWorld(cx, cy) {
 }
 function hexColor(h) { return parseInt((h||'#888888').replace('#',''),16); }
 
-// ── Low-poly football player model ───────────────────
-// Torso box + shoulder pads + helmet + facemask + arms + legs
-function makeFootballPlayer(p, isDef) {
-  const group  = new THREE.Group();
-  const col    = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  const white  = 0xffffff;
-  const dark   = 0x111111;
+// ── Toon material helpers ─────────────────────────────
+function toonMat(color, opts={}) {
+  // MeshToonMaterial gives hard cel-shaded look
+  return new THREE.MeshToonMaterial({ color, ...opts });
+}
+function outlineMat(color=0x000000) {
+  // Rendered backface-only + slightly scaled = cartoon outline
+  return new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+}
+// Add an outline shell around any mesh
+function withOutline(mesh, scale=1.055, col=0x111111) {
+  const outline = new THREE.Mesh(mesh.geometry, outlineMat(col));
+  outline.scale.setScalar(scale);
+  mesh.add(outline);
+  return mesh;
+}
 
-  const bodyMat  = new THREE.MeshLambertMaterial({ color: col });
-  const whiteMat = new THREE.MeshLambertMaterial({ color: white });
-  const darkMat  = new THREE.MeshLambertMaterial({ color: dark });
-  const skinMat  = new THREE.MeshLambertMaterial({ color: 0xd4956a });
+// ── Low-poly football player model — TOON SHADING ────
+function makeFootballPlayer(p, isDef) {
+  const group = new THREE.Group();
+  const col   = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+
+  const bodyMat  = toonMat(col);
+  const whiteMat = toonMat(0xffffff);
+  const skinMat  = toonMat(0xd4956a);
+  const darkMat  = toonMat(0x222244);
+  const fmMat    = toonMat(0xbbbbbb);
 
   // ── Legs ──────────────────────────────────────────
   const legGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
-  const lLeg = new THREE.Mesh(legGeo, bodyMat);
-  lLeg.position.set(-0.16, 0.35, 0);
-  lLeg.castShadow = true;
-  group.add(lLeg);
-  const rLeg = new THREE.Mesh(legGeo, bodyMat);
-  rLeg.position.set( 0.16, 0.35, 0);
-  rLeg.castShadow = true;
-  group.add(rLeg);
+  [-0.16, 0.16].forEach(x => {
+    const leg = new THREE.Mesh(legGeo, bodyMat);
+    leg.position.set(x, 0.35, 0);
+    leg.castShadow = true;
+    withOutline(leg);
+    group.add(leg);
+  });
 
-  // ── Thigh pads (white boxes on upper legs) ────────
+  // ── Thigh pads ────────────────────────────────────
   const tpadGeo = new THREE.BoxGeometry(0.24, 0.22, 0.28);
   [-0.16, 0.16].forEach(x => {
     const tp = new THREE.Mesh(tpadGeo, whiteMat);
     tp.position.set(x, 0.64, 0.04);
+    withOutline(tp, 1.05);
     group.add(tp);
   });
 
@@ -3352,21 +3367,22 @@ function makeFootballPlayer(p, isDef) {
   const torso = new THREE.Mesh(torsoGeo, bodyMat);
   torso.position.set(0, 1.12, 0);
   torso.castShadow = true;
+  withOutline(torso);
   group.add(torso);
 
-  // ── Jersey number on chest ─────────────────────────
+  // ── Jersey number ─────────────────────────────────
   const numCanvas = document.createElement('canvas');
   numCanvas.width = 64; numCanvas.height = 64;
   const nc = numCanvas.getContext('2d');
-  nc.fillStyle = isDef ? '#ff8888' : '#ffffff';
-  nc.font = 'bold 36px Arial';
+  nc.fillStyle = isDef ? '#ffaaaa' : '#ffffff';
+  nc.font = 'bold 38px Arial';
   nc.textAlign = 'center'; nc.textBaseline = 'middle';
-  // Use position index as jersey number placeholder
   nc.fillText(p.label.slice(0,2), 32, 32);
   const numTex = new THREE.CanvasTexture(numCanvas);
-  const numGeo = new THREE.PlaneGeometry(0.32, 0.32);
-  const numMat = new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthTest: false });
-  const numMesh = new THREE.Mesh(numGeo, numMat);
+  const numMesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.32, 0.32),
+    new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthTest: false })
+  );
   numMesh.position.set(0, 1.12, 0.18);
   group.add(numMesh);
 
@@ -3374,105 +3390,92 @@ function makeFootballPlayer(p, isDef) {
   const spadGeo = new THREE.BoxGeometry(0.96, 0.18, 0.46);
   const spad = new THREE.Mesh(spadGeo, whiteMat);
   spad.position.set(0, 1.50, 0);
+  withOutline(spad, 1.04);
   group.add(spad);
-  // Shoulder pad wing curves (tapered boxes)
   const wingGeo = new THREE.BoxGeometry(0.24, 0.12, 0.38);
   [-0.42, 0.42].forEach(x => {
     const wing = new THREE.Mesh(wingGeo, whiteMat);
     wing.position.set(x, 1.46, 0);
     wing.rotation.z = x > 0 ? -0.22 : 0.22;
+    withOutline(wing, 1.05);
     group.add(wing);
   });
 
   // ── Arms ──────────────────────────────────────────
   const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.55, 6);
-  const lArm = new THREE.Mesh(armGeo, bodyMat);
-  lArm.position.set(-0.56, 1.28, 0);
-  lArm.rotation.z =  0.55;
-  group.add(lArm);
-  const rArm = new THREE.Mesh(armGeo, bodyMat);
-  rArm.position.set( 0.56, 1.28, 0);
-  rArm.rotation.z = -0.55;
-  group.add(rArm);
+  [[-0.56, 0.55], [0.56, -0.55]].forEach(([x, rz]) => {
+    const arm = new THREE.Mesh(armGeo, bodyMat);
+    arm.position.set(x, 1.28, 0);
+    arm.rotation.z = rz;
+    withOutline(arm);
+    group.add(arm);
+  });
 
   // ── Neck ──────────────────────────────────────────
-  const neckGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.14, 6);
-  const neck = new THREE.Mesh(neckGeo, skinMat);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.14,6), skinMat);
   neck.position.set(0, 1.63, 0);
   group.add(neck);
 
-  // ── Helmet ────────────────────────────────────────
-  // Main shell — flattened sphere
-  const helmGeo = new THREE.SphereGeometry(0.33, 10, 8);
-  const helmMat = new THREE.MeshLambertMaterial({ color: col });
+  // ── Helmet — toon with shiny gradient feel ─────────
+  const helmGeo = new THREE.SphereGeometry(0.33, 12, 10);
+  const helmMat = toonMat(col);
   const helm = new THREE.Mesh(helmGeo, helmMat);
   helm.scale.set(1, 0.92, 1.05);
   helm.position.set(0, 1.92, 0);
   helm.castShadow = true;
+  withOutline(helm, 1.06);
   group.add(helm);
 
-  // Helmet stripe (white bar over top)
-  const stripeGeo = new THREE.BoxGeometry(0.1, 0.38, 0.68);
-  const stripe = new THREE.Mesh(stripeGeo, whiteMat);
+  // Helmet center stripe
+  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.38,0.68), whiteMat);
   stripe.position.set(0, 2.12, 0);
   group.add(stripe);
 
-  // Facemask — 3 horizontal bars
+  // ── Facemask ──────────────────────────────────────
   for (let i = 0; i < 3; i++) {
-    const fmGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.54, 5);
-    const fm = new THREE.Mesh(fmGeo, new THREE.MeshLambertMaterial({ color: 0xcccccc }));
-    fm.rotation.z = Math.PI / 2;
-    fm.position.set(0, 1.83 + i * 0.1, 0.3);
+    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.54,5), fmMat);
+    fm.rotation.z = Math.PI/2;
+    fm.position.set(0, 1.83 + i*0.1, 0.3);
     group.add(fm);
   }
-  // Facemask vertical bar
-  const fmVGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.3, 5);
-  const fmV = new THREE.Mesh(fmVGeo, new THREE.MeshLambertMaterial({ color: 0xcccccc }));
+  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.3,5), fmMat);
   fmV.position.set(0, 1.86, 0.34);
   group.add(fmV);
 
-  // ── Eye visor (dark strip) ─────────────────────────
-  const visorGeo = new THREE.BoxGeometry(0.5, 0.08, 0.06);
-  const visorMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.85 });
-  const visor = new THREE.Mesh(visorGeo, visorMat);
+  // ── Visor — dark tinted ───────────────────────────
+  const visor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5,0.08,0.06),
+    toonMat(0x1a1a3e, { transparent:true, opacity:0.88 })
+  );
   visor.position.set(0, 1.97, 0.3);
   group.add(visor);
 
-  // ── Floating position label ────────────────────────
+  // ── Label sprite ──────────────────────────────────
   const labelSprite = makeLabel(p.label, isDef ? '#ff9090' : '#ffffff');
-  labelSprite.position.y = 2.55;
+  labelSprite.position.y = 2.6;
   labelSprite.scale.set(1.6, 0.7, 1);
   group.add(labelSprite);
 
-  // Position
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
-
-  // Offense faces upfield (toward negative z = opponent end zone)
-  // Defense faces into the backfield (toward positive z = toward QB)
   group.rotation.y = isDef ? 0 : Math.PI;
-
-  // Store eye-level offset for FP camera
-  group._eyeY   = EYE_HEIGHT;
-  group._bodyH  = 2.25;
-  group._isDef  = isDef;
+  group._eyeY  = EYE_HEIGHT;
+  group._bodyH = 2.25;
+  group._isDef = isDef;
 
   return group;
 }
 
-// ── Football mesh ─────────────────────────────────────
+// ── Football mesh — toon shaded ──────────────────────
 function makeBallMesh() {
   const g = new THREE.Group();
-  // Brown ellipsoid body
   const bGeo = new THREE.SphereGeometry(0.25, 10, 7);
-  const bMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+  const bMat = toonMat(0x8B4513);
   const ball = new THREE.Mesh(bGeo, bMat);
   ball.scale.set(0.7, 1, 0.7);
+  withOutline(ball, 1.08, 0x3a1a00);
   g.add(ball);
-  // White lace stripe
-  const lGeo = new THREE.BoxGeometry(0.08, 0.28, 0.06);
-  const lMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
-  const lace = new THREE.Mesh(lGeo, lMat);
+  const lace = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.28,0.06), toonMat(0xffffff));
   lace.position.set(0.01, 0, 0.22);
   g.add(lace);
   g.visible = false;
@@ -3507,40 +3510,47 @@ function makeLabel(text, color) {
 function initPOV() {
   if (povScene) return;
   const c = document.getElementById('povCanvas');
-  povRenderer = new THREE.WebGLRenderer({ canvas:c, antialias:true });
+  povRenderer = new THREE.WebGLRenderer({ canvas:c, antialias:true, preserveDrawingBuffer:true });
   povRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   povRenderer.shadowMap.enabled = true;
   povRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
   povRenderer.setClearColor(0x87ceeb); // sky blue
 
   povScene = new THREE.Scene();
-  povScene.fog = new THREE.Fog(0x87ceeb, 55, 130);
-  povScene.background = new THREE.Color(0x87ceeb);
+  // Warmer sky blue — more stadium feel
+  const skyCol = new THREE.Color(0x87ceeb);
+  povScene.fog = new THREE.Fog(0x9fd8f0, 50, 120);
+  povScene.background = skyCol;
 
   povCamera = new THREE.PerspectiveCamera(85, 1, 0.05, 250);
 
-  // ── Lighting ─────────────────────────────────────
-  povScene.add(new THREE.AmbientLight(0xffffff, 0.7));
-  const sun = new THREE.DirectionalLight(0xfff8e0, 1.2);
+  // ── Lighting — tuned for toon shading ────────────
+  // Toon needs strong directional contrast — reduce ambient, punch sun
+  povScene.add(new THREE.AmbientLight(0xffffff, 0.45));
+  const sun = new THREE.DirectionalLight(0xfffce8, 1.6);
   sun.position.set(20, 45, -15);
   sun.castShadow = true;
   sun.shadow.mapSize.width  = 2048;
   sun.shadow.mapSize.height = 2048;
   sun.shadow.camera.near = 1;
   sun.shadow.camera.far  = 150;
-  sun.shadow.camera.left = sun.shadow.camera.bottom = -50;
-  sun.shadow.camera.right = sun.shadow.camera.top   =  50;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -55;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  55;
   povScene.add(sun);
-  // Fill light from opposite side
-  const fill = new THREE.DirectionalLight(0xc8e8ff, 0.4);
-  fill.position.set(-10, 15, 10);
+  // Rim light from behind — gives players depth and separation from field
+  const rim = new THREE.DirectionalLight(0xaaddff, 0.5);
+  rim.position.set(-15, 20, 25);
+  povScene.add(rim);
+  // Subtle fill from below (stadium lights bouncing off turf)
+  const fill = new THREE.HemisphereLight(0x88cc88, 0x334422, 0.35);
   povScene.add(fill);
 
-  // ── Checkerboard field ────────────────────────────
+  // ── Checkerboard field — toon materials ──────────
+  const turfColors = [0x2d7a2d, 0x286628];
   for (let i=0; i<10; i++) {
     const zFrom = (-H3/2) + i*(H3/10);
     const geo = new THREE.PlaneGeometry(W3*1.6, H3/10);
-    const mat = new THREE.MeshLambertMaterial({ color: i%2===0 ? 0x2a6a2a : 0x265e26 });
+    const mat = new THREE.MeshToonMaterial({ color: turfColors[i%2] });
     const mesh = new THREE.Mesh(geo, mat);
     mesh.rotation.x = -Math.PI/2;
     mesh.position.set(0, 0, zFrom + H3/20);
@@ -3599,10 +3609,9 @@ function initPOV() {
 
   // ── Goal posts ────────────────────────────────────
   function makeGoalPost(z) {
-    const mat = new THREE.MeshLambertMaterial({ color: 0xf0d060 });
+    const mat = new THREE.MeshToonMaterial({ color: 0xf0d040 });
     const post = new THREE.Group();
-    // Upright
-    const uGeo = new THREE.CylinderGeometry(0.12,0.12,8,6);
+    const uGeo = new THREE.CylinderGeometry(0.12,0.12,8,8);
     const u = new THREE.Mesh(uGeo, mat); u.position.set(0,4,0); post.add(u);
     // Crossbar
     const cbGeo = new THREE.CylinderGeometry(0.08,0.08,6,6);
@@ -3617,23 +3626,24 @@ function initPOV() {
     post.position.set(0, 0, z);
     return post;
   }
-  // Goal posts at 0.85 — well behind both end zone cameras at 0.58
   povScene.add(makeGoalPost(-H3*0.85));
   povScene.add(makeGoalPost( H3*0.85));
 
-  // ── Crowd stands (simple colored boxes) ───────────
+  // ── Stands — layered toon rows suggest crowd ───────
   for (const sx of [-W3*0.82, W3*0.82]) {
-    const sGeo = new THREE.BoxGeometry(3, 8, H3*1.1);
-    const sMat = new THREE.MeshLambertMaterial({ color: 0x555577 });
-    const stand = new THREE.Mesh(sGeo, sMat);
-    stand.position.set(sx, 4, 0);
+    // Base stand structure
+    const sMat = new THREE.MeshToonMaterial({ color: 0x2a3355 });
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, H3*1.1), sMat);
+    stand.position.set(sx, 4.5, 0);
     povScene.add(stand);
-    // Crowd texture stripe
-    const cgGeo = new THREE.BoxGeometry(3.1, 7, H3*1.1);
-    const cgMat = new THREE.MeshLambertMaterial({ color: 0x334466, transparent:true, opacity:0.5 });
-    const cg = new THREE.Mesh(cgGeo, cgMat);
-    cg.position.set(sx, 4, 0);
-    povScene.add(cg);
+    // Crowd rows — alternating team colors to simulate fans
+    const rowColors = [0x4466cc, 0xcc3333, 0x4466cc, 0xeeeeee, 0x4466cc, 0xcc3333];
+    rowColors.forEach((c, row) => {
+      const rowMat = new THREE.MeshToonMaterial({ color: c, transparent:true, opacity:0.72 });
+      const rowMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.55, H3*1.05), rowMat);
+      rowMesh.position.set(sx, 1.2 + row*1.25, 0);
+      povScene.add(rowMesh);
+    });
   }
 
   resizePOV();
@@ -3847,11 +3857,16 @@ function openPOV() {
 
 function closePOV() {
   document.getElementById('povOverlay').classList.remove('open');
-  povAnimating=false;
+  povAnimating = false;
+  povPaused    = false;
+  povProgress  = 0;
   if (povRaf) cancelAnimationFrame(povRaf);
-  povPlayerMeshes.forEach(pm=>{ const w=canvasToWorld(pm.ox,pm.oy); pm.group.position.set(w.x,0,w.z); pm.group.rotation.y=Math.PI; });
-  povDefMeshes.forEach(dm=>{ const w=canvasToWorld(dm.ox,dm.oy); dm.group.position.set(w.x,0,w.z); dm.group.rotation.y=0; });
-  if (povBallMesh) povBallMesh.visible=false;
+  if (povRecording) stopPOVVideo();
+  // Fully dispose and null — next open rebuilds scene with current materials
+  if (povRenderer) { povRenderer.dispose(); povRenderer = null; }
+  povScene = null; povCamera = null;
+  povPlayerMeshes = []; povDefMeshes = []; povRoutelines = [];
+  povBallMesh = null;
 }
 
 function povRenderLoop() {
@@ -4078,11 +4093,106 @@ function povRunPlay() {
   povRaf = requestAnimationFrame(povStep);
 }
 
+// ── POV PNG screenshot ────────────────────────
+function savePOVPNG() {
+  if (!povRenderer) { alert('Open the POV view first.'); return; }
+  // Force a render to make sure canvas is current
+  if (povScene && povCamera) povRenderer.render(povScene, povCamera);
+  const c   = document.getElementById('povCanvas');
+  const a   = document.createElement('a');
+  const n   = (document.getElementById('playName')?.value || 'pov').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  const cam = povCamMode === 'fp' ? 'firstperson' : povCamMode === 'broadcast' ? 'broadcast' :
+              povCamMode === 'ezoff' ? 'endzone-off' : 'endzone-def';
+  a.download = n + '-' + cam + '.png';
+  // Three.js canvas needs preserveDrawingBuffer — use toDataURL with a fresh render
+  try {
+    a.href = c.toDataURL('image/png');
+    a.click();
+    status('POV screenshot saved.', 'success');
+  } catch(e) {
+    // If preserveDrawingBuffer wasn't set, re-init renderer with it
+    reinitPOVWithBuffer();
+  }
+}
+
+function reinitPOVWithBuffer() {
+  // Re-create renderer with preserveDrawingBuffer:true so PNG export works
+  if (!povScene) return;
+  const c = document.getElementById('povCanvas');
+  povRenderer.dispose();
+  povRenderer = new THREE.WebGLRenderer({ canvas:c, antialias:true, preserveDrawingBuffer:true });
+  povRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
+  povRenderer.shadowMap.enabled = true;
+  povRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  povRenderer.setClearColor(0x87ceeb);
+  resizePOV();
+  if (povScene && povCamera) povRenderer.render(povScene, povCamera);
+  setTimeout(() => savePOVPNG(), 100);
+}
+
+// ── POV WebM video recording ──────────────────
+let povMediaRecorder = null;
+let povRecordedChunks = [];
+let povRecording = false;
+
+function startPOVVideo() {
+  if (povRecording) { stopPOVVideo(); return; }
+  const c = document.getElementById('povCanvas');
+  if (!c.captureStream) {
+    alert('Video recording needs Chrome or Edge. On Safari use Cmd+Shift+5 screen record.');
+    return;
+  }
+  try {
+    povRecordedChunks = [];
+    const stream = c.captureStream(30);
+    const opts = MediaRecorder.isTypeSupported('video/webm;codecs=vp9')
+      ? { mimeType:'video/webm;codecs=vp9' }
+      : { mimeType:'video/webm' };
+    povMediaRecorder = new MediaRecorder(stream, opts);
+    povMediaRecorder.ondataavailable = e => { if(e.data.size>0) povRecordedChunks.push(e.data); };
+    povMediaRecorder.onstop = savePOVVideoFile;
+    povMediaRecorder.start(100);
+    povRecording = true;
+    const btn = document.getElementById('povVideoBtn');
+    if (btn) { btn.textContent = '⏹ Stop Rec'; btn.style.background='rgba(180,30,30,.85)'; }
+    // Auto-start play
+    povRunPlay();
+    status('POV recording started — will save when animation finishes.', 'loading');
+  } catch(err) {
+    alert('Could not start POV recording: ' + err.message);
+  }
+}
+
+function stopPOVVideo() {
+  if (povMediaRecorder && povRecording) {
+    povMediaRecorder.stop();
+    povRecording = false;
+    const btn = document.getElementById('povVideoBtn');
+    if (btn) { btn.textContent = '🎬 Video'; btn.style.background='rgba(30,60,120,.85)'; }
+  }
+}
+
+function savePOVVideoFile() {
+  if (!povRecordedChunks.length) return;
+  const blob = new Blob(povRecordedChunks, { type:'video/webm' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  const n    = (document.getElementById('playName')?.value||'pov').toLowerCase().replace(/[^a-z0-9]+/g,'-');
+  const cam  = povCamMode==='fp'?'firstperson':povCamMode==='broadcast'?'broadcast':
+               povCamMode==='ezoff'?'endzone-off':'endzone-def';
+  a.href = url; a.download = n+'-'+cam+'.webm'; a.click();
+  URL.revokeObjectURL(url);
+  povRecordedChunks = [];
+  status('POV video saved as .webm — opens in Chrome, VLC, Firefox.', 'success');
+}
+
 function stopPOVPlay() {
   povAnimating = false;
   povPaused    = false;
   povProgress  = 0;
   if (povRaf) cancelAnimationFrame(povRaf);
+  // Auto-stop POV video recording if active
+  if (povRecording) stopPOVVideo();
   document.getElementById('povRunBtn').textContent = '▶ Run Play';
   document.getElementById('povRunBtn').onclick = povRunPlay;
   const pauseBtn = document.getElementById('povPauseBtn');
@@ -4107,6 +4217,8 @@ init();
     </div>
     <div style="display:flex;gap:8px;pointer-events:all">
       <button class="pov-run-btn" id="povRunBtn" onclick="povRunPlay()">▶ Run Play</button>
+      <button class="pov-run-btn" style="background:rgba(26,100,58,.85);border-color:#1a7c3a" onclick="savePOVPNG()" title="Save screenshot of current POV view">📸 PNG</button>
+      <button class="pov-run-btn" style="background:rgba(30,60,120,.85);border-color:#2a6fac" onclick="startPOVVideo()" id="povVideoBtn" title="Record POV animation as .webm">🎬 Video</button>
       <button class="pov-close" onclick="closePOV()">✕ Close</button>
     </div>
   </div>
