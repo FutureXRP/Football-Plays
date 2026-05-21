@@ -1627,13 +1627,24 @@ function clearSelectedAssignment() {
   const p = obj();
   if (!p) { status('Select a player first.', 'error'); return; }
   pushHistory('Clear selected assignment');
-  routes = routes.filter(r => r.pid !== p.id);
-  blocks = blocks.filter(b => b.pid !== p.id);
-  motions = motions.filter(m => m.pid !== p.id);
-  if (ballPath && ballPath[0] && Math.hypot(ballPath[0].x - p.x, ballPath[0].y - p.y) < 25) ballPath = null;
-  p.assignment = '';
+
+  if (selected.side === 'defense') {
+    // Clear defender custom path and reset assignment
+    defRoutes = defRoutes.filter(r => r.did !== p.id);
+    p.assignment = document.getElementById('coverage')?.value || '';
+    renderEditor();
+    status('Cleared defender path and assignment.', 'success');
+  } else {
+    // Clear offensive player routes, blocks, motions
+    routes  = routes.filter(r => r.pid !== p.id);
+    blocks  = blocks.filter(b => b.pid !== p.id);
+    motions = motions.filter(m => m.pid !== p.id);
+    if (ballPath && ballPath[0] && Math.hypot(ballPath[0].x - p.x, ballPath[0].y - p.y) < 25) ballPath = null;
+    p.assignment = '';
+    status('Cleared selected player assignments.', 'success');
+  }
+
   buildList(); draw();
-  status('Cleared selected player assignments.', 'success');
 }
 
 // ─────────────────────────────────────────────
