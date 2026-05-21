@@ -57,7 +57,13 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .pov-tab:hover{border-color:rgba(200,168,75,.7);color:#c8a84b}
 .pov-tab.active{background:rgba(200,168,75,.22);border-color:#c8a84b;color:#c8a84b}
 .pov-run-btn{pointer-events:all;background:rgba(26,124,58,.9);border:1px solid #2a9c4a;color:#fff;font:700 12px 'Barlow Condensed';padding:6px 14px;border-radius:4px;cursor:pointer;letter-spacing:1px}
-.pov-info{position:absolute;bottom:72px;left:14px;right:14px;display:flex;gap:8px;z-index:10;pointer-events:none}
+.pov-controls{position:absolute;bottom:72px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:6px;z-index:12;background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.12);border-radius:6px;padding:6px 10px;pointer-events:all;white-space:nowrap}
+.pov-ctrl-btn{font:700 11px 'Barlow Condensed';letter-spacing:1px;padding:4px 10px;border-radius:4px;cursor:pointer;border:1px solid rgba(255,255,255,.18);background:rgba(255,255,255,.08);color:rgba(255,255,255,.8);transition:.12s}
+.pov-ctrl-btn:hover{background:rgba(200,168,75,.25);border-color:#c8a84b;color:#c8a84b}
+.pov-ctrl-btn.active{background:rgba(200,168,75,.3);border-color:#c8a84b;color:#c8a84b}
+.pov-speed-label{font:600 10px 'Barlow Condensed';letter-spacing:1.5px;color:rgba(255,255,255,.45);text-transform:uppercase;margin-right:2px}
+.pov-scrub{width:130px;height:4px;cursor:pointer;accent-color:#c8a84b}
+.pov-progress-label{font:600 10px 'Barlow Condensed';color:rgba(255,255,255,.5);min-width:30px;text-align:right}
 .pov-info-chip{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:6px 10px;flex:1}
 .pov-info-chip .lbl{font:600 9px 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.4)}
 .pov-info-chip .val{font:600 11px 'Barlow Condensed';color:#eee;margin-top:2px}
@@ -2697,7 +2703,11 @@ let povSelectedSide = 'offense';
 let povAnimating    = false;
 let povRaf          = null;
 let povThrowArc     = null;
-let povCamMode      = 'fp'; // 'fp' | 'broadcast' | 'birds'
+let povCamMode      = 'fp'; // 'fp' | 'broadcast' | 'sideline'
+let povSpeed        = 1.0;  // playback multiplier
+let povPaused       = false;
+let povProgress     = 0;    // 0→1 current play position
+let povStepFn       = null; // reference to current frame renderer for scrubbing
 
 // Field scale: 760px → 76 units
 const PX  = 1 / 10;
@@ -3072,24 +3082,39 @@ function applyStaticCamera() {
 }
 
 function applyCameraForMode(px, py, pz, facingY, selP) {
+  const isDef = povSelectedSide === 'defense';
+
   if (povCamMode === 'fp') {
-    // Eyes at player head position, looking toward opponent end zone
     povCamera.fov = 85;
     povCamera.position.set(px, EYE_HEIGHT, pz);
-    // Look in the direction the player faces (toward negative z = upfield by default)
-    const lx = px + Math.sin(facingY||0) * 0.1;
-    const lz = pz - 20 + Math.cos(facingY||0) * 0.1;
-    povCamera.lookAt(lx, EYE_HEIGHT - 0.1, lz);
+
+    // Offense looks toward NEGATIVE z (opponent end zone = upfield)
+    // Defense looks toward POSITIVE z (into the backfield)
+    const forwardZ = isDef ? 1 : -1;
+
+    // If we have a real facing angle from movement, use it
+    // Otherwise default to straight ahead based on side
+    let lx, lz;
+    if (facingY !== 0) {
+      lx = px - Math.sin(facingY) * 20;
+      lz = pz - Math.cos(facingY) * 20;
+    } else {
+      lx = px;
+      lz = pz + forwardZ * 20;
+    }
+    povCamera.lookAt(lx, EYE_HEIGHT - 0.12, lz);
+
   } else if (povCamMode === 'broadcast') {
-    // Elevated sideline angle ~30° looking across field
+    // Elevated sideline — elevated angle looking down across field
     povCamera.fov = 65;
-    povCamera.position.set(W3*0.58, 12, pz + 4);
-    povCamera.lookAt(px, 1, pz - 8);
+    povCamera.position.set(W3 * 0.62, 13, pz + 5);
+    povCamera.lookAt(px, 1.2, pz - 6);
+
   } else {
-    // Birds eye — straight down, wide
-    povCamera.fov = 75;
-    povCamera.position.set(px, 48, pz);
-    povCamera.lookAt(px, 0, pz - 0.01);
+    // Sideline — ground level on the sideline, looking straight across
+    povCamera.fov = 58;
+    povCamera.position.set(W3 * 0.72, 2.2, pz);
+    povCamera.lookAt(-W3 * 0.1, 1.4, pz);
   }
   povCamera.updateProjectionMatrix();
 }
@@ -3170,9 +3195,13 @@ function openPOV() {
     populatePOVScene();
     const def = players.find(p=>p.pos==='QB')||players[0];
     if (def) { povSelectedId=def.id; povSelectedSide='offense'; }
+    povProgress = 0;
+    povPaused   = false;
+    povSpeed    = 1;
     buildPOVTabs();
     updatePOVHUD();
     updateSelfVisibility();
+    updateScrubUI();
     resizePOV();
     applyStaticCamera();
     povRenderLoop();
@@ -3200,21 +3229,79 @@ function povRenderLoop() {
   if (povScene && povCamera && povRenderer) povRenderer.render(povScene, povCamera);
 }
 
+// ── Playback control functions ─────────────────────────
+function setPovSpeed(s) {
+  povSpeed = s;
+  document.querySelectorAll('.pov-ctrl-btn').forEach(b => {
+    if (b.textContent === s+'×' || (s===0.25&&b.textContent==='¼×') || (s===0.5&&b.textContent==='½×')) b.classList.add('active');
+    else if (['¼×','½×','1×','2×'].includes(b.textContent)) b.classList.remove('active');
+  });
+  const lbl = document.getElementById('speedBtn-1');
+}
+
+function togglePovPause() {
+  if (!povAnimating && povProgress === 0) { povRunPlay(); return; }
+  povPaused = !povPaused;
+  const btn = document.getElementById('povPauseBtn');
+  if (btn) btn.textContent = povPaused ? '▶ Resume' : '⏸ Pause';
+  if (!povPaused && povAnimating) {
+    // Resume — restart rAF from current progress
+    povT0 = performance.now() - (povProgress * povTotalMs / povSpeed);
+    povRaf = requestAnimationFrame(povStepRef);
+  }
+}
+
+function stepFrame(dir) {
+  // Step ±1% through the play, render that frame statically
+  povPaused = true;
+  const btn = document.getElementById('povPauseBtn');
+  if (btn) btn.textContent = '▶ Resume';
+  povProgress = Math.max(0, Math.min(1, povProgress + dir * 0.01));
+  updateScrubUI();
+  if (povStepFn) povStepFn(povProgress);
+}
+
+function scrubTo(val) {
+  povPaused = true;
+  const btn = document.getElementById('povPauseBtn');
+  if (btn) btn.textContent = '▶ Resume';
+  povProgress = Number(val) / 100;
+  updateScrubUI();
+  if (povStepFn) povStepFn(povProgress);
+}
+
+function updateScrubUI() {
+  const scrub = document.getElementById('povScrub');
+  const lbl   = document.getElementById('povProgressLabel');
+  if (scrub) scrub.value = Math.round(povProgress * 100);
+  if (lbl)   lbl.textContent = Math.round(povProgress * 100) + '%';
+}
+
+// Shared state for pause/resume timing
+let povT0 = 0;
+let povTotalMs = 3400;
+let povStepRef = null;
+
 // ── Play animation in POV ──────────────────────────────
 function povRunPlay() {
-  if (povAnimating) return;
+  if (povAnimating && !povPaused) return;
+
   const allActions = [...motions,...routes,...blocks];
   if (!allActions.length) { alert('Generate a play first, then open POV.'); return; }
 
-  povAnimating=true;
-  document.getElementById('povRunBtn').textContent='■ Stop';
-  document.getElementById('povRunBtn').onclick=stopPOVPlay;
+  povAnimating = true;
+  povPaused    = false;
+  if (povProgress >= 1) povProgress = 0; // restart if finished
+  document.getElementById('povRunBtn').textContent = '■ Stop';
+  document.getElementById('povRunBtn').onclick = stopPOVPlay;
+  const pauseBtn = document.getElementById('povPauseBtn');
+  if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
 
-  const hasM = motions.length>0;
-  const MEND = hasM ? 0.28 : 0;
-  const TOTAL= hasM ? 4200 : 3400;
+  const hasM  = motions.length > 0;
+  const MEND  = hasM ? 0.28 : 0;
+  povTotalMs  = hasM ? 4200 : 3400;
 
-  // Build tracks (same logic as main engine)
+  // ── Build tracks ───────────────────────────────────
   const offTrk={};
   players.forEach(p=>{
     const pM=motions.filter(a=>a.pid===p.id);
@@ -3228,26 +3315,23 @@ function povRunPlay() {
     offTrk[p.id]={ motion:mPts.length>1?mPts:null, play:plPts.length>1?plPts:[sp,sp], isQB:p.pos==='QB'||p.label==='QB', isOL:p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label) };
   });
   const defTrk=computeDefenderTracks();
+  const isDef = povSelectedSide === 'defense';
 
-  const t0=performance.now();
   function eIO(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
   function ptAt2D(pts,e){if(!pts||pts.length<2)return pts?pts[0]:{x:0,y:0};const ci=Math.max(0,Math.min(1,e));const idx=Math.min(pts.length-2,Math.floor(ci*(pts.length-1)));const loc=ci*(pts.length-1)-idx;const a=pts[idx],b=pts[idx+1]||a;return{x:a.x+(b.x-a.x)*loc,y:a.y+(b.y-a.y)*loc};}
 
-  function povStep(ts) {
-    if (!povAnimating) return;
-    povRaf=requestAnimationFrame(povStep);
-    const raw=Math.min((ts-t0)/TOTAL,1);
-
+  // ── Core render-at-progress function (shared by rAF and scrub) ──
+  function renderAtProgress(raw) {
     // Move offense
     players.forEach(p=>{
       const pm=povPlayerMeshes.find(m=>m.id===p.id); if(!pm) return;
       const tr=offTrk[p.id];
       let pos2d;
-      if(hasM&&raw<MEND){ const e=eIO(raw/MEND); pos2d=tr.motion?ptAt2D(tr.motion,e):{x:p.x,y:p.y}; }
+      if(hasM&&raw<MEND){ pos2d=tr.motion?ptAt2D(tr.motion,eIO(raw/MEND)):{x:p.x,y:p.y}; }
       else{ const pr=hasM?(raw-MEND)/(1-MEND):raw; const sp=tr.isQB?Math.min(pr/0.62,1):tr.isOL?Math.min(pr/0.75,1):pr; pos2d=ptAt2D(tr.play,eIO(sp)); }
       const w=canvasToWorld(pos2d.x,pos2d.y);
       pm.group.position.set(w.x,0,w.z);
-      // Face direction of movement
+      // Face direction
       const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
       const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
       const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
@@ -3282,39 +3366,76 @@ function povRunPlay() {
       } else { povBallMesh.visible=false; }
     }
 
-    // Follow camera
+    // Camera follow
     const sArr=povSelectedSide==='offense'?povPlayerMeshes:povDefMeshes;
     const sMesh=sArr.find(m=>m.id===povSelectedId);
     if(sMesh){
       const mp=sMesh.group.position;
       const fy=sMesh.group.rotation.y;
       if(povCamMode==='fp'){
-        // True first-person: camera IS the player's eyes
-        const tx=mp.x; const tz=mp.z;
-        povCamera.position.lerp(new THREE.Vector3(tx,EYE_HEIGHT,tz),0.15);
-        const lx=mp.x-Math.sin(fy)*20; const lz=mp.z-Math.cos(fy)*20;
-        povCamera.lookAt(lx,EYE_HEIGHT-0.15,lz);
+        povCamera.position.lerp(new THREE.Vector3(mp.x,EYE_HEIGHT,mp.z),0.18);
+        const forwardZ=isDef?1:-1;
+        let lx,lz;
+        if(Math.abs(fy)>0.05){ lx=mp.x-Math.sin(fy)*20; lz=mp.z-Math.cos(fy)*20; }
+        else { lx=mp.x; lz=mp.z+forwardZ*20; }
+        povCamera.lookAt(lx,EYE_HEIGHT-0.12,lz);
       } else if(povCamMode==='broadcast'){
-        povCamera.position.lerp(new THREE.Vector3(W3*0.58,12,mp.z+4),0.05);
-        povCamera.lookAt(mp.x,1,mp.z-8);
+        povCamera.position.lerp(new THREE.Vector3(W3*0.62,13,mp.z+5),0.05);
+        povCamera.lookAt(mp.x,1.2,mp.z-6);
       } else {
-        // Birds eye — directly above, follow player
-        povCamera.position.lerp(new THREE.Vector3(mp.x,48,mp.z),0.04);
-        povCamera.lookAt(mp.x,0,mp.z-0.01);
+        // Sideline — camera slides along sideline tracking player z
+        povCamera.position.lerp(new THREE.Vector3(W3*0.72,2.2,mp.z),0.06);
+        povCamera.lookAt(-W3*0.1,1.4,mp.z);
       }
     }
 
     povRenderer.render(povScene,povCamera);
-    if(raw>=1){ povAnimating=false; document.getElementById('povRunBtn').textContent='▶ Run Play'; document.getElementById('povRunBtn').onclick=povRunPlay; }
+    updateScrubUI();
   }
-  povRaf=requestAnimationFrame(povStep);
+
+  // Expose for scrubbing
+  povStepFn = renderAtProgress;
+
+  // ── rAF loop ───────────────────────────────────────
+  // Start timing from current progress position
+  povT0 = performance.now() - (povProgress * povTotalMs / Math.max(povSpeed, 0.1));
+
+  function povStep(ts) {
+    if (!povAnimating) return;
+    if (povPaused) { povRaf = requestAnimationFrame(povStep); return; } // idle loop while paused
+
+    const elapsed = (ts - povT0) * povSpeed;
+    const raw = Math.min(elapsed / povTotalMs, 1);
+    povProgress = raw;
+
+    renderAtProgress(raw);
+
+    if (raw >= 1) {
+      povAnimating = false;
+      povProgress  = 1;
+      updateScrubUI();
+      document.getElementById('povRunBtn').textContent = '▶ Run Play';
+      document.getElementById('povRunBtn').onclick = povRunPlay;
+      return;
+    }
+    povRaf = requestAnimationFrame(povStep);
+  }
+
+  povStepRef = povStep;
+  povRaf = requestAnimationFrame(povStep);
 }
 
 function stopPOVPlay() {
-  povAnimating=false;
-  document.getElementById('povRunBtn').textContent='▶ Run Play';
-  document.getElementById('povRunBtn').onclick=povRunPlay;
-  if(povBallMesh) povBallMesh.visible=false;
+  povAnimating = false;
+  povPaused    = false;
+  povProgress  = 0;
+  if (povRaf) cancelAnimationFrame(povRaf);
+  document.getElementById('povRunBtn').textContent = '▶ Run Play';
+  document.getElementById('povRunBtn').onclick = povRunPlay;
+  const pauseBtn = document.getElementById('povPauseBtn');
+  if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
+  updateScrubUI();
+  if (povBallMesh) povBallMesh.visible = false;
   players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=0;}});
   defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;}});
   applyStaticCamera();
@@ -3340,9 +3461,25 @@ init();
   <div class="pov-cam-bar">
     <button class="pov-cam-btn active" id="camBtn-fp"        onclick="setCamMode('fp')">👁 First Person</button>
     <button class="pov-cam-btn"        id="camBtn-broadcast" onclick="setCamMode('broadcast')">📺 Broadcast</button>
-    <button class="pov-cam-btn"        id="camBtn-birds"     onclick="setCamMode('birds')">🦅 Birds Eye</button>
+    <button class="pov-cam-btn"        id="camBtn-sideline"  onclick="setCamMode('sideline')">🏟 Sideline</button>
   </div>
   <div class="pov-tabs" id="povTabs"></div>
+
+  <!-- Playback controls -->
+  <div class="pov-controls">
+    <span class="pov-speed-label">Speed</span>
+    <button class="pov-ctrl-btn" onclick="setPovSpeed(0.25)">¼×</button>
+    <button class="pov-ctrl-btn" onclick="setPovSpeed(0.5)">½×</button>
+    <button class="pov-ctrl-btn active" id="speedBtn-1" onclick="setPovSpeed(1)">1×</button>
+    <button class="pov-ctrl-btn" onclick="setPovSpeed(2)">2×</button>
+    <span style="width:1px;height:18px;background:rgba(255,255,255,.15);margin:0 2px"></span>
+    <button class="pov-ctrl-btn" id="povPauseBtn" onclick="togglePovPause()">⏸ Pause</button>
+    <button class="pov-ctrl-btn" onclick="stepFrame(-1)">◀</button>
+    <button class="pov-ctrl-btn" onclick="stepFrame(1)">▶</button>
+    <input type="range" class="pov-scrub" id="povScrub" min="0" max="100" value="0" oninput="scrubTo(this.value)">
+    <span class="pov-progress-label" id="povProgressLabel">0%</span>
+  </div>
+
   <div class="pov-info">
     <div class="pov-info-chip"><div class="lbl">Formation</div><div class="val" id="povFormation">Shotgun</div></div>
     <div class="pov-info-chip"><div class="lbl">Coverage</div><div class="val" id="povCoverage">Cover 3</div></div>
