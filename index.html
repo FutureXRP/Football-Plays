@@ -47,7 +47,12 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .pov-player-badge{font:700 13px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);padding:4px 12px;border-radius:4px}
 .pov-assignment{font:500 11px 'Barlow Condensed';letter-spacing:1px;color:rgba(255,220,80,.9);background:rgba(0,0,0,.45);padding:3px 10px;border-radius:4px}
 .pov-close{pointer-events:all;background:rgba(180,30,30,.8);border:none;color:#fff;font:700 13px 'Barlow Condensed';padding:6px 14px;border-radius:4px;cursor:pointer;letter-spacing:1px}
-.pov-tabs{position:absolute;top:52px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:10;flex-wrap:wrap;justify-content:center}
+.pov-cam-bar{position:absolute;top:52px;left:50%;transform:translateX(-50%);display:flex;gap:0;z-index:11;border:1px solid rgba(255,255,255,.2);border-radius:5px;overflow:hidden}
+.pov-cam-btn{font:700 11px 'Barlow Condensed';letter-spacing:1px;text-transform:uppercase;padding:5px 13px;cursor:pointer;border:none;background:rgba(0,0,0,.6);color:rgba(255,255,255,.65);transition:.12s;border-right:1px solid rgba(255,255,255,.15)}
+.pov-cam-btn:last-child{border-right:none}
+.pov-cam-btn:hover{background:rgba(200,168,75,.2);color:#c8a84b}
+.pov-cam-btn.active{background:rgba(200,168,75,.3);color:#c8a84b}
+.pov-tabs{position:absolute;top:88px;left:50%;transform:translateX(-50%);display:flex;gap:4px;z-index:10;flex-wrap:wrap;justify-content:center;max-width:90%}
 .pov-tab{font:700 11px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:4px;cursor:pointer;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.55);color:rgba(255,255,255,.7);transition:.12s}
 .pov-tab:hover{border-color:rgba(200,168,75,.7);color:#c8a84b}
 .pov-tab.active{background:rgba(200,168,75,.22);border-color:#c8a84b;color:#c8a84b}
@@ -2679,10 +2684,11 @@ function init() {
 
 
 // ═══════════════════════════════════════════════════════
-// POV FIRST-PERSON VIEW ENGINE — Three.js r128
+// POV ENGINE v2 — First Person · Broadcast · Birds Eye
+// Low-poly football player models · True eye-level camera
 // ═══════════════════════════════════════════════════════
-let povScene, povCamera, povRenderer, povClock;
-let povPlayerMeshes = [];  // {id, mesh, labelSprite, side}
+let povScene, povCamera, povRenderer;
+let povPlayerMeshes = [];
 let povDefMeshes    = [];
 let povRoutelines   = [];
 let povBallMesh     = null;
@@ -2690,120 +2696,335 @@ let povSelectedId   = null;
 let povSelectedSide = 'offense';
 let povAnimating    = false;
 let povRaf          = null;
-let povTracks       = {};
-let povDefTracks    = {};
 let povThrowArc     = null;
+let povCamMode      = 'fp'; // 'fp' | 'broadcast' | 'birds'
 
-// Canvas → Three.js world units  (760px → 76 units, 540px → 54 units)
+// Field scale: 760px → 76 units
 const PX  = 1 / 10;
-const W3  = W * PX;   // 76
-const H3  = H * PX;   // 54
+const W3  = W * PX;
+const H3  = H * PX;
 const LOS3 = LOS * PX;
+const EYE_HEIGHT = 1.75; // camera at eye level for first-person
 
 function canvasToWorld(cx, cy) {
-  return { x: (cx - W / 2) * PX, z: (cy - H / 2) * PX };
+  return { x: (cx - W/2)*PX, z: (cy - H/2)*PX };
 }
+function hexColor(h) { return parseInt((h||'#888888').replace('#',''),16); }
 
-function hexColor(cssHex) {
-  return parseInt(cssHex.replace('#', ''), 16);
-}
+// ── Low-poly football player model ───────────────────
+// Torso box + shoulder pads + helmet + facemask + arms + legs
+function makeFootballPlayer(p, isDef) {
+  const group  = new THREE.Group();
+  const col    = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  const white  = 0xffffff;
+  const dark   = 0x111111;
 
-// ── Texture-less sprite label (billboard) ─────────────
-function makeLabel(text, color) {
-  const canvas2 = document.createElement('canvas');
-  canvas2.width = 128; canvas2.height = 64;
-  const c = canvas2.getContext('2d');
-  c.fillStyle = color || '#ffffff';
-  c.font = 'bold 28px Barlow Condensed, monospace';
-  c.textAlign = 'center'; c.textBaseline = 'middle';
-  c.fillText(text.slice(0, 4), 64, 32);
-  const tex = new THREE.CanvasTexture(canvas2);
-  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
-  const sprite = new THREE.Sprite(mat);
-  sprite.scale.set(1.2, 0.6, 1);
-  return sprite;
-}
+  const bodyMat  = new THREE.MeshLambertMaterial({ color: col });
+  const whiteMat = new THREE.MeshLambertMaterial({ color: white });
+  const darkMat  = new THREE.MeshLambertMaterial({ color: dark });
+  const skinMat  = new THREE.MeshLambertMaterial({ color: 0xd4956a });
 
-// ── Route / block line in 3D ──────────────────────────
-function makeLine3D(pts2d, color, height = 0.05) {
-  if (!pts2d || pts2d.length < 2) return null;
-  const points = pts2d.map(p => {
-    const w = canvasToWorld(p.x, p.y);
-    return new THREE.Vector3(w.x, height, w.z);
+  // ── Legs ──────────────────────────────────────────
+  const legGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
+  const lLeg = new THREE.Mesh(legGeo, bodyMat);
+  lLeg.position.set(-0.16, 0.35, 0);
+  lLeg.castShadow = true;
+  group.add(lLeg);
+  const rLeg = new THREE.Mesh(legGeo, bodyMat);
+  rLeg.position.set( 0.16, 0.35, 0);
+  rLeg.castShadow = true;
+  group.add(rLeg);
+
+  // ── Thigh pads (white boxes on upper legs) ────────
+  const tpadGeo = new THREE.BoxGeometry(0.24, 0.22, 0.28);
+  [-0.16, 0.16].forEach(x => {
+    const tp = new THREE.Mesh(tpadGeo, whiteMat);
+    tp.position.set(x, 0.64, 0.04);
+    group.add(tp);
   });
-  const geo = new THREE.BufferGeometry().setFromPoints(points);
-  const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
-  return new THREE.Line(geo, mat);
+
+  // ── Torso ─────────────────────────────────────────
+  const torsoGeo = new THREE.BoxGeometry(0.58, 0.65, 0.34);
+  const torso = new THREE.Mesh(torsoGeo, bodyMat);
+  torso.position.set(0, 1.12, 0);
+  torso.castShadow = true;
+  group.add(torso);
+
+  // ── Jersey number on chest ─────────────────────────
+  const numCanvas = document.createElement('canvas');
+  numCanvas.width = 64; numCanvas.height = 64;
+  const nc = numCanvas.getContext('2d');
+  nc.fillStyle = isDef ? '#ff8888' : '#ffffff';
+  nc.font = 'bold 36px Arial';
+  nc.textAlign = 'center'; nc.textBaseline = 'middle';
+  // Use position index as jersey number placeholder
+  nc.fillText(p.label.slice(0,2), 32, 32);
+  const numTex = new THREE.CanvasTexture(numCanvas);
+  const numGeo = new THREE.PlaneGeometry(0.32, 0.32);
+  const numMat = new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthTest: false });
+  const numMesh = new THREE.Mesh(numGeo, numMat);
+  numMesh.position.set(0, 1.12, 0.18);
+  group.add(numMesh);
+
+  // ── Shoulder pads ─────────────────────────────────
+  const spadGeo = new THREE.BoxGeometry(0.96, 0.18, 0.46);
+  const spad = new THREE.Mesh(spadGeo, whiteMat);
+  spad.position.set(0, 1.50, 0);
+  group.add(spad);
+  // Shoulder pad wing curves (tapered boxes)
+  const wingGeo = new THREE.BoxGeometry(0.24, 0.12, 0.38);
+  [-0.42, 0.42].forEach(x => {
+    const wing = new THREE.Mesh(wingGeo, whiteMat);
+    wing.position.set(x, 1.46, 0);
+    wing.rotation.z = x > 0 ? -0.22 : 0.22;
+    group.add(wing);
+  });
+
+  // ── Arms ──────────────────────────────────────────
+  const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.55, 6);
+  const lArm = new THREE.Mesh(armGeo, bodyMat);
+  lArm.position.set(-0.56, 1.28, 0);
+  lArm.rotation.z =  0.55;
+  group.add(lArm);
+  const rArm = new THREE.Mesh(armGeo, bodyMat);
+  rArm.position.set( 0.56, 1.28, 0);
+  rArm.rotation.z = -0.55;
+  group.add(rArm);
+
+  // ── Neck ──────────────────────────────────────────
+  const neckGeo = new THREE.CylinderGeometry(0.13, 0.13, 0.14, 6);
+  const neck = new THREE.Mesh(neckGeo, skinMat);
+  neck.position.set(0, 1.63, 0);
+  group.add(neck);
+
+  // ── Helmet ────────────────────────────────────────
+  // Main shell — flattened sphere
+  const helmGeo = new THREE.SphereGeometry(0.33, 10, 8);
+  const helmMat = new THREE.MeshLambertMaterial({ color: col });
+  const helm = new THREE.Mesh(helmGeo, helmMat);
+  helm.scale.set(1, 0.92, 1.05);
+  helm.position.set(0, 1.92, 0);
+  helm.castShadow = true;
+  group.add(helm);
+
+  // Helmet stripe (white bar over top)
+  const stripeGeo = new THREE.BoxGeometry(0.1, 0.38, 0.68);
+  const stripe = new THREE.Mesh(stripeGeo, whiteMat);
+  stripe.position.set(0, 2.12, 0);
+  group.add(stripe);
+
+  // Facemask — 3 horizontal bars
+  for (let i = 0; i < 3; i++) {
+    const fmGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.54, 5);
+    const fm = new THREE.Mesh(fmGeo, new THREE.MeshLambertMaterial({ color: 0xcccccc }));
+    fm.rotation.z = Math.PI / 2;
+    fm.position.set(0, 1.83 + i * 0.1, 0.3);
+    group.add(fm);
+  }
+  // Facemask vertical bar
+  const fmVGeo = new THREE.CylinderGeometry(0.025, 0.025, 0.3, 5);
+  const fmV = new THREE.Mesh(fmVGeo, new THREE.MeshLambertMaterial({ color: 0xcccccc }));
+  fmV.position.set(0, 1.86, 0.34);
+  group.add(fmV);
+
+  // ── Eye visor (dark strip) ─────────────────────────
+  const visorGeo = new THREE.BoxGeometry(0.5, 0.08, 0.06);
+  const visorMat = new THREE.MeshLambertMaterial({ color: 0x1a1a2e, transparent: true, opacity: 0.85 });
+  const visor = new THREE.Mesh(visorGeo, visorMat);
+  visor.position.set(0, 1.97, 0.3);
+  group.add(visor);
+
+  // ── Floating position label ────────────────────────
+  const labelSprite = makeLabel(p.label, isDef ? '#ff9090' : '#ffffff');
+  labelSprite.position.y = 2.55;
+  labelSprite.scale.set(1.6, 0.7, 1);
+  group.add(labelSprite);
+
+  // Position
+  const w = canvasToWorld(p.x, p.y);
+  group.position.set(w.x, 0, w.z);
+
+  // Store eye-level offset for FP camera
+  group._eyeY   = EYE_HEIGHT;
+  group._bodyH  = 2.25; // total height for label hiding in FP mode
+
+  return group;
 }
 
-function initPOV() {
-  if (povScene) return; // already initialized
+// ── Football mesh ─────────────────────────────────────
+function makeBallMesh() {
+  const g = new THREE.Group();
+  // Brown ellipsoid body
+  const bGeo = new THREE.SphereGeometry(0.25, 10, 7);
+  const bMat = new THREE.MeshLambertMaterial({ color: 0x8B4513 });
+  const ball = new THREE.Mesh(bGeo, bMat);
+  ball.scale.set(0.7, 1, 0.7);
+  g.add(ball);
+  // White lace stripe
+  const lGeo = new THREE.BoxGeometry(0.08, 0.28, 0.06);
+  const lMat = new THREE.MeshLambertMaterial({ color: 0xffffff });
+  const lace = new THREE.Mesh(lGeo, lMat);
+  lace.position.set(0.01, 0, 0.22);
+  g.add(lace);
+  g.visible = false;
+  return g;
+}
 
+// ── 3D route line ──────────────────────────────────────
+function makeLine3D(pts2d, color, ht=0.06) {
+  if (!pts2d || pts2d.length < 2) return null;
+  const pts = pts2d.map(p => { const w=canvasToWorld(p.x,p.y); return new THREE.Vector3(w.x,ht,w.z); });
+  const geo = new THREE.BufferGeometry().setFromPoints(pts);
+  return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, linewidth:2 }));
+}
+
+// ── Floating label sprite ──────────────────────────────
+function makeLabel(text, color) {
+  const c2 = document.createElement('canvas');
+  c2.width=128; c2.height=56;
+  const cx=c2.getContext('2d');
+  cx.fillStyle=color||'#fff';
+  cx.font='bold 26px Barlow Condensed,monospace';
+  cx.textAlign='center'; cx.textBaseline='middle';
+  cx.fillText(text.slice(0,4),64,28);
+  const tex=new THREE.CanvasTexture(c2);
+  const mat=new THREE.SpriteMaterial({map:tex,transparent:true,depthTest:false});
+  const s=new THREE.Sprite(mat);
+  s.scale.set(1.4,0.6,1);
+  return s;
+}
+
+// ── Init Three.js scene ───────────────────────────────
+function initPOV() {
+  if (povScene) return;
   const c = document.getElementById('povCanvas');
-  povRenderer = new THREE.WebGLRenderer({ canvas: c, antialias: true });
-  povRenderer.setPixelRatio(window.devicePixelRatio);
+  povRenderer = new THREE.WebGLRenderer({ canvas:c, antialias:true });
+  povRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   povRenderer.shadowMap.enabled = true;
-  povRenderer.setClearColor(0x000000);
+  povRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  povRenderer.setClearColor(0x87ceeb); // sky blue
 
   povScene = new THREE.Scene();
-  povScene.fog = new THREE.Fog(0x1a4a1a, 40, 120);
+  povScene.fog = new THREE.Fog(0x87ceeb, 55, 130);
+  povScene.background = new THREE.Color(0x87ceeb);
 
-  povCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 300);
+  povCamera = new THREE.PerspectiveCamera(85, 1, 0.05, 250);
 
-  povClock = new THREE.Clock();
-
-  // ── Lighting ──────────────────────────────────────
-  povScene.add(new THREE.AmbientLight(0xffffff, 0.65));
-  const sun = new THREE.DirectionalLight(0xfff5cc, 1.1);
-  sun.position.set(10, 30, -10);
+  // ── Lighting ─────────────────────────────────────
+  povScene.add(new THREE.AmbientLight(0xffffff, 0.7));
+  const sun = new THREE.DirectionalLight(0xfff8e0, 1.2);
+  sun.position.set(20, 45, -15);
   sun.castShadow = true;
+  sun.shadow.mapSize.width  = 2048;
+  sun.shadow.mapSize.height = 2048;
+  sun.shadow.camera.near = 1;
+  sun.shadow.camera.far  = 150;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -50;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  50;
   povScene.add(sun);
+  // Fill light from opposite side
+  const fill = new THREE.DirectionalLight(0xc8e8ff, 0.4);
+  fill.position.set(-10, 15, 10);
+  povScene.add(fill);
 
-  // ── Field plane ───────────────────────────────────
-  const fieldGeo = new THREE.PlaneGeometry(W3 * 1.5, H3 * 2.2);
-  const fieldMat = new THREE.MeshLambertMaterial({ color: 0x2a6a2a });
-  const fieldMesh = new THREE.Mesh(fieldGeo, fieldMat);
-  fieldMesh.rotation.x = -Math.PI / 2;
-  fieldMesh.receiveShadow = true;
-  povScene.add(fieldMesh);
-
-  // ── Yard lines ────────────────────────────────────
-  for (let i = 0; i <= 10; i++) {
-    const y2d = i * H / 10;
-    const wz = (y2d - H / 2) * PX;
-    const pts = [new THREE.Vector3(-W3 / 2, 0.02, wz), new THREE.Vector3(W3 / 2, 0.02, wz)];
-    const geo = new THREE.BufferGeometry().setFromPoints(pts);
-    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 });
-    povScene.add(new THREE.Line(geo, mat));
+  // ── Checkerboard field ────────────────────────────
+  for (let i=0; i<10; i++) {
+    const zFrom = (-H3/2) + i*(H3/10);
+    const geo = new THREE.PlaneGeometry(W3*1.6, H3/10);
+    const mat = new THREE.MeshLambertMaterial({ color: i%2===0 ? 0x2a6a2a : 0x265e26 });
+    const mesh = new THREE.Mesh(geo, mat);
+    mesh.rotation.x = -Math.PI/2;
+    mesh.position.set(0, 0, zFrom + H3/20);
+    mesh.receiveShadow = true;
+    povScene.add(mesh);
   }
 
-  // ── LOS line ──────────────────────────────────────
-  const losW = canvasToWorld(0, LOS).z;
-  const losPts = [new THREE.Vector3(-W3/2, 0.04, losW), new THREE.Vector3(W3/2, 0.04, losW)];
-  const losGeo = new THREE.BufferGeometry().setFromPoints(losPts);
-  const losMat = new THREE.LineBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.7 });
-  povScene.add(new THREE.Line(losGeo, losMat));
-
-  // ── Hash marks ────────────────────────────────────
-  for (let i = 0; i <= 10; i++) {
-    const y2d = i * H / 10;
-    const wz = (y2d - H / 2) * PX;
-    for (const side of [-0.15, 0.15]) {
-      const hx = W3 * side;
-      const hpts = [new THREE.Vector3(hx - 0.6, 0.03, wz), new THREE.Vector3(hx + 0.6, 0.03, wz)];
-      const hgeo = new THREE.BufferGeometry().setFromPoints(hpts);
-      const hmat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
-      povScene.add(new THREE.Line(hgeo, hmat));
+  // ── Yard lines ────────────────────────────────────
+  for (let i=0; i<=10; i++) {
+    const z = (-H3/2) + i*(H3/10);
+    const isLOS = Math.abs(z - ((LOS-H/2)*PX)) < 0.3;
+    const col   = isLOS ? 0xffdd00 : 0xffffff;
+    const op    = isLOS ? 0.8 : 0.22;
+    const pts = [new THREE.Vector3(-W3*0.75,0.02,z), new THREE.Vector3(W3*0.75,0.02,z)];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:col,transparent:true,opacity:op}));
+    povScene.add(line);
+    // Number markers
+    if (!isLOS && i>0 && i<10) {
+      const yardNum = Math.abs(i*10-50);
+      for (const sx of [-W3*0.28, W3*0.28]) {
+        const nc2 = document.createElement('canvas'); nc2.width=64; nc2.height=32;
+        const nctx = nc2.getContext('2d');
+        nctx.fillStyle='rgba(255,255,255,0.55)';
+        nctx.font='bold 20px Arial'; nctx.textAlign='center'; nctx.textBaseline='middle';
+        nctx.fillText(yardNum, 32, 16);
+        const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(nc2),transparent:true,depthTest:false}));
+        sp.scale.set(2,1,1);
+        sp.position.set(sx, 0.05, z);
+        povScene.add(sp);
+      }
     }
   }
 
-  // ── End zone indicator ────────────────────────────
-  const ezGeo = new THREE.PlaneGeometry(W3, H3 * 0.16);
-  const ezMat = new THREE.MeshLambertMaterial({ color: 0x1a5a1a });
-  const ezMesh = new THREE.Mesh(ezGeo, ezMat);
-  ezMesh.rotation.x = -Math.PI / 2;
-  ezMesh.position.set(0, 0.01, (-H3 / 2) + (H3 * 0.08));
-  povScene.add(ezMesh);
+  // ── Hash marks ────────────────────────────────────
+  for (let i=0; i<=10; i++) {
+    for (let j=0; j<8; j++) {
+      const z = (-H3/2) + i*(H3/10) + j*(H3/80);
+      for (const hx of [-W3*0.165, W3*0.165]) {
+        const pts = [new THREE.Vector3(hx-0.4,0.02,z), new THREE.Vector3(hx+0.4,0.02,z)];
+        const geo = new THREE.BufferGeometry().setFromPoints(pts);
+        povScene.add(new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.3})));
+      }
+    }
+  }
+
+  // ── End zones ─────────────────────────────────────
+  for (const zOff of [-H3*0.54, H3*0.54]) {
+    const ezGeo = new THREE.PlaneGeometry(W3*1.6, H3*0.08);
+    const ezMat = new THREE.MeshLambertMaterial({ color: 0x1a5218 });
+    const ez = new THREE.Mesh(ezGeo, ezMat);
+    ez.rotation.x = -Math.PI/2;
+    ez.position.set(0, 0.01, zOff);
+    povScene.add(ez);
+  }
+
+  // ── Goal posts ────────────────────────────────────
+  function makeGoalPost(z) {
+    const mat = new THREE.MeshLambertMaterial({ color: 0xf0d060 });
+    const post = new THREE.Group();
+    // Upright
+    const uGeo = new THREE.CylinderGeometry(0.12,0.12,8,6);
+    const u = new THREE.Mesh(uGeo, mat); u.position.set(0,4,0); post.add(u);
+    // Crossbar
+    const cbGeo = new THREE.CylinderGeometry(0.08,0.08,6,6);
+    const cb = new THREE.Mesh(cbGeo, mat);
+    cb.rotation.z = Math.PI/2; cb.position.set(0,5.5,0); post.add(cb);
+    // Two uprights
+    for (const x of [-3,3]) {
+      const upGeo = new THREE.CylinderGeometry(0.07,0.07,4,6);
+      const up = new THREE.Mesh(upGeo, mat);
+      up.position.set(x,7.5,0); post.add(up);
+    }
+    post.position.set(0, 0, z);
+    return post;
+  }
+  povScene.add(makeGoalPost(-H3*0.58));
+  povScene.add(makeGoalPost( H3*0.58));
+
+  // ── Crowd stands (simple colored boxes) ───────────
+  for (const sx of [-W3*0.82, W3*0.82]) {
+    const sGeo = new THREE.BoxGeometry(3, 8, H3*1.1);
+    const sMat = new THREE.MeshLambertMaterial({ color: 0x555577 });
+    const stand = new THREE.Mesh(sGeo, sMat);
+    stand.position.set(sx, 4, 0);
+    povScene.add(stand);
+    // Crowd texture stripe
+    const cgGeo = new THREE.BoxGeometry(3.1, 7, H3*1.1);
+    const cgMat = new THREE.MeshLambertMaterial({ color: 0x334466, transparent:true, opacity:0.5 });
+    const cg = new THREE.Mesh(cgGeo, cgMat);
+    cg.position.set(sx, 4, 0);
+    povScene.add(cg);
+  }
 
   resizePOV();
   window.addEventListener('resize', resizePOV);
@@ -2812,437 +3033,291 @@ function initPOV() {
 function resizePOV() {
   if (!povRenderer) return;
   const c = document.getElementById('povCanvas');
-  const w = c.clientWidth || window.innerWidth;
-  const h = c.clientHeight || window.innerHeight - 10;
+  const w = c.clientWidth  || window.innerWidth;
+  const h = c.clientHeight || (window.innerHeight - 10);
   povRenderer.setSize(w, h, false);
-  if (povCamera) {
-    povCamera.aspect = w / h;
-    povCamera.updateProjectionMatrix();
+  if (povCamera) { povCamera.aspect = w/h; povCamera.updateProjectionMatrix(); }
+}
+
+// ── Camera mode switching ─────────────────────────────
+function setCamMode(mode) {
+  povCamMode = mode;
+  document.querySelectorAll('.pov-cam-btn').forEach(b => b.classList.remove('active'));
+  const btn = document.getElementById('camBtn-'+mode);
+  if (btn) btn.classList.add('active');
+  // Hide self-player mesh in FP mode so we don't see our own head
+  updateSelfVisibility();
+  if (!povAnimating) applyStaticCamera();
+}
+
+function updateSelfVisibility() {
+  const allMeshes = [...povPlayerMeshes, ...povDefMeshes];
+  allMeshes.forEach(pm => {
+    const isSelf = pm.id === povSelectedId && pm.side === povSelectedSide;
+    // In FP mode hide the selected player's body (we ARE them)
+    // Show floating label still
+    pm.group.children.forEach((child, i) => {
+      if (child.isSprite) return; // always show label
+      child.visible = !(isSelf && povCamMode === 'fp');
+    });
+  });
+}
+
+function applyStaticCamera() {
+  const selList = povSelectedSide==='offense' ? players : defenders;
+  const selP    = selList.find(x => x.id===povSelectedId);
+  if (!selP) return;
+  const w = canvasToWorld(selP.x, selP.y);
+  applyCameraForMode(w.x, EYE_HEIGHT, w.z, 0, selP);
+}
+
+function applyCameraForMode(px, py, pz, facingY, selP) {
+  if (povCamMode === 'fp') {
+    // Eyes at player head position, looking toward opponent end zone
+    povCamera.fov = 85;
+    povCamera.position.set(px, EYE_HEIGHT, pz);
+    // Look in the direction the player faces (toward negative z = upfield by default)
+    const lx = px + Math.sin(facingY||0) * 0.1;
+    const lz = pz - 20 + Math.cos(facingY||0) * 0.1;
+    povCamera.lookAt(lx, EYE_HEIGHT - 0.1, lz);
+  } else if (povCamMode === 'broadcast') {
+    // Elevated sideline angle ~30° looking across field
+    povCamera.fov = 65;
+    povCamera.position.set(W3*0.58, 12, pz + 4);
+    povCamera.lookAt(px, 1, pz - 8);
+  } else {
+    // Birds eye — straight down, wide
+    povCamera.fov = 75;
+    povCamera.position.set(px, 48, pz);
+    povCamera.lookAt(px, 0, pz - 0.01);
   }
+  povCamera.updateProjectionMatrix();
 }
 
-// ── Build 3D player capsule ────────────────────────────
-function makePlayerMesh(p, isDef) {
-  const group = new THREE.Group();
-
-  // Body cylinder
-  const bodyH  = isDef ? 1.4 : 1.6;
-  const bodyGeo = new THREE.CylinderGeometry(0.38, 0.38, bodyH, 10);
-  const col     = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  const bodyMat = new THREE.MeshLambertMaterial({ color: col });
-  const body    = new THREE.Mesh(bodyGeo, bodyMat);
-  body.position.y = bodyH / 2;
-  body.castShadow = true;
-  group.add(body);
-
-  // Helmet sphere
-  const helmGeo = new THREE.SphereGeometry(0.38, 10, 8);
-  const helmMat = new THREE.MeshLambertMaterial({ color: col });
-  const helm    = new THREE.Mesh(helmGeo, helmMat);
-  helm.position.y = bodyH + 0.3;
-  helm.castShadow = true;
-  group.add(helm);
-
-  // White facemask line
-  const fmPts = [
-    new THREE.Vector3(0, bodyH + 0.18, 0.35),
-    new THREE.Vector3(0, bodyH + 0.42, 0.35),
-  ];
-  const fmGeo = new THREE.BufferGeometry().setFromPoints(fmPts);
-  const fmMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
-  group.add(new THREE.Line(fmGeo, fmMat));
-
-  // Label sprite above helmet
-  const label = makeLabel(p.label, isDef ? '#ffcccc' : '#ffffff');
-  label.position.y = bodyH + 0.9;
-  group.add(label);
-
-  const w = canvasToWorld(p.x, p.y);
-  group.position.set(w.x, 0, w.z);
-
-  return group;
-}
-
-// ── Build ball mesh ────────────────────────────────────
-function makeBallMesh() {
-  const geo = new THREE.SphereGeometry(0.22, 8, 6);
-  const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
-  const ball = new THREE.Mesh(geo, mat);
-  ball.visible = false;
-  return ball;
-}
-
-// ── Populate scene from current play data ─────────────
+// ── Populate scene with players and routes ─────────────
 function populatePOVScene() {
-  // Clear previous
   povPlayerMeshes.forEach(m => povScene.remove(m.group));
-  povDefMeshes.forEach(m => povScene.remove(m.group));
-  povRoutelines.forEach(l => povScene.remove(l));
+  povDefMeshes.forEach(m    => povScene.remove(m.group));
+  povRoutelines.forEach(l   => povScene.remove(l));
   if (povBallMesh) povScene.remove(povBallMesh);
+  povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
 
-  povPlayerMeshes = [];
-  povDefMeshes    = [];
-  povRoutelines   = [];
-
-  // Offense
   players.forEach(p => {
-    const group = makePlayerMesh(p, false);
+    const group = makeFootballPlayer(p, false);
     povScene.add(group);
-    povPlayerMeshes.push({ id: p.id, side: 'offense', group, ox: p.x, oy: p.y });
+    povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
   });
-
-  // Defense
   defenders.forEach(d => {
-    const group = makePlayerMesh(d, true);
+    const group = makeFootballPlayer(d, true);
     povScene.add(group);
-    povDefMeshes.push({ id: d.id, side: 'defense', group, ox: d.x, oy: d.y });
+    povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
   });
 
-  // Routes (yellow)
-  routes.forEach(r => {
-    const line = makeLine3D(r.pts, 0xf5c842, 0.06);
-    if (line) { povScene.add(line); povRoutelines.push(line); }
-  });
+  routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+  blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+  motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
 
-  // Blocks (red dashed — just solid in 3D)
-  blocks.forEach(b => {
-    const line = makeLine3D(b.pts, 0xe74c3c, 0.06);
-    if (line) { povScene.add(line); povRoutelines.push(line); }
-  });
-
-  // Motions (blue)
-  motions.forEach(m => {
-    const line = makeLine3D(m.pts, 0x3498db, 0.06);
-    if (line) { povScene.add(line); povRoutelines.push(line); }
-  });
-
-  // Ball
   povBallMesh = makeBallMesh();
   povScene.add(povBallMesh);
-
-  // Throw arc storage
   povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
 }
 
-// ── Build player tabs ──────────────────────────────────
+// ── Build player tab buttons ───────────────────────────
 function buildPOVTabs() {
   const container = document.getElementById('povTabs');
   container.innerHTML = '';
-
-  const allPlayers = [
-    ...players.map(p => ({ ...p, side: 'offense' })),
-    ...defenders.map(d => ({ ...d, side: 'defense' }))
-  ];
-
-  allPlayers.forEach(p => {
+  [...players.map(p=>({...p,side:'offense'})), ...defenders.map(d=>({...d,side:'defense'}))].forEach(p => {
     const btn = document.createElement('button');
-    btn.className = 'pov-tab' + (p.id === povSelectedId && p.side === povSelectedSide ? ' active' : '');
+    btn.className = 'pov-tab' + (p.id===povSelectedId && p.side===povSelectedSide ? ' active' : '');
     btn.textContent = p.label;
-    btn.style.borderColor = p.color;
+    btn.style.cssText = `border-color:${p.color};color:${p.side==='offense'?'#eee':'#ffaaaa'}`;
     btn.onclick = () => {
-      povSelectedId   = p.id;
-      povSelectedSide = p.side;
-      document.querySelectorAll('.pov-tab').forEach(b => b.classList.remove('active'));
+      povSelectedId=p.id; povSelectedSide=p.side;
+      document.querySelectorAll('.pov-tab').forEach(b=>b.classList.remove('active'));
       btn.classList.add('active');
       updatePOVHUD();
-      if (!povAnimating) positionPOVCamera(p.x, p.y, false);
+      updateSelfVisibility();
+      if (!povAnimating) applyStaticCamera();
     };
     container.appendChild(btn);
   });
 }
 
-// ── Update HUD text ────────────────────────────────────
 function updatePOVHUD() {
-  const list = povSelectedSide === 'offense' ? players : defenders;
-  const p    = list.find(x => x.id === povSelectedId);
+  const list = povSelectedSide==='offense' ? players : defenders;
+  const p    = list.find(x=>x.id===povSelectedId);
   if (!p) return;
-
-  document.getElementById('povPlayerBadge').textContent   = p.label + ' — ' + p.pos;
-  document.getElementById('povAssignmentBadge').textContent = p.assignment || 'No assignment';
-  document.getElementById('povHudPlayer').textContent     = p.label;
-  document.getElementById('povHudAssign').textContent     = (p.assignment || '—').slice(0, 30);
-  document.getElementById('povFormation').textContent     = currentFormation;
-  document.getElementById('povCoverage').textContent      = document.getElementById('coverage')?.value || '—';
-  document.getElementById('povKeyRead').textContent       = getKeyRead(p);
-  document.getElementById('povDn').textContent            = '2nd & 7'; // placeholder — wire to real data later
+  document.getElementById('povPlayerBadge').textContent    = p.label+' — '+p.pos;
+  document.getElementById('povAssignmentBadge').textContent= p.assignment||'No assignment';
+  document.getElementById('povHudPlayer').textContent      = p.label;
+  document.getElementById('povHudAssign').textContent      = (p.assignment||'—').slice(0,32);
+  document.getElementById('povFormation').textContent      = currentFormation;
+  document.getElementById('povCoverage').textContent       = document.getElementById('coverage')?.value||'—';
+  document.getElementById('povKeyRead').textContent        = getKeyRead(p);
+  document.getElementById('povDn').textContent             = '2nd & 7';
 }
 
 function getKeyRead(p) {
-  if (p.pos === 'QB') return 'Watch safety rotation pre-snap';
-  if (p.pos === 'WR') return 'Read CB leverage — in or outside';
-  if (p.pos === 'RB') return 'Find the first down lineman';
-  if (p.pos === 'TE') return 'Release inside or outside LB';
-  if (p.pos === 'OL') return 'Identify your gap assignment';
-  if (p.pos === 'DL') return 'Read the guard\'s first step';
-  if (p.pos === 'LB') return 'Key the near back, read mesh';
-  if (p.pos === 'CB') return 'Watch #1 release — press or bail';
-  if (p.pos === 'S')  return 'Read QB eyes post-snap';
-  return 'Execute assignment';
+  const reads = {QB:'Watch safety rotation pre-snap',WR:'Read CB leverage — inside or outside',RB:'Hit the first down lineman',TE:'Release inside or outside the LB',OL:'Gap assignment — who do you fire on?',DL:'Read guard\'s first step',LB:'Key the near back — read mesh',CB:'Watch #1 release — press or bail',S:'Read QB eyes post-snap'};
+  return reads[p.pos] || 'Execute your assignment';
 }
 
-// ── Position camera behind selected player ─────────────
-function positionPOVCamera(px2d, py2d, smooth) {
-  const w = canvasToWorld(px2d, py2d);
-
-  // Camera sits 3.5 units behind player (toward own end zone) and 2.2 units up
-  const camX = w.x;
-  const camY = 2.2;
-  const camZ = w.z + 3.5; // +z = toward own end zone (camera behind player)
-
-  // Look toward opponent end zone (negative z = upfield)
-  const lookX = w.x;
-  const lookY = 0.8;
-  const lookZ = w.z - 15;
-
-  if (smooth) {
-    // Lerp used during animation — see povStep
-    povCamera._targetPos = { x: camX, y: camY, z: camZ };
-    povCamera._targetLook = { x: lookX, y: lookY, z: lookZ };
-  } else {
-    povCamera.position.set(camX, camY, camZ);
-    povCamera.lookAt(lookX, lookY, lookZ);
-  }
-}
-
-// ── Open POV modal ─────────────────────────────────────
+// ── Open POV ──────────────────────────────────────────
 function openPOV() {
-  const overlay = document.getElementById('povOverlay');
-  overlay.classList.add('open');
-
-  // Load Three.js if not already loaded
-  if (typeof THREE === 'undefined') {
-    const script = document.createElement('script');
-    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    script.onload = () => {
-      initPOV();
-      populatePOVScene();
-      // Default: select QB or first offensive player
-      const defaultP = players.find(p => p.pos === 'QB') || players[0];
-      if (defaultP) {
-        povSelectedId   = defaultP.id;
-        povSelectedSide = 'offense';
-      }
-      buildPOVTabs();
-      updatePOVHUD();
-      resizePOV();
-      const p = players.find(x => x.id === povSelectedId);
-      if (p) positionPOVCamera(p.x, p.y, false);
-      povRenderLoop();
-    };
-    document.head.appendChild(script);
-  } else {
-    if (!povScene) initPOV();
+  document.getElementById('povOverlay').classList.add('open');
+  const doInit = () => {
+    initPOV();
     populatePOVScene();
-    const defaultP = players.find(p => p.pos === 'QB') || players[0];
-    if (defaultP) { povSelectedId = defaultP.id; povSelectedSide = 'offense'; }
+    const def = players.find(p=>p.pos==='QB')||players[0];
+    if (def) { povSelectedId=def.id; povSelectedSide='offense'; }
     buildPOVTabs();
     updatePOVHUD();
+    updateSelfVisibility();
     resizePOV();
-    const p = players.find(x => x.id === povSelectedId);
-    if (p) positionPOVCamera(p.x, p.y, false);
+    applyStaticCamera();
     povRenderLoop();
-  }
+  };
+  if (typeof THREE==='undefined') {
+    const s=document.createElement('script');
+    s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    s.onload=doInit;
+    document.head.appendChild(s);
+  } else { doInit(); }
 }
 
 function closePOV() {
   document.getElementById('povOverlay').classList.remove('open');
-  povAnimating = false;
+  povAnimating=false;
   if (povRaf) cancelAnimationFrame(povRaf);
-  // Reset all meshes to original positions
-  povPlayerMeshes.forEach(pm => {
-    const w = canvasToWorld(pm.ox, pm.oy);
-    pm.group.position.set(w.x, 0, w.z);
-  });
-  povDefMeshes.forEach(dm => {
-    const w = canvasToWorld(dm.ox, dm.oy);
-    dm.group.position.set(w.x, 0, w.z);
-  });
-  if (povBallMesh) povBallMesh.visible = false;
+  povPlayerMeshes.forEach(pm=>{ const w=canvasToWorld(pm.ox,pm.oy); pm.group.position.set(w.x,0,w.z); pm.group.rotation.y=0; });
+  povDefMeshes.forEach(dm=>{ const w=canvasToWorld(dm.ox,dm.oy); dm.group.position.set(w.x,0,w.z); dm.group.rotation.y=0; });
+  if (povBallMesh) povBallMesh.visible=false;
 }
 
-// ── Render loop ────────────────────────────────────────
 function povRenderLoop() {
   if (!document.getElementById('povOverlay').classList.contains('open')) return;
   povRaf = requestAnimationFrame(povRenderLoop);
-  if (povScene && povCamera && povRenderer) {
-    povRenderer.render(povScene, povCamera);
-  }
+  if (povScene && povCamera && povRenderer) povRenderer.render(povScene, povCamera);
 }
 
-// ── Animate play in POV ────────────────────────────────
+// ── Play animation in POV ──────────────────────────────
 function povRunPlay() {
   if (povAnimating) return;
+  const allActions = [...motions,...routes,...blocks];
+  if (!allActions.length) { alert('Generate a play first, then open POV.'); return; }
 
-  const allActions = [...motions, ...routes, ...blocks];
-  if (!allActions.length) { alert('Generate a play first then open POV.'); return; }
+  povAnimating=true;
+  document.getElementById('povRunBtn').textContent='■ Stop';
+  document.getElementById('povRunBtn').onclick=stopPOVPlay;
 
-  povAnimating = true;
-  document.getElementById('povRunBtn').textContent = '■ Stop';
-  document.getElementById('povRunBtn').onclick = stopPOVPlay;
+  const hasM = motions.length>0;
+  const MEND = hasM ? 0.28 : 0;
+  const TOTAL= hasM ? 4200 : 3400;
 
-  const hasMotionP = motions.length > 0;
-  const MOTION_END = hasMotionP ? 0.28 : 0;
-  const TOTAL_MS   = hasMotionP ? 4200 : 3400;
-
-  // Build same tracks as main animation
-  const offTracks = {};
-  players.forEach(p => {
-    const pMotions = motions.filter(a => a.pid === p.id);
-    const pPlay    = [...routes, ...blocks].filter(a => a.pid === p.id);
-    const startPos = { x: p.x, y: p.y };
-
-    let motPts = [];
-    pMotions.forEach(a => {
-      const seg = a.pts?.length ? a.pts : [startPos, startPos];
-      motPts = motPts.concat(motPts.length ? seg.slice(1) : seg);
-    });
-
-    const mEnd = motPts.length ? motPts[motPts.length - 1] : startPos;
-    let playPts = [mEnd];
-    pPlay.forEach(a => {
-      let seg = a.pts?.length ? a.pts : [mEnd, mEnd];
-      if (a.type === 'block') {
-        const last = seg[seg.length - 1];
-        const prev = seg.length >= 2 ? seg[seg.length - 2] : seg[0];
-        seg = [...seg, { x: last.x + (last.x - prev.x) * .15, y: last.y + (last.y - prev.y) * .15 }];
-      }
-      playPts = playPts.concat(seg.slice(1));
-    });
-
-    offTracks[p.id] = {
-      motion: motPts.length > 1 ? motPts : null,
-      play:   playPts.length > 1 ? playPts : [startPos, startPos],
-      isQB:   p.pos === 'QB' || p.label === 'QB',
-      isOL:   p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)
-    };
+  // Build tracks (same logic as main engine)
+  const offTrk={};
+  players.forEach(p=>{
+    const pM=motions.filter(a=>a.pid===p.id);
+    const pP=[...routes,...blocks].filter(a=>a.pid===p.id);
+    const sp={x:p.x,y:p.y};
+    let mPts=[];
+    pM.forEach(a=>{ const seg=a.pts?.length?a.pts:[sp,sp]; mPts=mPts.concat(mPts.length?seg.slice(1):seg); });
+    const mEnd=mPts.length?mPts[mPts.length-1]:sp;
+    let plPts=[mEnd];
+    pP.forEach(a=>{ let seg=a.pts?.length?a.pts:[mEnd,mEnd]; if(a.type==='block'){const l=seg[seg.length-1];const pv=seg.length>=2?seg[seg.length-2]:seg[0];seg=[...seg,{x:l.x+(l.x-pv.x)*.15,y:l.y+(l.y-pv.y)*.15}];} plPts=plPts.concat(seg.slice(1)); });
+    offTrk[p.id]={ motion:mPts.length>1?mPts:null, play:plPts.length>1?plPts:[sp,sp], isQB:p.pos==='QB'||p.label==='QB', isOL:p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label) };
   });
+  const defTrk=computeDefenderTracks();
 
-  const defT = computeDefenderTracks();
-
-  const startTime = performance.now();
-
-  function ptAt2D(pts, e) {
-    if (!pts || pts.length < 2) return pts ? pts[0] : { x: 0, y: 0 };
-    const clamped = Math.max(0, Math.min(1, e));
-    const idx   = Math.min(pts.length - 2, Math.floor(clamped * (pts.length - 1)));
-    const local = clamped * (pts.length - 1) - idx;
-    const a = pts[idx], b = pts[idx + 1] || a;
-    return { x: a.x + (b.x - a.x) * local, y: a.y + (b.y - a.y) * local };
-  }
-
-  function eIO(t) { return t < .5 ? 2*t*t : -1+(4-2*t)*t; }
+  const t0=performance.now();
+  function eIO(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
+  function ptAt2D(pts,e){if(!pts||pts.length<2)return pts?pts[0]:{x:0,y:0};const ci=Math.max(0,Math.min(1,e));const idx=Math.min(pts.length-2,Math.floor(ci*(pts.length-1)));const loc=ci*(pts.length-1)-idx;const a=pts[idx],b=pts[idx+1]||a;return{x:a.x+(b.x-a.x)*loc,y:a.y+(b.y-a.y)*loc};}
 
   function povStep(ts) {
     if (!povAnimating) return;
-    povRaf = requestAnimationFrame(povStep);
+    povRaf=requestAnimationFrame(povStep);
+    const raw=Math.min((ts-t0)/TOTAL,1);
 
-    const raw  = Math.min((ts - startTime) / TOTAL_MS, 1);
-
-    // Move offensive players
-    players.forEach(p => {
-      const pm = povPlayerMeshes.find(m => m.id === p.id);
-      if (!pm) return;
-      const tr = offTracks[p.id];
-
+    // Move offense
+    players.forEach(p=>{
+      const pm=povPlayerMeshes.find(m=>m.id===p.id); if(!pm) return;
+      const tr=offTrk[p.id];
       let pos2d;
-      if (hasMotionP && raw < MOTION_END) {
-        const motE = eIO(raw / MOTION_END);
-        pos2d = tr.motion ? ptAt2D(tr.motion, motE) : { x: p.x, y: p.y };
-      } else {
-        const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
-        const spd     = tr.isQB ? Math.min(playRaw / 0.62, 1) : tr.isOL ? Math.min(playRaw / 0.75, 1) : playRaw;
-        pos2d = ptAt2D(tr.play, eIO(spd));
-      }
-
-      const w = canvasToWorld(pos2d.x, pos2d.y);
-      pm.group.position.set(w.x, 0, w.z);
-
-      // Orient player toward movement direction
-      if (tr.play.length > 1) {
-        const nextE  = Math.min((raw + 0.02), 1);
-        const playRN = hasMotionP ? (nextE - MOTION_END) / (1 - MOTION_END) : nextE;
-        const npos   = ptAt2D(tr.play, eIO(Math.max(0, Math.min(1, playRN))));
-        const dx = npos.x - pos2d.x, dz = npos.y - pos2d.y;
-        if (Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5) {
-          pm.group.rotation.y = Math.atan2(dx, dz);
-        }
-      }
+      if(hasM&&raw<MEND){ const e=eIO(raw/MEND); pos2d=tr.motion?ptAt2D(tr.motion,e):{x:p.x,y:p.y}; }
+      else{ const pr=hasM?(raw-MEND)/(1-MEND):raw; const sp=tr.isQB?Math.min(pr/0.62,1):tr.isOL?Math.min(pr/0.75,1):pr; pos2d=ptAt2D(tr.play,eIO(sp)); }
+      const w=canvasToWorld(pos2d.x,pos2d.y);
+      pm.group.position.set(w.x,0,w.z);
+      // Face direction of movement
+      const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
+      const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
+      const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
+      if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz);
     });
 
-    // Move defenders
-    defenders.forEach(d => {
-      const dm = povDefMeshes.find(m => m.id === d.id);
-      if (!dm) return;
-      if (hasMotionP && raw < MOTION_END) return;
-      const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
-      const pts = defT[d.id] || [{ x: d.x, y: d.y }];
-      const pos2d = ptAt2D(pts.length > 1 ? pts : [pts[0], pts[0]], eIO(playRaw));
-      const w = canvasToWorld(pos2d.x, pos2d.y);
-      dm.group.position.set(w.x, 0, w.z);
+    // Move defense
+    defenders.forEach(d=>{
+      const dm=povDefMeshes.find(m=>m.id===d.id); if(!dm) return;
+      if(hasM&&raw<MEND) return;
+      const pr=hasM?(raw-MEND)/(1-MEND):raw;
+      const pts=defTrk[d.id]||[{x:d.x,y:d.y}];
+      const pos2d=ptAt2D(pts.length>1?pts:[pts[0],pts[0]],eIO(pr));
+      const w=canvasToWorld(pos2d.x,pos2d.y);
+      dm.group.position.set(w.x,0,w.z);
     });
 
-    // Throw arc ball
-    if (povThrowArc && povBallMesh) {
-      const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
-      const delay   = povThrowArc._throwDelay || 0.58;
-      if (playRaw >= delay) {
-        const throwT = Math.min((playRaw - delay) / (1 - delay), 1);
-        const p0 = povThrowArc[0], p1 = povThrowArc[1], p2 = povThrowArc[2];
-        const bx = (1-throwT)*(1-throwT)*p0.x + 2*(1-throwT)*throwT*p1.x + throwT*throwT*p2.x;
-        const by2d = (1-throwT)*(1-throwT)*p0.y + 2*(1-throwT)*throwT*p1.y + throwT*throwT*p2.y;
-        const bArc = Math.sin(throwT * Math.PI) * 6; // arc height
-        const w  = canvasToWorld(bx, by2d);
-        povBallMesh.position.set(w.x, bArc + 0.5, w.z);
-        povBallMesh.visible = true;
+    // Ball arc
+    if(povThrowArc&&povBallMesh){
+      const pr=hasM?(raw-MEND)/(1-MEND):raw;
+      const delay=povThrowArc._throwDelay||0.58;
+      if(pr>=delay){
+        const tT=Math.min((pr-delay)/(1-delay),1);
+        const p0=povThrowArc[0],p1=povThrowArc[1],p2=povThrowArc[2];
+        const bx=(1-tT)*(1-tT)*p0.x+2*(1-tT)*tT*p1.x+tT*tT*p2.x;
+        const by=(1-tT)*(1-tT)*p0.y+2*(1-tT)*tT*p1.y+tT*tT*p2.y;
+        const arcH=Math.sin(tT*Math.PI)*7;
+        const bw=canvasToWorld(bx,by);
+        povBallMesh.position.set(bw.x,arcH+0.6,bw.z);
+        povBallMesh.visible=true;
+        povBallMesh.rotation.z+=0.15;
+      } else { povBallMesh.visible=false; }
+    }
+
+    // Follow camera
+    const sArr=povSelectedSide==='offense'?povPlayerMeshes:povDefMeshes;
+    const sMesh=sArr.find(m=>m.id===povSelectedId);
+    if(sMesh){
+      const mp=sMesh.group.position;
+      const fy=sMesh.group.rotation.y;
+      if(povCamMode==='fp'){
+        // True first-person: camera IS the player's eyes
+        const tx=mp.x; const tz=mp.z;
+        povCamera.position.lerp(new THREE.Vector3(tx,EYE_HEIGHT,tz),0.15);
+        const lx=mp.x-Math.sin(fy)*20; const lz=mp.z-Math.cos(fy)*20;
+        povCamera.lookAt(lx,EYE_HEIGHT-0.15,lz);
+      } else if(povCamMode==='broadcast'){
+        povCamera.position.lerp(new THREE.Vector3(W3*0.58,12,mp.z+4),0.05);
+        povCamera.lookAt(mp.x,1,mp.z-8);
       } else {
-        povBallMesh.visible = false;
+        // Birds eye — directly above, follow player
+        povCamera.position.lerp(new THREE.Vector3(mp.x,48,mp.z),0.04);
+        povCamera.lookAt(mp.x,0,mp.z-0.01);
       }
     }
 
-    // Follow camera — track selected player
-    const selList = povSelectedSide === 'offense' ? players : defenders;
-    const selP    = selList.find(x => x.id === povSelectedId);
-    const meshArr = povSelectedSide === 'offense' ? povPlayerMeshes : povDefMeshes;
-    const selMesh = meshArr.find(m => m.id === povSelectedId);
-
-    if (selMesh) {
-      const mp = selMesh.group.position;
-      const facing = selMesh.group.rotation.y;
-      // Camera stays 3.5 units behind player, follows their rotation
-      const behindX = mp.x + Math.sin(facing) * 3.5;
-      const behindZ = mp.z + Math.cos(facing) * 3.5;
-      povCamera.position.lerp(new THREE.Vector3(behindX, 2.2, behindZ), 0.08);
-      povCamera.lookAt(mp.x - Math.sin(facing)*8, 0.8, mp.z - Math.cos(facing)*8);
-    }
-
-    povRenderer.render(povScene, povCamera);
-
-    if (raw >= 1) {
-      povAnimating = false;
-      document.getElementById('povRunBtn').textContent = '▶ Run Play';
-      document.getElementById('povRunBtn').onclick = povRunPlay;
-    }
+    povRenderer.render(povScene,povCamera);
+    if(raw>=1){ povAnimating=false; document.getElementById('povRunBtn').textContent='▶ Run Play'; document.getElementById('povRunBtn').onclick=povRunPlay; }
   }
-
-  povRaf = requestAnimationFrame(povStep);
+  povRaf=requestAnimationFrame(povStep);
 }
 
 function stopPOVPlay() {
-  povAnimating = false;
-  document.getElementById('povRunBtn').textContent = '▶ Run Play';
-  document.getElementById('povRunBtn').onclick = povRunPlay;
-  if (povBallMesh) povBallMesh.visible = false;
-  // Reset positions
-  players.forEach(p => {
-    const pm = povPlayerMeshes.find(m => m.id === p.id);
-    if (pm) { const w = canvasToWorld(p.x, p.y); pm.group.position.set(w.x, 0, w.z); }
-  });
-  defenders.forEach(d => {
-    const dm = povDefMeshes.find(m => m.id === d.id);
-    if (dm) { const w = canvasToWorld(d.x, d.y); dm.group.position.set(w.x, 0, w.z); }
-  });
-  const p = (povSelectedSide === 'offense' ? players : defenders).find(x => x.id === povSelectedId);
-  if (p) positionPOVCamera(p.x, p.y, false);
+  povAnimating=false;
+  document.getElementById('povRunBtn').textContent='▶ Run Play';
+  document.getElementById('povRunBtn').onclick=povRunPlay;
+  if(povBallMesh) povBallMesh.visible=false;
+  players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=0;}});
+  defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;}});
+  applyStaticCamera();
 }
 // ═══════════════════════════════════════════════════════
 
@@ -3260,6 +3335,12 @@ init();
       <button class="pov-run-btn" id="povRunBtn" onclick="povRunPlay()">▶ Run Play</button>
       <button class="pov-close" onclick="closePOV()">✕ Close</button>
     </div>
+  </div>
+  <!-- Camera mode selector -->
+  <div class="pov-cam-bar">
+    <button class="pov-cam-btn active" id="camBtn-fp"        onclick="setCamMode('fp')">👁 First Person</button>
+    <button class="pov-cam-btn"        id="camBtn-broadcast" onclick="setCamMode('broadcast')">📺 Broadcast</button>
+    <button class="pov-cam-btn"        id="camBtn-birds"     onclick="setCamMode('birds')">🦅 Birds Eye</button>
   </div>
   <div class="pov-tabs" id="povTabs"></div>
   <div class="pov-info">
