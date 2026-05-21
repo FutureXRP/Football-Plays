@@ -3121,13 +3121,12 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
 
   } else if (povCamMode === 'ezoff') {
     // OFFENSIVE end zone — camera behind the offense (positive z = own end zone)
-    // Looking upfield toward negative z (toward defense and opponent end zone)
-    // Goal posts are at +H3*0.78, camera at +H3*0.62 — posts are BEHIND camera, not in FOV
+    // Looking upfield toward NEGATIVE z (toward defense and opponent end zone)
     const ezCamZ = (H3 / 2) * 0.62;
     const zoomD  = povZoom;
     povCamera.fov = 70;
     povCamera.position.set(0, 8 * zoomD, ezCamZ);
-    povCamera.lookAt(0, 1.5, LOS3 - 6); // look upfield toward LOS
+    povCamera.lookAt(0, 1.5, LOS3 - 20); // look toward LOS and beyond — negative z
 
   } else {
     // DEFENSIVE end zone — camera behind the defense (negative z = opponent end zone)
@@ -3428,11 +3427,11 @@ function povRunPlay() {
         povCamera.position.lerp(new THREE.Vector3(W3*0.52*zoomD, 10*zoomD, mp.z+4*zoomD), 0.05);
         povCamera.lookAt(mp.x, 1.2, mp.z-5);
       } else if(povCamMode==='ezoff'){
-        // Offensive end zone — fixed, behind offense (positive z), looking upfield
+        // Offensive end zone — fixed, behind offense (positive z), looking upfield (negative z)
         const ezCamZ = (H3/2)*0.62;
         const zoomD  = povZoom;
         povCamera.position.set(0, 8*zoomD, ezCamZ);
-        povCamera.lookAt(0, 1.5, LOS3-6);
+        povCamera.lookAt(0, 1.5, LOS3-20);
       } else {
         // Defensive end zone — fixed, behind defense (negative z), looking toward backfield
         const ezCamZ = -(H3/2)*0.62;
