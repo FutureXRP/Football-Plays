@@ -2854,9 +2854,14 @@ function makeFootballPlayer(p, isDef) {
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
 
+  // Offense faces upfield (toward negative z = opponent end zone)
+  // Defense faces into the backfield (toward positive z = toward QB)
+  group.rotation.y = isDef ? 0 : Math.PI;
+
   // Store eye-level offset for FP camera
   group._eyeY   = EYE_HEIGHT;
-  group._bodyH  = 2.25; // total height for label hiding in FP mode
+  group._bodyH  = 2.25;
+  group._isDef  = isDef;
 
   return group;
 }
@@ -3088,17 +3093,17 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     povCamera.fov = 85;
     povCamera.position.set(px, EYE_HEIGHT, pz);
 
-    // Offense looks toward NEGATIVE z (opponent end zone = upfield)
-    // Defense looks toward POSITIVE z (into the backfield)
+    // After rotation fix: offense faces negative z (rotation.y = PI), defense faces positive z (rotation.y = 0)
+    // FP camera looks in the SAME direction the player's face points
     const forwardZ = isDef ? 1 : -1;
 
-    // If we have a real facing angle from movement, use it
-    // Otherwise default to straight ahead based on side
     let lx, lz;
     if (facingY !== 0) {
-      lx = px - Math.sin(facingY) * 20;
-      lz = pz - Math.cos(facingY) * 20;
+      // Use actual movement direction from animation
+      lx = px + Math.sin(facingY) * 20;
+      lz = pz - Math.cos(facingY) * 20 * (isDef ? -1 : 1);
     } else {
+      // Default: straight ahead based on side
       lx = px;
       lz = pz + forwardZ * 20;
     }
@@ -3111,10 +3116,13 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     povCamera.lookAt(px, 1.2, pz - 6);
 
   } else {
-    // Sideline — ground level on the sideline, looking straight across
-    povCamera.fov = 58;
-    povCamera.position.set(W3 * 0.72, 2.2, pz);
-    povCamera.lookAt(-W3 * 0.1, 1.4, pz);
+    // End zone — goal post height, centered behind attacking end zone, looking straight down the field
+    // Offense attacks toward negative z, so camera goes behind negative z end zone
+    const ezZ = -(H3 / 2) - 7;  // just behind the end zone
+    povCamera.fov = 72;
+    povCamera.position.set(0, 8, ezZ);
+    // Look toward the line of scrimmage area (positive z = toward offense/defense)
+    povCamera.lookAt(0, 1.5, LOS3 + 4);
   }
   povCamera.updateProjectionMatrix();
 }
@@ -3218,7 +3226,7 @@ function closePOV() {
   document.getElementById('povOverlay').classList.remove('open');
   povAnimating=false;
   if (povRaf) cancelAnimationFrame(povRaf);
-  povPlayerMeshes.forEach(pm=>{ const w=canvasToWorld(pm.ox,pm.oy); pm.group.position.set(w.x,0,w.z); pm.group.rotation.y=0; });
+  povPlayerMeshes.forEach(pm=>{ const w=canvasToWorld(pm.ox,pm.oy); pm.group.position.set(w.x,0,w.z); pm.group.rotation.y=Math.PI; });
   povDefMeshes.forEach(dm=>{ const w=canvasToWorld(dm.ox,dm.oy); dm.group.position.set(w.x,0,w.z); dm.group.rotation.y=0; });
   if (povBallMesh) povBallMesh.visible=false;
 }
@@ -3335,7 +3343,8 @@ function povRunPlay() {
       const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
       const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
       const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
-      if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz);
+      // Offset by PI for offense since their base rotation is Math.PI (facing negative z)
+      if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz)+Math.PI;
     });
 
     // Move defense
@@ -3374,18 +3383,28 @@ function povRunPlay() {
       const fy=sMesh.group.rotation.y;
       if(povCamMode==='fp'){
         povCamera.position.lerp(new THREE.Vector3(mp.x,EYE_HEIGHT,mp.z),0.18);
+        // After rotation fix: offense faces -z (rotation PI), defense faces +z (rotation 0)
         const forwardZ=isDef?1:-1;
         let lx,lz;
-        if(Math.abs(fy)>0.05){ lx=mp.x-Math.sin(fy)*20; lz=mp.z-Math.cos(fy)*20; }
-        else { lx=mp.x; lz=mp.z+forwardZ*20; }
+        if(Math.abs(fy)>0.05){
+          // Use actual movement direction — fy is rotation.y
+          // For offense (PI base): sin/cos of fy gives facing direction
+          lx=mp.x+Math.sin(fy)*20;
+          lz=mp.z-Math.cos(fy)*20*(isDef?-1:1);
+        } else {
+          lx=mp.x;
+          lz=mp.z+forwardZ*20;
+        }
         povCamera.lookAt(lx,EYE_HEIGHT-0.12,lz);
       } else if(povCamMode==='broadcast'){
         povCamera.position.lerp(new THREE.Vector3(W3*0.62,13,mp.z+5),0.05);
         povCamera.lookAt(mp.x,1.2,mp.z-6);
       } else {
-        // Sideline — camera slides along sideline tracking player z
-        povCamera.position.lerp(new THREE.Vector3(W3*0.72,2.2,mp.z),0.06);
-        povCamera.lookAt(-W3*0.1,1.4,mp.z);
+        // End zone — fixed position, goal post height, looks straight down the field
+        // Does not follow any player — shows the whole spread
+        const ezZ = -(H3/2) - 7;
+        povCamera.position.set(0, 8, ezZ);
+        povCamera.lookAt(0, 1.5, LOS3 + 4);
       }
     }
 
@@ -3436,7 +3455,7 @@ function stopPOVPlay() {
   if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
   updateScrubUI();
   if (povBallMesh) povBallMesh.visible = false;
-  players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=0;}});
+  players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=Math.PI;}});
   defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;}});
   applyStaticCamera();
 }
@@ -3461,7 +3480,7 @@ init();
   <div class="pov-cam-bar">
     <button class="pov-cam-btn active" id="camBtn-fp"        onclick="setCamMode('fp')">👁 First Person</button>
     <button class="pov-cam-btn"        id="camBtn-broadcast" onclick="setCamMode('broadcast')">📺 Broadcast</button>
-    <button class="pov-cam-btn"        id="camBtn-sideline"  onclick="setCamMode('sideline')">🏟 Sideline</button>
+    <button class="pov-cam-btn"        id="camBtn-sideline"  onclick="setCamMode('sideline')">🏈 End Zone</button>
   </div>
   <div class="pov-tabs" id="povTabs"></div>
 
