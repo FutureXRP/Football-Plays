@@ -46,6 +46,11 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .ball-step-icon{width:20px;text-align:center;font-size:14px}
 .ball-step-del{margin-left:auto;cursor:pointer;color:var(--muted);font-size:13px;line-height:1}
 .ball-step-del:hover{color:#e74c3c}
+.bar-row3{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;padding-top:5px;border-top:1px solid rgba(255,255,255,.08);margin-top:3px}
+.bar-row3.hidden{display:none}
+.play-scrub{flex:1;min-width:80px;max-width:200px;height:4px;cursor:pointer;accent-color:var(--gold)}
+.play-progress-lbl{font:600 10px 'Barlow Condensed';color:var(--muted);min-width:28px;text-align:right;letter-spacing:.5px}
+.speed-lbl{font:600 10px 'Barlow Condensed';letter-spacing:1.5px;color:var(--muted);text-transform:uppercase}
 #povOverlay{display:none;position:fixed;inset:0;z-index:9999;background:#000;flex-direction:column}
 #povOverlay.open{display:flex}
 #povCanvas{display:block;width:100%;flex:1;min-height:0}
@@ -272,15 +277,30 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn" onclick="openPOV()" title="First-person player view">👁 POV</button>
         <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach.</span>
       </div>
-      <!-- Row 2: save / open / export / reset -->
+      <!-- Row 2: save / open / export / reset / paths toggle -->
       <div class="bar-row">
         <button class="btn" onclick="saveToSession()" title="Quick-save to session list">📌 Keep</button>
         <button class="btn green" onclick="savePlay()" title="Download .pdpro save file">💾 Save</button>
         <button class="btn blue" onclick="openPlayFile()" title="Open .pdpro save file">📂 Open</button>
         <button class="btn" onclick="exportPNG()" title="Download PNG image">📸 PNG</button>
         <button class="btn" onclick="exportVideo()" title="Record animation as .webm video (Chrome/Edge)">🎬 Video</button>
+        <button class="btn active" id="btnPaths" onclick="togglePaths()" title="Show/hide route and block lines">👁 Paths</button>
         <button class="btn" onclick="resetAll()" title="Reset routes/blocks, keep formation">↺ Reset</button>
         <button class="btn red" onclick="hardReset()" title="Reset everything including formation">⬛ Full Reset</button>
+      </div>
+      <!-- Row 3: playback controls — slides in during animation -->
+      <div class="bar-row3 hidden" id="playbackRow">
+        <span class="speed-lbl">Speed</span>
+        <button class="btn" style="padding:5px 8px;font-size:11px" onclick="setAnimSpeed(0.25)">¼×</button>
+        <button class="btn" style="padding:5px 8px;font-size:11px" onclick="setAnimSpeed(0.5)">½×</button>
+        <button class="btn active" id="animSpeedBtn1" style="padding:5px 8px;font-size:11px" onclick="setAnimSpeed(1)">1×</button>
+        <button class="btn" style="padding:5px 8px;font-size:11px" onclick="setAnimSpeed(2)">2×</button>
+        <span style="width:1px;height:16px;background:rgba(255,255,255,.12)"></span>
+        <button class="btn" id="animPauseBtn" style="padding:5px 10px;font-size:11px" onclick="toggleAnimPause()">⏸</button>
+        <button class="btn" style="padding:5px 8px;font-size:11px" onclick="stepAnim(-1)" title="Step back 2%">◀</button>
+        <button class="btn" style="padding:5px 8px;font-size:11px" onclick="stepAnim(1)"  title="Step forward 2%">▶</button>
+        <input type="range" class="play-scrub" id="animScrub" min="0" max="100" value="0" oninput="scrubAnim(this.value)">
+        <span class="play-progress-lbl" id="animProgressLbl">0%</span>
       </div>
     </div>
   </main>
@@ -406,6 +426,17 @@ let flipped = false;
 let historyStack = [], redoStack = [];
 let suspendHistory = false;
 let coordinatorSide = 'offense';
+
+// ── 2D playback controls ──────────────────────
+let animPaused   = false;
+let animProgress = 0;      // 0→1
+let animSpeed    = 1.0;
+let animT0       = 0;      // performance.now() offset for pause/resume
+let animTotalMs  = 3400;
+let animRenderFn = null;   // shared render-at-progress function for scrub
+
+// ── Path visibility ───────────────────────────
+let showPaths = true;
 
 // ── Ball script state ──────────────────────────
 let ballScript    = [];
@@ -2389,92 +2420,146 @@ function drawWithPreview(tracks) {
 }
 
 // ─────────────────────────────────────────────
+// 2D PLAYBACK CONTROLS
+// ─────────────────────────────────────────────
+function togglePaths() {
+  showPaths = !showPaths;
+  const btn = document.getElementById('btnPaths');
+  if (btn) btn.classList.toggle('active', showPaths);
+  draw();
+  status(showPaths ? 'Paths visible.' : 'Paths hidden — players only.', 'success');
+}
+
+function setAnimSpeed(s) {
+  animSpeed = s;
+  document.querySelectorAll('.bar-row3 .btn').forEach(b => {
+    const lbl = b.textContent.trim();
+    if (['¼×','½×','1×','2×'].includes(lbl)) b.classList.remove('active');
+  });
+  const map = { 0.25:'¼×', 0.5:'½×', 1:'1×', 2:'2×' };
+  document.querySelectorAll('.bar-row3 .btn').forEach(b => {
+    if (b.textContent.trim() === map[s]) b.classList.add('active');
+  });
+  // Recalculate T0 so speed change doesn't jump position
+  if (anim && !animPaused) {
+    animT0 = performance.now() - (animProgress * animTotalMs / Math.max(animSpeed, 0.01));
+  }
+}
+
+function toggleAnimPause() {
+  if (!anim && animProgress === 0) { runPlay(); return; }
+  animPaused = !animPaused;
+  const btn = document.getElementById('animPauseBtn');
+  if (btn) btn.textContent = animPaused ? '▶' : '⏸';
+  if (!animPaused && anim) {
+    // Resume — recalc T0 from current progress
+    animT0 = performance.now() - (animProgress * animTotalMs / Math.max(animSpeed, 0.01));
+    raf = requestAnimationFrame(animStepRef);
+  }
+}
+
+function stepAnim(dir) {
+  animPaused = true;
+  const btn = document.getElementById('animPauseBtn');
+  if (btn) btn.textContent = '▶';
+  animProgress = Math.max(0, Math.min(1, animProgress + dir * 0.02));
+  updateAnimScrubUI();
+  if (animRenderFn) animRenderFn(animProgress);
+}
+
+function scrubAnim(val) {
+  animPaused = true;
+  const btn = document.getElementById('animPauseBtn');
+  if (btn) btn.textContent = '▶';
+  animProgress = Number(val) / 100;
+  updateAnimScrubUI();
+  if (animRenderFn) animRenderFn(animProgress);
+}
+
+function updateAnimScrubUI() {
+  const scrub = document.getElementById('animScrub');
+  const lbl   = document.getElementById('animProgressLbl');
+  if (scrub) scrub.value = Math.round(animProgress * 100);
+  if (lbl)   lbl.textContent = Math.round(animProgress * 100) + '%';
+}
+
+let animStepRef = null; // reference to rAF step for resume
+
+// ─────────────────────────────────────────────
 // ANIMATION ENGINE — two-phase: motion → snap → play
-// QB runs at 1.4× speed to reach position first
 // ─────────────────────────────────────────────
 function runPlay() {
-  if (anim) return;
+  if (anim && !animPaused) return;
   const allActions = [...motions, ...routes, ...blocks];
-  if (!allActions.length) { status('Add routes, blocking, or a ball path first.', 'error'); return; }
+  if (!allActions.length && !ballScript.length) {
+    status('Add routes, blocking, or a ball script first.', 'error'); return;
+  }
 
   anim = true;
+  animPaused = false;
+  if (animProgress >= 1) animProgress = 0; // restart if finished
+
+  // Show playback row, auto-hide paths
+  const row3 = document.getElementById('playbackRow');
+  if (row3) row3.classList.remove('hidden');
+  const wasShowingPaths = showPaths;
+  showPaths = false; // auto-hide on run
+  const btn = document.getElementById('btnPaths');
+  if (btn) btn.classList.remove('active');
+
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.add('active');
+  const pauseBtn = document.getElementById('animPauseBtn');
+  if (pauseBtn) pauseBtn.textContent = '⏸';
 
-  // ── Phase split ──────────────────────────────
-  // If there are any motion paths, Phase 1 = motion only (0 → MOTION_END)
-  // Phase 2 = routes + blocks + ball (MOTION_END → 1.0)
   const hasMotion = motions.length > 0;
-  const MOTION_END = hasMotion ? 0.28 : 0; // 28% of total time for pre-snap motion
+  const MOTION_END = hasMotion ? 0.28 : 0;
   const PLAY_START = MOTION_END;
-  const TOTAL_MS   = hasMotion ? 4200 : 3400;
+  animTotalMs = hasMotion ? 4200 : 3400;
 
-  let start = performance.now();
-  players.forEach(p  => { p.animX  = p.x;  p.animY  = p.y;  });
-  defenders.forEach(d => { d.animX  = d.x;  d.animY  = d.y;  });
+  players.forEach(p  => { p.animX = p.x; p.animY = p.y; });
+  defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
 
-  // ── Build offensive tracks ───────────────────
-  // Separate motion tracks from play tracks
-  const motionTracks = {}; // pid → pts (pre-snap motion path)
-  const playTracks   = {}; // pid → pts (post-snap play path)
+  // ── Build tracks ─────────────────────────────
+  const motionTracks = {};
+  const playTracks   = {};
 
   players.forEach(p => {
     const pMotions = motions.filter(a => a.pid === p.id);
     const pPlay    = [...routes, ...blocks].filter(a => a.pid === p.id);
-
-    // Motion track: just the motion path
     if (pMotions.length) {
       let pts = [];
       pMotions.forEach(a => {
-        const seg = a.pts && a.pts.length ? a.pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
+        const seg = a.pts?.length ? a.pts : [{ x: p.x, y: p.y }, { x: p.x, y: p.y }];
         pts = pts.concat(pts.length ? seg.slice(1) : seg);
       });
       motionTracks[p.id] = pts;
     }
-
-    // Play track: routes + blocks, starting from end of motion (or original position)
     const startPos = motionTracks[p.id]
       ? motionTracks[p.id][motionTracks[p.id].length - 1]
       : { x: p.x, y: p.y };
-
     if (pPlay.length) {
       let pts = [startPos];
       pPlay.forEach(a => {
-        let seg = a.pts && a.pts.length ? a.pts : [startPos, startPos];
+        let seg = a.pts?.length ? a.pts : [startPos, startPos];
         if (a.type === 'block') {
-          // Preserve ALL intermediate waypoints — only append the settle nudge at the end
           const last = seg[seg.length - 1];
           const prev = seg.length >= 2 ? seg[seg.length - 2] : seg[0];
-          const settle = {
-            x: last.x + (last.x - prev.x) * .15,
-            y: last.y + (last.y - prev.y) * .15
-          };
-          seg = [...seg, settle]; // full path + settle, no points dropped
+          seg = [...seg, { x: last.x+(last.x-prev.x)*.15, y: last.y+(last.y-prev.y)*.15 }];
         }
         pts = pts.concat(seg.slice(1));
       });
       playTracks[p.id] = pts;
     } else {
-      // No play action — hold at motion end position
       playTracks[p.id] = [startPos, startPos];
     }
   });
 
-  // ── Defensive tracks ────────────────────────
-  const defTracks = computeDefenderTracks();
-
-  // ── Throw arc ───────────────────────────────
-  const isThrowPlay = ballPath && ballPath._isThrow;
-  const throwDelay  = isThrowPlay ? (ballPath._throwDelay || 0.58) : 0;
-  let footballPos   = null;
-
-  // ── Per-player speed profiles ────────────────
-  // QB completes his full track at 62% of play phase progress.
-  // Map playRaw 0→0.62 to QB progress 0→1, hold at 1 after.
-  // OL completes blocks early too (they fire off the ball fast).
-  // All others run full 0→1 duration.
-  const QB_COMPLETE_AT  = 0.62; // QB done at 62% of play phase
-  const OL_COMPLETE_AT  = 0.75; // OL fires and settles early
+  const defTracks        = computeDefenderTracks();
+  const isThrowPlay      = ballPath && ballPath._isThrow;
+  const throwDelay       = isThrowPlay ? (ballPath._throwDelay || 0.58) : 0;
+  const QB_COMPLETE_AT   = 0.62;
+  const OL_COMPLETE_AT   = 0.75;
 
   function playerProgress(p, playRaw) {
     const isQB = p.pos === 'QB' || p.label === 'QB';
@@ -2486,70 +2571,49 @@ function runPlay() {
 
   function ptAt(pts, e) {
     if (!pts || pts.length < 2) return pts ? pts[0] : { x: 0, y: 0 };
-    const clamped = Math.max(0, Math.min(1, e));
-    const idx   = Math.min(pts.length - 2, Math.floor(clamped * (pts.length - 1)));
-    const local = (clamped * (pts.length - 1)) - idx;
-    const a = pts[idx], b = pts[idx + 1] || a;
-    return { x: a.x + (b.x - a.x) * local, y: a.y + (b.y - a.y) * local };
+    const cl = Math.max(0, Math.min(1, e));
+    const idx = Math.min(pts.length - 2, Math.floor(cl * (pts.length - 1)));
+    const loc = cl * (pts.length - 1) - idx;
+    const a = pts[idx], b = pts[idx+1] || a;
+    return { x: a.x+(b.x-a.x)*loc, y: a.y+(b.y-a.y)*loc };
   }
 
-  function easeInOut(t) {
-    return t < .5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
-  }
+  function eIO(t) { return t < .5 ? 2*t*t : -1+(4-2*t)*t; }
 
-  function step(t) {
-    const raw  = Math.min((t - start) / TOTAL_MS, 1);
-    const e    = easeInOut(raw);
+  // ── Shared render-at-progress (used by rAF AND scrub/step) ──
+  function renderAt2D(raw) {
+    let footballPos = null;
 
     players.forEach(p => {
       if (hasMotion && raw < MOTION_END) {
-        // ── Phase 1: Motion only ──
-        const motE = easeInOut(raw / MOTION_END);
-        if (motionTracks[p.id]) {
-          const pt = ptAt(motionTracks[p.id], motE);
-          p.animX = pt.x; p.animY = pt.y;
-        }
-        // Everyone else holds position during motion phase
+        const motE = eIO(raw / MOTION_END);
+        if (motionTracks[p.id]) { const pt = ptAt(motionTracks[p.id], motE); p.animX = pt.x; p.animY = pt.y; }
       } else {
-        // ── Phase 2: Play unfolds ──
         const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
-        const pProg   = playerProgress(p, playRaw);
-        const playerE = easeInOut(pProg);
-        const pt = ptAt(playTracks[p.id], playerE);
+        const pt = ptAt(playTracks[p.id], eIO(playerProgress(p, playRaw)));
         p.animX = pt.x; p.animY = pt.y;
       }
     });
 
-    // Defenders only move in play phase
     defenders.forEach(d => {
-      if (hasMotion && raw < MOTION_END) return; // hold during motion
+      if (hasMotion && raw < MOTION_END) return;
       const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
-      const defE    = easeInOut(playRaw);
-      const pts     = defTracks[d.id] || [{ x: d.x, y: d.y }];
-      const pt      = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], defE);
+      const pts = defTracks[d.id] || [{ x: d.x, y: d.y }];
+      const pt = ptAt(pts.length > 1 ? pts : [pts[0], pts[0]], eIO(playRaw));
       d.animX = pt.x; d.animY = pt.y;
     });
 
-    // Throw arc (only in play phase) — legacy for play action
     if (isThrowPlay && !ballScript.length) {
       const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
       if (playRaw >= throwDelay) {
         const throwT = Math.min((playRaw - throwDelay) / (1 - throwDelay), 1);
-        const p0 = ballPath[0], p1 = ballPath[1], p2 = ballPath[2];
-        footballPos = arcPt(p0, p1, p2, throwT);
-      } else {
-        footballPos = null;
+        footballPos = arcPt(ballPath[0], ballPath[1], ballPath[2], throwT);
       }
     }
-
-    // Ball script — drives ball position when script is active
-    if (ballScript.length) {
-      footballPos = getBallPos(raw, hasMotion, MOTION_END) || footballPos;
-    }
+    if (ballScript.length) footballPos = getBallPos(raw, hasMotion, MOTION_END) || footballPos;
 
     drawFrame(footballPos);
 
-    // Show "SET" pause text briefly at snap moment
     if (hasMotion && raw >= MOTION_END - 0.02 && raw <= MOTION_END + 0.02) {
       ctx.fillStyle = 'rgba(255,220,0,0.85)';
       ctx.font = '900 18px Barlow Condensed';
@@ -2558,25 +2622,60 @@ function runPlay() {
       ctx.textAlign = 'left';
     }
 
-    if (raw < 1) raf = requestAnimationFrame(step);
-    else setTimeout(() => stopPlay(true), 500);
+    animProgress = raw;
+    updateAnimScrubUI();
   }
 
+  // Expose for scrub/step
+  animRenderFn = renderAt2D;
+
+  // Start timing from current progress
+  animT0 = performance.now() - (animProgress * animTotalMs / Math.max(animSpeed, 0.01));
+
+  function step(t) {
+    if (!anim) return;
+    if (animPaused) { raf = requestAnimationFrame(step); return; } // idle while paused
+
+    const elapsed = (t - animT0) * animSpeed;
+    const raw = Math.min(elapsed / animTotalMs, 1);
+
+    renderAt2D(raw);
+
+    if (raw >= 1) {
+      setTimeout(() => stopPlay(true), 450);
+      return;
+    }
+    raf = requestAnimationFrame(step);
+  }
+
+  animStepRef = step;
   raf = requestAnimationFrame(step);
-  status(hasMotion ? 'Motion → snap → play animation running...' : 'Running play animation...', 'loading');
+  status(hasMotion ? 'Motion → snap → play...' : 'Running...', 'loading');
 }
 
 function stopPlay(done = false) {
   anim = false;
+  animPaused = false;
+  if (animProgress >= 1) animProgress = 0; // reset for next run
   if (raf) cancelAnimationFrame(raf);
   players.forEach(p => { p.animX = p.x; p.animY = p.y; });
   defenders.forEach(d => { d.animX = d.x; d.animY = d.y; });
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
-  // Stop recording if active — triggers saveVideoFile via onstop
+
+  // Hide row 3, restore paths
+  const row3 = document.getElementById('playbackRow');
+  if (row3) row3.classList.add('hidden');
+  showPaths = true;
+  const btnP = document.getElementById('btnPaths');
+  if (btnP) btnP.classList.add('active');
+  const pauseBtn = document.getElementById('animPauseBtn');
+  if (pauseBtn) pauseBtn.textContent = '⏸';
+  updateAnimScrubUI();
+
   if (isRecording) stopVideoRecording();
   drawFrame(null);
-  if (!isRecording) status(done ? 'Play animation complete.' : 'Stopped.', done ? 'success' : '');
+  if (!isRecording) status(done ? 'Play complete.' : 'Stopped.', done ? 'success' : '');
 }
 
 // ─────────────────────────────────────────────
@@ -2587,48 +2686,46 @@ function draw() { drawFrame(null); }
 function drawFrame(footballPos) {
   ctx.clearRect(0, 0, W, H);
   drawField();
-  drawLines(motions, '#3498db', false);
-  drawLines(routes, '#f5c842', false);
-  drawLines(blocks, '#e74c3c', true);
 
-  // Draw ball script paths on the field (static diagram)
-  drawBallScriptPaths();
+  // Only draw path lines when showPaths is true
+  if (showPaths) {
+    drawLines(motions, '#3498db', false);
+    drawLines(routes, '#f5c842', false);
+    drawLines(blocks, '#e74c3c', true);
+    drawBallScriptPaths();
 
-  // Legacy ballPath (throw arc from play action)
-  if (ballPath && !ballScript.length) {
-    if (ballPath._isThrow) {
-      drawThrowArc(ballPath[0], ballPath[1], ballPath[2], 'rgba(255,180,40,.45)');
-    } else {
-      drawPath(ballPath, '#d8892b', false, 5);
+    // Legacy ballPath
+    if (ballPath && !ballScript.length) {
+      if (ballPath._isThrow) {
+        drawThrowArc(ballPath[0], ballPath[1], ballPath[2], 'rgba(255,180,40,.45)');
+      } else {
+        drawPath(ballPath, '#d8892b', false, 5);
+      }
     }
-  }
 
-  // Draw defender custom paths
-  defRoutes.forEach(dr => drawPath(dr.pts, '#ff9090', true, 2.2));
+    defRoutes.forEach(dr => drawPath(dr.pts, '#ff9090', true, 2.2));
+  }
 
   if (drawing && drawPts.length > 1) {
     const isDefDraw = selected.side === 'defense' && selected.id !== null;
     drawPath(drawPts, isDefDraw ? '#ff9090' : mode === 'block' ? '#e74c3c' : mode === 'motion' ? '#3498db' : '#f5c842', true, 2);
   }
 
-  // Ball draw preview — show line while dragging in ball mode
+  // Ball draw preview — always show even when paths hidden
   if (ballDrawing && ballDrawPts.length > 1) {
-    // Preview color based on distance and endpoint
     const start = ballDrawPts[0];
     const end   = ballDrawPts[ballDrawPts.length - 1];
     const dist  = Math.hypot(end.x - start.x, end.y - start.y);
-    const nearRec = hit(players.filter(p => ['WR','TE'].includes(p.pos)), end.x, end.y, 32);
+    const nearRec  = hit(players.filter(p => ['WR','TE'].includes(p.pos)), end.x, end.y, 32);
     const nearBack = hit(players.filter(p => ['RB','FB'].includes(p.pos)), end.x, end.y, 32);
     const previewColor = nearBack ? '#e67e22' : nearRec ? '#f5c842' : dist > 80 ? '#f5c842' : '#e67e22';
     drawPath(ballDrawPts, previewColor, true, 3);
-    // Small football at cursor end
     drawFootball(end.x, end.y);
   }
 
   drawPeople(defenders, true);
   drawPeople(players, false);
 
-  // Draw football — from script during anim, static at snap position otherwise
   const ballPos = footballPos || (ballScript.length ? getStaticBallPos() : null);
   if (ballPos) drawFootball(ballPos.x, ballPos.y);
 }
@@ -3164,7 +3261,7 @@ document.addEventListener('keydown', e => {
   if (k === 'm') setMode('motion');
   if (k === 'p') autoPlayAction();
   if (k === 'escape') stopPlay();
-  if (k === ' ') { e.preventDefault(); anim ? stopPlay() : runPlay(); }
+  if (k === ' ') { e.preventDefault(); anim ? toggleAnimPause() : runPlay(); }
 });
 
 // ─────────────────────────────────────────────
