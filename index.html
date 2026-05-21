@@ -34,7 +34,18 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .btn.red{background:var(--red);border-color:#9b2d25;color:#fff}
 .btn.blue{background:#1a4f7c;border-color:#2a6fac;color:#fff}
 .btn.full{width:100%;text-align:center}
-/* ── POV overlay ── */
+/* ── Ball script popup ── */
+#ballPopup{display:none;position:absolute;z-index:500;background:#1a1a1a;border:1px solid var(--gold);border-radius:7px;padding:6px;box-shadow:0 4px 24px rgba(0,0,0,.7);min-width:160px}
+#ballPopup.open{display:block}
+.ball-pop-title{font:700 10px 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:var(--muted);padding:4px 6px 6px;border-bottom:1px solid var(--border);margin-bottom:5px}
+.ball-pop-btn{display:flex;align-items:center;gap:8px;width:100%;padding:7px 9px;border:none;background:none;color:var(--text);font:600 13px 'Barlow Condensed';letter-spacing:.5px;cursor:pointer;border-radius:4px;transition:.1s;text-align:left}
+.ball-pop-btn:hover{background:rgba(200,168,75,.15);color:var(--gold)}
+.ball-pop-btn .pop-icon{font-size:16px;width:22px;text-align:center}
+/* Ball script step list in left panel */
+.ball-step{display:flex;align-items:center;gap:7px;padding:5px 7px;background:var(--panel2);border:1px solid var(--border);border-radius:4px;margin-bottom:4px;font-size:11px}
+.ball-step-icon{width:20px;text-align:center;font-size:14px}
+.ball-step-del{margin-left:auto;cursor:pointer;color:var(--muted);font-size:13px;line-height:1}
+.ball-step-del:hover{color:#e74c3c}
 #povOverlay{display:none;position:fixed;inset:0;z-index:9999;background:#000;flex-direction:column}
 #povOverlay.open{display:flex}
 #povCanvas{display:block;width:100%;flex:1;min-height:0}
@@ -147,10 +158,19 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn active" id="mode-select" onclick="setMode('select')" title="Select/move players (S)">🖱</button>
         <button class="btn" id="mode-route" onclick="setMode('route')" title="Draw route (R)">🟡</button>
         <button class="btn" id="mode-block" onclick="setMode('block')" title="Draw block (B)">🟥</button>
-        <button class="btn" id="mode-ball" onclick="setMode('ball')" title="Set RB aiming point">🏈</button>
+        <button class="btn" id="mode-ball" onclick="setMode('ball')" title="Ball script mode — click players to build snap/handoff/pass sequence">🏈</button>
         <button class="btn" id="mode-motion" onclick="setMode('motion')" title="Draw pre-snap motion (M)">➡</button>
       </div>
       <p class="hint" style="margin-top:7px">Select moves both offense and defense. <span class="kbd">R</span> route · <span class="kbd">B</span> block · <span class="kbd">M</span> motion · <span class="kbd">S</span> select</p>
+    </div>
+
+    <div class="section" data-coach="offense" id="ballScriptSection">
+      <div class="label">🏈 Ball Script <span class="badge" id="ballScriptBadge">0 steps</span></div>
+      <div id="ballScriptList"><p class="hint">Click 🏈 mode then click players to build the ball sequence. Snap → Handoff/Pass → Carry/Catch.</p></div>
+      <div class="grid2" style="margin-top:7px">
+        <button class="btn full" onclick="autoSnapScript()">⚡ Auto Snap</button>
+        <button class="btn full red" onclick="clearBallScript()">✕ Clear</button>
+      </div>
     </div>
 
     <div class="section" data-coach="offense">
@@ -228,6 +248,14 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     <div class="field-holder">
       <canvas id="field" width="760" height="540"></canvas>
       <div class="anim-progress" id="animProgress">⏵ RUNNING</div>
+      <!-- Ball transfer popup -->
+      <div id="ballPopup">
+        <div class="ball-pop-title">Ball Transfer</div>
+        <button class="ball-pop-btn" onclick="commitBallTransfer('run')"><span class="pop-icon">🏃</span>Run / Handoff</button>
+        <button class="ball-pop-btn" onclick="commitBallTransfer('pass')"><span class="pop-icon">🎯</span>Pass / Throw</button>
+        <button class="ball-pop-btn" onclick="commitBallTransfer('lateral')"><span class="pop-icon">🔄</span>Lateral / Pitch</button>
+        <button class="ball-pop-btn" onclick="closeBallPopup()" style="color:var(--muted);font-size:11px;padding:4px 9px">✕ Cancel</button>
+      </div>
     </div>
     <div class="bar">
       <!-- Row 1: play name + primary playback + coach -->
@@ -371,6 +399,12 @@ let flipped = false;
 let historyStack = [], redoStack = [];
 let suspendHistory = false;
 let coordinatorSide = 'offense';
+
+// ── Ball script state ──────────────────────────
+// Each step: { phase, fromId, toId, transferPt, type }
+// phase: 'snap' | 'carry' | 'pass' | 'handoff' | 'lateral'
+let ballScript = [];
+let ballScriptPending = null; // pending transfer waiting for popup choice
 
 const PLAYER_RADIUS = 15;
 const DEF_RADIUS = 12;
@@ -592,12 +626,12 @@ function loadFormation(f) {
   currentFormation = f;
   flipped = false;
   players = normalizeSpacing(formations[f].map(mkPlayer));
-  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = [];
+  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = []; ballScript = [];
   selected = { side: 'offense', id: null };
   document.querySelectorAll('#formationBtns .btn').forEach(b =>
     b.classList.toggle('active', b.textContent.trim() === f));
   updateFlipButton();
-  buildList(); renderEditor(); draw();
+  buildList(); renderEditor(); renderBallScript(); draw();
   status('Loaded ' + f + '.', 'success');
 }
 
@@ -706,7 +740,7 @@ function loadCustomFormation(name) {
 function cloneState() {
   return JSON.parse(JSON.stringify({
     currentFormation, flipped, players, defenders, routes, blocks, motions, defRoutes,
-    ballPath, selected, playName: document.getElementById('playName')?.value || ''
+    ballPath, ballScript, selected, playName: document.getElementById('playName')?.value || ''
   }));
 }
 
@@ -718,10 +752,11 @@ function applyState(st) {
   routes = st.routes || []; blocks = st.blocks || [];
   motions = st.motions || []; ballPath = st.ballPath || null;
   defRoutes = st.defRoutes || [];
+  ballScript   = st.ballScript   || [];
   selected = st.selected || { side: 'offense', id: null };
   if (document.getElementById('playName')) document.getElementById('playName').value = st.playName || '';
   updateFlipButton();
-  buildList(); renderEditor(); draw();
+  buildList(); renderEditor(); renderBallScript(); draw();
   suspendHistory = false;
 }
 
@@ -1681,9 +1716,254 @@ function clearSelectedAssignment() {
   buildList(); draw();
 }
 
-// ─────────────────────────────────────────────
-// MODE & INPUT HANDLING
-// ─────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════
+// BALL SCRIPT ENGINE
+// ═══════════════════════════════════════════════════════
+
+function showBallPopup(canvasX, canvasY) {
+  const popup  = document.getElementById('ballPopup');
+  const holder = document.querySelector('.field-holder');
+  const rect   = holder.getBoundingClientRect();
+  const canv   = canvas.getBoundingClientRect();
+
+  // Convert canvas coords to field-holder relative px
+  const scaleX = canv.width  / W;
+  const scaleY = canv.height / H;
+  const px = (canv.left - rect.left) + canvasX * scaleX;
+  const py = (canv.top  - rect.top)  + canvasY * scaleY;
+
+  popup.style.left = Math.min(px + 10, rect.width  - 175) + 'px';
+  popup.style.top  = Math.min(py + 10, rect.height - 165) + 'px';
+  popup.classList.add('open');
+}
+
+function closeBallPopup() {
+  document.getElementById('ballPopup').classList.remove('open');
+  ballScriptPending = null;
+}
+
+function commitBallTransfer(type) {
+  closeBallPopup();
+  if (!ballScriptPending) return;
+
+  pushHistory('Ball transfer');
+  const { fromId, toId, toPos } = ballScriptPending;
+  ballScriptPending = null;
+
+  const fromPlayer = players.find(p => p.id === fromId);
+  const toPlayer   = players.find(p => p.id === toId);
+  if (!fromPlayer || !toPlayer) return;
+
+  // Remove the current carry step (we're replacing it)
+  const lastIdx = ballScript.length - 1;
+  if (ballScript[lastIdx]?.phase === 'carry') ballScript.pop();
+
+  if (type === 'run') {
+    // Handoff — ball transfers at mesh point between the two players
+    const meshX = (fromPlayer.x + toPlayer.x) / 2;
+    const meshY = (fromPlayer.y + toPlayer.y) / 2;
+    ballScript.push({ phase: 'handoff', fromId, toId, meshPt: { x: meshX, y: meshY } });
+    // Default carry target = toPlayer current position (user can click field to adjust)
+    ballScript.push({ phase: 'carry', carrierId: toId, target: { x: toPos.x - 0, y: toPos.y - 80 } });
+    toPlayer.assignment = 'Ball carrier — click field in 🏈 mode to set carry target';
+    status('Handoff added. Click empty field to set carry target.', 'success');
+
+  } else if (type === 'pass') {
+    // Pass — ball arcs from QB release to receiver
+    const dist  = Math.hypot(toPos.x - fromPlayer.x, toPos.y - fromPlayer.y);
+    const arcH  = Math.max(20, dist * 0.22); // arc height scales with distance
+    const midX  = (fromPlayer.x + toPos.x) / 2;
+    const midY  = Math.min(fromPlayer.y, toPos.y) - arcH;
+    ballScript.push({ phase: 'pass', fromId, toId,
+      releasePt: { x: fromPlayer.x, y: fromPlayer.y },
+      arcPeak:   { x: midX, y: midY },
+      catchPt:   { x: toPos.x, y: toPos.y } });
+    // YAC carry after catch
+    ballScript.push({ phase: 'carry', carrierId: toId, target: { x: toPos.x, y: toPos.y - 50 } });
+    toPlayer.assignment = 'Pass target — catch and run';
+    status('Pass added. Click field in 🏈 mode to set YAC target.', 'success');
+
+  } else {
+    // Lateral / Pitch — flat arc slightly downward/sideways
+    const dx   = toPos.x - fromPlayer.x;
+    const dy   = toPos.y - fromPlayer.y;
+    const midX = fromPlayer.x + dx * 0.5;
+    const midY = fromPlayer.y + dy * 0.5 + 8; // slight downward arc for lateral
+    ballScript.push({ phase: 'lateral', fromId, toId,
+      releasePt: { x: fromPlayer.x, y: fromPlayer.y },
+      arcPeak:   { x: midX, y: midY },
+      catchPt:   { x: toPos.x, y: toPos.y } });
+    ballScript.push({ phase: 'carry', carrierId: toId, target: { x: toPos.x, y: toPos.y - 70 } });
+    toPlayer.assignment = 'Lateral receiver — carry after pitch';
+    status('Lateral added.', 'success');
+  }
+
+  buildList(); renderBallScript(); draw();
+}
+
+function renderBallScript() {
+  const el    = document.getElementById('ballScriptList');
+  const badge = document.getElementById('ballScriptBadge');
+  if (!el) return;
+  if (!ballScript.length) {
+    el.innerHTML = '<p class="hint">Click 🏈 mode then click players to build the ball sequence.</p>';
+    if (badge) badge.textContent = '0 steps';
+    return;
+  }
+  if (badge) badge.textContent = ballScript.length + ' step' + (ballScript.length !== 1 ? 's' : '');
+
+  const icons = { snap:'🏈', carry:'🏃', handoff:'🤝', pass:'🎯', lateral:'🔄', catch:'🙌' };
+  el.innerHTML = ballScript.map((step, i) => {
+    const fromP = players.find(p => p.id === (step.fromId || step.carrierId));
+    const toP   = players.find(p => p.id === step.toId);
+    const label = step.phase === 'snap'    ? `Snap: ${fromP?.label||'C'} → ${toP?.label||'QB'}` :
+                  step.phase === 'carry'   ? `Carry: ${fromP?.label||'?'} → target` :
+                  step.phase === 'handoff' ? `Handoff: ${fromP?.label||'?'} → ${toP?.label||'?'}` :
+                  step.phase === 'pass'    ? `Pass: ${fromP?.label||'QB'} → ${toP?.label||'?'}` :
+                  step.phase === 'lateral' ? `Lateral: ${fromP?.label||'?'} → ${toP?.label||'?'}` : step.phase;
+    return `<div class="ball-step">
+      <span class="ball-step-icon">${icons[step.phase]||'🏈'}</span>
+      <span>${label}</span>
+      <span class="ball-step-del" onclick="removeBallStep(${i})">✕</span>
+    </div>`;
+  }).join('');
+}
+
+function removeBallStep(i) {
+  pushHistory('Remove ball step');
+  ballScript.splice(i, 1);
+  renderBallScript(); draw();
+}
+
+function clearBallScript() {
+  pushHistory('Clear ball script');
+  ballScript = [];
+  renderBallScript(); draw();
+  status('Ball script cleared.', 'success');
+}
+
+// Auto-snap: detect Center and QB and build snap automatically
+function autoSnapScript() {
+  const center = players.find(p => p.label === 'C') || players.find(p => p.pos === 'OL');
+  const qb     = players.find(p => p.pos === 'QB');
+  if (!center || !qb) { status('Need a Center (C) and QB on the field.', 'error'); return; }
+  pushHistory('Auto snap');
+  // Remove any existing snap steps
+  ballScript = ballScript.filter(s => s.phase !== 'snap');
+  ballScript.unshift({ phase: 'snap', fromId: center.id, toId: qb.id });
+  // Ensure QB has a carry step after snap if none exists
+  if (!ballScript.find(s => s.carrierId === qb.id)) {
+    ballScript.push({ phase: 'carry', carrierId: qb.id, target: { x: qb.x, y: qb.y + 60 } });
+  }
+  renderBallScript(); draw();
+  status('Auto snap: C → QB. Click 🏈 then click a player to add handoff or pass.', 'success');
+}
+
+// ── Compute ball position at normalized time t (0→1) ──
+// Returns {x, y} — the ball's canvas position at animation progress t
+function getBallPos(t, hasMotion, MEND) {
+  if (!ballScript.length) return null;
+
+  // Normalize t to play phase only
+  const playT = hasMotion ? Math.max(0, (t - MEND) / (1 - MEND)) : t;
+  if (playT < 0) return null;
+
+  // Assign time windows to each step
+  // snap = 0→0.10, transfers each get a small window, carries fill the rest
+  const steps = ballScript;
+  const n     = steps.length;
+
+  // Compute cumulative timing
+  // snap: 0.10 of play time, each transfer: 0.08, carries: divided among remaining
+  const snapTime    = 0.10;
+  const transferTime= 0.08;
+  const nTransfers  = steps.filter(s => ['handoff','pass','lateral'].includes(s.phase)).length;
+  const nCarries    = steps.filter(s => s.phase === 'carry').length;
+  const carryTime   = Math.max(0.01, (1 - snapTime - nTransfers * transferTime) / Math.max(nCarries, 1));
+
+  let cursor = 0;
+  for (const step of steps) {
+    let duration = step.phase === 'snap'    ? snapTime     :
+                   step.phase === 'carry'   ? carryTime    :
+                   transferTime;
+
+    const stepStart = cursor;
+    const stepEnd   = cursor + duration;
+    cursor = stepEnd;
+
+    if (playT <= stepEnd || step === steps[steps.length - 1]) {
+      const localT = duration > 0 ? Math.max(0, Math.min(1, (playT - stepStart) / duration)) : 1;
+      return getBallPosForStep(step, localT);
+    }
+  }
+  return null;
+}
+
+function getBallPosForStep(step, t) {
+  const eIO = x => x < .5 ? 2*x*x : -1+(4-2*x)*x;
+  const e   = eIO(t);
+
+  if (step.phase === 'snap') {
+    const from = players.find(p => p.id === step.fromId);
+    const to   = players.find(p => p.id === step.toId);
+    if (!from || !to) return null;
+    // Under-center or shotgun snap arc
+    const fromPos = { x: anim ? from.animX : from.x, y: anim ? from.animY : from.y };
+    const toPos   = { x: anim ? to.animX   : to.x,   y: anim ? to.animY   : to.y   };
+    const dist    = Math.hypot(toPos.x - fromPos.x, toPos.y - fromPos.y);
+    const isGun   = dist > 50; // shotgun if QB is far back
+    const arcH    = isGun ? -dist * 0.12 : -8; // small arc for shotgun, tiny for under-center
+    const midX    = (fromPos.x + toPos.x) / 2;
+    const midY    = Math.min(fromPos.y, toPos.y) + arcH;
+    return quadBezier(fromPos, { x: midX, y: midY }, toPos, e);
+
+  } else if (step.phase === 'carry') {
+    const carrier = players.find(p => p.id === step.carrierId);
+    if (!carrier) return null;
+    const cp = { x: anim ? carrier.animX : carrier.x, y: anim ? carrier.animY : carrier.y };
+    if (!step.target) return cp;
+    // Ball is glued to carrier — lerp from current pos to target
+    return {
+      x: cp.x + (step.target.x - cp.x) * e * 0,  // ball stays on carrier
+      y: cp.y + (step.target.y - cp.y) * e * 0
+    };
+
+  } else if (step.phase === 'handoff') {
+    const from = players.find(p => p.id === step.fromId);
+    const to   = players.find(p => p.id === step.toId);
+    if (!from || !to) return null;
+    const fp = { x: anim ? from.animX : from.x, y: anim ? from.animY : from.y };
+    const tp = { x: anim ? to.animX   : to.x,   y: anim ? to.animY   : to.y   };
+    const mesh = step.meshPt || { x: (fp.x+tp.x)/2, y: (fp.y+tp.y)/2 };
+    // Short arc from QB hands to RB hands through mesh
+    return quadBezier(fp, mesh, tp, e);
+
+  } else if (step.phase === 'pass' || step.phase === 'lateral') {
+    const from = players.find(p => p.id === step.fromId);
+    if (!from) return null;
+    const fp = { x: anim ? from.animX : from.x, y: anim ? from.animY : from.y };
+    const release = step.releasePt || fp;
+    const peak    = step.arcPeak   || { x: (fp.x + step.catchPt.x)/2, y: fp.y - 60 };
+    const catchPt = step.catchPt   || fp;
+    return quadBezier(release, peak, catchPt, e);
+  }
+
+  return null;
+}
+
+// Ball stays on carrier between transfers — get carrier's anim position
+function getBallOnCarrier(carrierId) {
+  const carrier = players.find(p => p.id === carrierId);
+  if (!carrier) return null;
+  return { x: anim ? carrier.animX : carrier.x, y: anim ? carrier.animY : carrier.y };
+}
+
+function quadBezier(p0, p1, p2, t) {
+  const u = 1 - t;
+  return { x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x, y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y };
+}
+
+// ═══════════════════════════════════════════════════════
 function setMode(m) {
   mode = m;
   document.querySelectorAll('[id^=mode-]').forEach(b => b.classList.remove('active'));
@@ -1715,16 +1995,53 @@ canvas.onmousedown = e => {
   }
 
   if (mode === 'ball') {
-    const rb = players.find(p => p.pos === 'RB' || p.label === 'RB' || p.label === 'TB')
-              || players.find(p => p.pos === 'QB');
-    if (!rb) { status('Add or select a RB first.', 'error'); return; }
-    pushHistory('Set RB target');
-    selected = { side: 'offense', id: rb.id };
-    ballPath = [{ x: rb.x, y: rb.y }, m];
-    routes = routes.filter(r => !(r.pid === rb.id && r.kind === 'carry'));
-    routes.push({ pid: rb.id, type: 'run', kind: 'carry', pts: ballPath, auto: true });
-    rb.assignment = 'Ball carrier target set';
-    buildList();
+    // Ball script mode — click a player to add them to the ball sequence
+    const clickedPlayer = off;
+    if (!clickedPlayer) {
+      // Clicked empty field — if last step is a carry, update its target point
+      const lastStep = ballScript[ballScript.length - 1];
+      if (lastStep && lastStep.phase === 'carry') {
+        pushHistory('Move carry target');
+        lastStep.target = { x: m.x, y: m.y };
+        renderBallScript(); draw();
+        status('Carry target updated.', 'success');
+      } else {
+        status('Click a player to add them to the ball script.', '');
+      }
+      return;
+    }
+
+    // First click — must be Center (snap) or we auto-add snap
+    if (ballScript.length === 0) {
+      const center = players.find(p => p.label === 'C') || players.find(p => p.pos === 'OL');
+      const qb     = players.find(p => p.pos === 'QB');
+      if (!center || !qb) { status('Need a Center and QB for the snap.', 'error'); return; }
+      pushHistory('Add snap');
+      ballScript.push({ phase: 'snap', fromId: center.id, toId: qb.id });
+      ballScript.push({ phase: 'carry', carrierId: qb.id, target: { x: qb.x, y: qb.y } });
+      renderBallScript(); draw();
+      status('Snap added: C → QB. Now click a player to hand off or throw.', 'success');
+      return;
+    }
+
+    // Subsequent clicks — show popup to choose transfer type
+    const lastStep = ballScript[ballScript.length - 1];
+    if (!lastStep) return;
+    const currentCarrierId = lastStep.carrierId || lastStep.toId;
+    const carrier = players.find(p => p.id === currentCarrierId);
+    if (!carrier) return;
+    if (clickedPlayer.id === currentCarrierId) {
+      status('Already carrying — click a different player to transfer.', '');
+      return;
+    }
+
+    // Store pending transfer and show popup
+    ballScriptPending = {
+      fromId: currentCarrierId,
+      toId:   clickedPlayer.id,
+      toPos:  { x: clickedPlayer.x, y: clickedPlayer.y }
+    };
+    showBallPopup(m.x, m.y);
     return;
   }
 
@@ -2131,8 +2448,8 @@ function runPlay() {
       d.animX = pt.x; d.animY = pt.y;
     });
 
-    // Throw arc (only in play phase)
-    if (isThrowPlay) {
+    // Throw arc (only in play phase) — legacy for play action
+    if (isThrowPlay && !ballScript.length) {
       const playRaw = hasMotion ? (raw - PLAY_START) / (1 - PLAY_START) : raw;
       if (playRaw >= throwDelay) {
         const throwT = Math.min((playRaw - throwDelay) / (1 - throwDelay), 1);
@@ -2141,6 +2458,11 @@ function runPlay() {
       } else {
         footballPos = null;
       }
+    }
+
+    // Ball script — drives ball position when script is active
+    if (ballScript.length) {
+      footballPos = getBallPos(raw, hasMotion, MOTION_END) || footballPos;
     }
 
     drawFrame(footballPos);
@@ -2187,10 +2509,12 @@ function drawFrame(footballPos) {
   drawLines(routes, '#f5c842', false);
   drawLines(blocks, '#e74c3c', true);
 
-  // Draw the ballPath: for throw plays show a dashed arc; for run plays show the orange path
-  if (ballPath) {
+  // Draw ball script paths on the field (static diagram)
+  drawBallScriptPaths();
+
+  // Legacy ballPath (throw arc from play action)
+  if (ballPath && !ballScript.length) {
     if (ballPath._isThrow) {
-      // Draw dashed throw arc line (static, shows intended trajectory)
       drawThrowArc(ballPath[0], ballPath[1], ballPath[2], 'rgba(255,180,40,.45)');
     } else {
       drawPath(ballPath, '#d8892b', false, 5);
@@ -2208,10 +2532,59 @@ function drawFrame(footballPos) {
   drawPeople(defenders, true);
   drawPeople(players, false);
 
-  // Draw football in flight (on top of everything)
-  if (footballPos) {
-    drawFootball(footballPos.x, footballPos.y);
+  // Draw football — from script during anim, static at snap position otherwise
+  const ballPos = footballPos || (ballScript.length ? getStaticBallPos() : null);
+  if (ballPos) drawFootball(ballPos.x, ballPos.y);
+}
+
+// Draw the ball script paths as colored lines on the static diagram
+function drawBallScriptPaths() {
+  for (const step of ballScript) {
+    if (step.phase === 'snap') {
+      const from = players.find(p => p.id === step.fromId);
+      const to   = players.find(p => p.id === step.toId);
+      if (from && to) {
+        // White dashed snap line
+        drawPath([{ x: from.x, y: from.y }, { x: to.x, y: to.y }], 'rgba(255,255,255,0.6)', true, 2);
+      }
+    } else if (step.phase === 'carry') {
+      const carrier = players.find(p => p.id === step.carrierId);
+      if (carrier && step.target) {
+        // Orange solid carry line
+        drawPath([{ x: carrier.x, y: carrier.y }, step.target], '#e67e22', false, 4);
+        // Football icon at target
+        drawFootball(step.target.x, step.target.y);
+      }
+    } else if (step.phase === 'handoff') {
+      const from = players.find(p => p.id === step.fromId);
+      const to   = players.find(p => p.id === step.toId);
+      if (from && to) {
+        // Orange dashed handoff arc
+        const mesh = step.meshPt || { x: (from.x+to.x)/2, y: (from.y+to.y)/2 };
+        drawThrowArc({ x: from.x, y: from.y }, mesh, { x: to.x, y: to.y }, 'rgba(230,126,34,0.7)');
+      }
+    } else if (step.phase === 'pass') {
+      // Gold dashed pass arc
+      if (step.releasePt && step.arcPeak && step.catchPt) {
+        drawThrowArc(step.releasePt, step.arcPeak, step.catchPt, 'rgba(245,200,66,0.8)');
+      }
+    } else if (step.phase === 'lateral') {
+      // Blue dashed lateral arc
+      if (step.releasePt && step.arcPeak && step.catchPt) {
+        drawThrowArc(step.releasePt, step.arcPeak, step.catchPt, 'rgba(52,152,219,0.7)');
+      }
+    }
   }
+}
+
+function getStaticBallPos() {
+  // Show ball at snap position (on center) when not animating
+  const center = players.find(p => p.label === 'C');
+  if (ballScript.length && ballScript[0]?.phase === 'snap') {
+    const fromP = players.find(p => p.id === ballScript[0].fromId);
+    return fromP ? { x: fromP.x, y: fromP.y } : null;
+  }
+  return center ? { x: center.x, y: center.y } : null;
 }
 
 function drawThrowArc(p0, p1, p2, color) {
@@ -2400,7 +2773,7 @@ function serialize() {
     name: document.getElementById('playName').value || 'Untitled Play',
     formation: currentFormation, flipped,
     players, defenders, routes, blocks, motions, defRoutes,
-    ballPath: bp,
+    ballPath: bp, ballScript,
     date: Date.now()
   };
 }
@@ -2415,6 +2788,7 @@ function deserialize(data) {
   defRoutes    = data.defRoutes    || [];
   currentFormation = data.formation || 'Shotgun';
   flipped      = data.flipped      || false;
+  ballScript   = data.ballScript   || [];
 
   // Restore ballPath with throw metadata
   if (data.ballPath) {
@@ -2553,7 +2927,7 @@ function resetAll() {
 function hardReset() {
   if (!confirm('Reset everything? This will clear all routes, blocks, motions, formation, and defense.')) return;
   historyStack = []; redoStack = [];
-  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = [];
+  routes = []; blocks = []; motions = []; ballPath = null; defRoutes = []; ballScript = [];
   selected = { side: 'offense', id: null };
   document.getElementById('playName').value = '';
   loadFormation('Shotgun');
@@ -2683,6 +3057,7 @@ function init() {
   refreshSaved();
   refreshCustomFormations();
   updateFlipButton();
+  renderBallScript();
   draw();
   suspendHistory = false;
   historyStack = []; redoStack = [];
