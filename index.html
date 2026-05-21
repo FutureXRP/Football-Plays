@@ -34,6 +34,28 @@ h1{font:900 24px/1 'Barlow Condensed';letter-spacing:2px;text-transform:uppercas
 .btn.red{background:var(--red);border-color:#9b2d25;color:#fff}
 .btn.blue{background:#1a4f7c;border-color:#2a6fac;color:#fff}
 .btn.full{width:100%;text-align:center}
+/* ── POV overlay ── */
+#povOverlay{display:none;position:fixed;inset:0;z-index:9999;background:#000;flex-direction:column}
+#povOverlay.open{display:flex}
+#povCanvas{display:block;width:100%;flex:1;min-height:0}
+.pov-hud{position:absolute;bottom:0;left:0;right:0;padding:12px 18px 14px;background:linear-gradient(0deg,rgba(0,0,0,.85) 0%,transparent 100%);display:flex;align-items:flex-end;justify-content:space-between;pointer-events:none;z-index:10}
+.pov-hud-block{display:flex;flex-direction:column;gap:2px}
+.pov-hud-label{font:600 10px 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.55)}
+.pov-hud-val{font:700 16px 'Barlow Condensed';letter-spacing:1px;color:#fff}
+.pov-top{position:absolute;top:0;left:0;right:0;display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:linear-gradient(180deg,rgba(0,0,0,.8) 0%,transparent 100%);z-index:10;pointer-events:none}
+.pov-top-left{display:flex;align-items:center;gap:10px;pointer-events:all}
+.pov-player-badge{font:700 13px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;color:#fff;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.2);padding:4px 12px;border-radius:4px}
+.pov-assignment{font:500 11px 'Barlow Condensed';letter-spacing:1px;color:rgba(255,220,80,.9);background:rgba(0,0,0,.45);padding:3px 10px;border-radius:4px}
+.pov-close{pointer-events:all;background:rgba(180,30,30,.8);border:none;color:#fff;font:700 13px 'Barlow Condensed';padding:6px 14px;border-radius:4px;cursor:pointer;letter-spacing:1px}
+.pov-tabs{position:absolute;top:52px;left:50%;transform:translateX(-50%);display:flex;gap:5px;z-index:10;flex-wrap:wrap;justify-content:center}
+.pov-tab{font:700 11px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;padding:4px 10px;border-radius:4px;cursor:pointer;border:1px solid rgba(255,255,255,.2);background:rgba(0,0,0,.55);color:rgba(255,255,255,.7);transition:.12s}
+.pov-tab:hover{border-color:rgba(200,168,75,.7);color:#c8a84b}
+.pov-tab.active{background:rgba(200,168,75,.22);border-color:#c8a84b;color:#c8a84b}
+.pov-run-btn{pointer-events:all;background:rgba(26,124,58,.9);border:1px solid #2a9c4a;color:#fff;font:700 12px 'Barlow Condensed';padding:6px 14px;border-radius:4px;cursor:pointer;letter-spacing:1px}
+.pov-info{position:absolute;bottom:72px;left:14px;right:14px;display:flex;gap:8px;z-index:10;pointer-events:none}
+.pov-info-chip{background:rgba(0,0,0,.65);border:1px solid rgba(255,255,255,.1);border-radius:5px;padding:6px 10px;flex:1}
+.pov-info-chip .lbl{font:600 9px 'Barlow Condensed';letter-spacing:2px;text-transform:uppercase;color:rgba(255,255,255,.4)}
+.pov-info-chip .val{font:600 11px 'Barlow Condensed';color:#eee;margin-top:2px}
 .input,.select,.textarea{width:100%;background:var(--panel2);border:1px solid var(--border);color:var(--text);border-radius:5px;padding:8px 9px;outline:none;font-size:13px}
 .input:focus,.select:focus,.textarea:focus{border-color:var(--gold)}
 .textarea{min-height:88px;resize:vertical;line-height:1.45}
@@ -206,6 +228,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
         <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
+        <button class="btn" onclick="openPOV()" title="First-person player view">👁 POV</button>
         <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach.</span>
       </div>
       <!-- Row 2: save / open / export / reset -->
@@ -2654,7 +2677,601 @@ function init() {
   historyStack = []; redoStack = [];
 }
 
+
+// ═══════════════════════════════════════════════════════
+// POV FIRST-PERSON VIEW ENGINE — Three.js r128
+// ═══════════════════════════════════════════════════════
+let povScene, povCamera, povRenderer, povClock;
+let povPlayerMeshes = [];  // {id, mesh, labelSprite, side}
+let povDefMeshes    = [];
+let povRoutelines   = [];
+let povBallMesh     = null;
+let povSelectedId   = null;
+let povSelectedSide = 'offense';
+let povAnimating    = false;
+let povRaf          = null;
+let povTracks       = {};
+let povDefTracks    = {};
+let povThrowArc     = null;
+
+// Canvas → Three.js world units  (760px → 76 units, 540px → 54 units)
+const PX  = 1 / 10;
+const W3  = W * PX;   // 76
+const H3  = H * PX;   // 54
+const LOS3 = LOS * PX;
+
+function canvasToWorld(cx, cy) {
+  return { x: (cx - W / 2) * PX, z: (cy - H / 2) * PX };
+}
+
+function hexColor(cssHex) {
+  return parseInt(cssHex.replace('#', ''), 16);
+}
+
+// ── Texture-less sprite label (billboard) ─────────────
+function makeLabel(text, color) {
+  const canvas2 = document.createElement('canvas');
+  canvas2.width = 128; canvas2.height = 64;
+  const c = canvas2.getContext('2d');
+  c.fillStyle = color || '#ffffff';
+  c.font = 'bold 28px Barlow Condensed, monospace';
+  c.textAlign = 'center'; c.textBaseline = 'middle';
+  c.fillText(text.slice(0, 4), 64, 32);
+  const tex = new THREE.CanvasTexture(canvas2);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const sprite = new THREE.Sprite(mat);
+  sprite.scale.set(1.2, 0.6, 1);
+  return sprite;
+}
+
+// ── Route / block line in 3D ──────────────────────────
+function makeLine3D(pts2d, color, height = 0.05) {
+  if (!pts2d || pts2d.length < 2) return null;
+  const points = pts2d.map(p => {
+    const w = canvasToWorld(p.x, p.y);
+    return new THREE.Vector3(w.x, height, w.z);
+  });
+  const geo = new THREE.BufferGeometry().setFromPoints(points);
+  const mat = new THREE.LineBasicMaterial({ color, linewidth: 2 });
+  return new THREE.Line(geo, mat);
+}
+
+function initPOV() {
+  if (povScene) return; // already initialized
+
+  const c = document.getElementById('povCanvas');
+  povRenderer = new THREE.WebGLRenderer({ canvas: c, antialias: true });
+  povRenderer.setPixelRatio(window.devicePixelRatio);
+  povRenderer.shadowMap.enabled = true;
+  povRenderer.setClearColor(0x000000);
+
+  povScene = new THREE.Scene();
+  povScene.fog = new THREE.Fog(0x1a4a1a, 40, 120);
+
+  povCamera = new THREE.PerspectiveCamera(70, 1, 0.1, 300);
+
+  povClock = new THREE.Clock();
+
+  // ── Lighting ──────────────────────────────────────
+  povScene.add(new THREE.AmbientLight(0xffffff, 0.65));
+  const sun = new THREE.DirectionalLight(0xfff5cc, 1.1);
+  sun.position.set(10, 30, -10);
+  sun.castShadow = true;
+  povScene.add(sun);
+
+  // ── Field plane ───────────────────────────────────
+  const fieldGeo = new THREE.PlaneGeometry(W3 * 1.5, H3 * 2.2);
+  const fieldMat = new THREE.MeshLambertMaterial({ color: 0x2a6a2a });
+  const fieldMesh = new THREE.Mesh(fieldGeo, fieldMat);
+  fieldMesh.rotation.x = -Math.PI / 2;
+  fieldMesh.receiveShadow = true;
+  povScene.add(fieldMesh);
+
+  // ── Yard lines ────────────────────────────────────
+  for (let i = 0; i <= 10; i++) {
+    const y2d = i * H / 10;
+    const wz = (y2d - H / 2) * PX;
+    const pts = [new THREE.Vector3(-W3 / 2, 0.02, wz), new THREE.Vector3(W3 / 2, 0.02, wz)];
+    const geo = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.18 });
+    povScene.add(new THREE.Line(geo, mat));
+  }
+
+  // ── LOS line ──────────────────────────────────────
+  const losW = canvasToWorld(0, LOS).z;
+  const losPts = [new THREE.Vector3(-W3/2, 0.04, losW), new THREE.Vector3(W3/2, 0.04, losW)];
+  const losGeo = new THREE.BufferGeometry().setFromPoints(losPts);
+  const losMat = new THREE.LineBasicMaterial({ color: 0xffdd00, transparent: true, opacity: 0.7 });
+  povScene.add(new THREE.Line(losGeo, losMat));
+
+  // ── Hash marks ────────────────────────────────────
+  for (let i = 0; i <= 10; i++) {
+    const y2d = i * H / 10;
+    const wz = (y2d - H / 2) * PX;
+    for (const side of [-0.15, 0.15]) {
+      const hx = W3 * side;
+      const hpts = [new THREE.Vector3(hx - 0.6, 0.03, wz), new THREE.Vector3(hx + 0.6, 0.03, wz)];
+      const hgeo = new THREE.BufferGeometry().setFromPoints(hpts);
+      const hmat = new THREE.LineBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.35 });
+      povScene.add(new THREE.Line(hgeo, hmat));
+    }
+  }
+
+  // ── End zone indicator ────────────────────────────
+  const ezGeo = new THREE.PlaneGeometry(W3, H3 * 0.16);
+  const ezMat = new THREE.MeshLambertMaterial({ color: 0x1a5a1a });
+  const ezMesh = new THREE.Mesh(ezGeo, ezMat);
+  ezMesh.rotation.x = -Math.PI / 2;
+  ezMesh.position.set(0, 0.01, (-H3 / 2) + (H3 * 0.08));
+  povScene.add(ezMesh);
+
+  resizePOV();
+  window.addEventListener('resize', resizePOV);
+}
+
+function resizePOV() {
+  if (!povRenderer) return;
+  const c = document.getElementById('povCanvas');
+  const w = c.clientWidth || window.innerWidth;
+  const h = c.clientHeight || window.innerHeight - 10;
+  povRenderer.setSize(w, h, false);
+  if (povCamera) {
+    povCamera.aspect = w / h;
+    povCamera.updateProjectionMatrix();
+  }
+}
+
+// ── Build 3D player capsule ────────────────────────────
+function makePlayerMesh(p, isDef) {
+  const group = new THREE.Group();
+
+  // Body cylinder
+  const bodyH  = isDef ? 1.4 : 1.6;
+  const bodyGeo = new THREE.CylinderGeometry(0.38, 0.38, bodyH, 10);
+  const col     = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  const bodyMat = new THREE.MeshLambertMaterial({ color: col });
+  const body    = new THREE.Mesh(bodyGeo, bodyMat);
+  body.position.y = bodyH / 2;
+  body.castShadow = true;
+  group.add(body);
+
+  // Helmet sphere
+  const helmGeo = new THREE.SphereGeometry(0.38, 10, 8);
+  const helmMat = new THREE.MeshLambertMaterial({ color: col });
+  const helm    = new THREE.Mesh(helmGeo, helmMat);
+  helm.position.y = bodyH + 0.3;
+  helm.castShadow = true;
+  group.add(helm);
+
+  // White facemask line
+  const fmPts = [
+    new THREE.Vector3(0, bodyH + 0.18, 0.35),
+    new THREE.Vector3(0, bodyH + 0.42, 0.35),
+  ];
+  const fmGeo = new THREE.BufferGeometry().setFromPoints(fmPts);
+  const fmMat = new THREE.LineBasicMaterial({ color: 0xffffff, linewidth: 2 });
+  group.add(new THREE.Line(fmGeo, fmMat));
+
+  // Label sprite above helmet
+  const label = makeLabel(p.label, isDef ? '#ffcccc' : '#ffffff');
+  label.position.y = bodyH + 0.9;
+  group.add(label);
+
+  const w = canvasToWorld(p.x, p.y);
+  group.position.set(w.x, 0, w.z);
+
+  return group;
+}
+
+// ── Build ball mesh ────────────────────────────────────
+function makeBallMesh() {
+  const geo = new THREE.SphereGeometry(0.22, 8, 6);
+  const mat = new THREE.MeshLambertMaterial({ color: 0x8b4513 });
+  const ball = new THREE.Mesh(geo, mat);
+  ball.visible = false;
+  return ball;
+}
+
+// ── Populate scene from current play data ─────────────
+function populatePOVScene() {
+  // Clear previous
+  povPlayerMeshes.forEach(m => povScene.remove(m.group));
+  povDefMeshes.forEach(m => povScene.remove(m.group));
+  povRoutelines.forEach(l => povScene.remove(l));
+  if (povBallMesh) povScene.remove(povBallMesh);
+
+  povPlayerMeshes = [];
+  povDefMeshes    = [];
+  povRoutelines   = [];
+
+  // Offense
+  players.forEach(p => {
+    const group = makePlayerMesh(p, false);
+    povScene.add(group);
+    povPlayerMeshes.push({ id: p.id, side: 'offense', group, ox: p.x, oy: p.y });
+  });
+
+  // Defense
+  defenders.forEach(d => {
+    const group = makePlayerMesh(d, true);
+    povScene.add(group);
+    povDefMeshes.push({ id: d.id, side: 'defense', group, ox: d.x, oy: d.y });
+  });
+
+  // Routes (yellow)
+  routes.forEach(r => {
+    const line = makeLine3D(r.pts, 0xf5c842, 0.06);
+    if (line) { povScene.add(line); povRoutelines.push(line); }
+  });
+
+  // Blocks (red dashed — just solid in 3D)
+  blocks.forEach(b => {
+    const line = makeLine3D(b.pts, 0xe74c3c, 0.06);
+    if (line) { povScene.add(line); povRoutelines.push(line); }
+  });
+
+  // Motions (blue)
+  motions.forEach(m => {
+    const line = makeLine3D(m.pts, 0x3498db, 0.06);
+    if (line) { povScene.add(line); povRoutelines.push(line); }
+  });
+
+  // Ball
+  povBallMesh = makeBallMesh();
+  povScene.add(povBallMesh);
+
+  // Throw arc storage
+  povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+}
+
+// ── Build player tabs ──────────────────────────────────
+function buildPOVTabs() {
+  const container = document.getElementById('povTabs');
+  container.innerHTML = '';
+
+  const allPlayers = [
+    ...players.map(p => ({ ...p, side: 'offense' })),
+    ...defenders.map(d => ({ ...d, side: 'defense' }))
+  ];
+
+  allPlayers.forEach(p => {
+    const btn = document.createElement('button');
+    btn.className = 'pov-tab' + (p.id === povSelectedId && p.side === povSelectedSide ? ' active' : '');
+    btn.textContent = p.label;
+    btn.style.borderColor = p.color;
+    btn.onclick = () => {
+      povSelectedId   = p.id;
+      povSelectedSide = p.side;
+      document.querySelectorAll('.pov-tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      updatePOVHUD();
+      if (!povAnimating) positionPOVCamera(p.x, p.y, false);
+    };
+    container.appendChild(btn);
+  });
+}
+
+// ── Update HUD text ────────────────────────────────────
+function updatePOVHUD() {
+  const list = povSelectedSide === 'offense' ? players : defenders;
+  const p    = list.find(x => x.id === povSelectedId);
+  if (!p) return;
+
+  document.getElementById('povPlayerBadge').textContent   = p.label + ' — ' + p.pos;
+  document.getElementById('povAssignmentBadge').textContent = p.assignment || 'No assignment';
+  document.getElementById('povHudPlayer').textContent     = p.label;
+  document.getElementById('povHudAssign').textContent     = (p.assignment || '—').slice(0, 30);
+  document.getElementById('povFormation').textContent     = currentFormation;
+  document.getElementById('povCoverage').textContent      = document.getElementById('coverage')?.value || '—';
+  document.getElementById('povKeyRead').textContent       = getKeyRead(p);
+  document.getElementById('povDn').textContent            = '2nd & 7'; // placeholder — wire to real data later
+}
+
+function getKeyRead(p) {
+  if (p.pos === 'QB') return 'Watch safety rotation pre-snap';
+  if (p.pos === 'WR') return 'Read CB leverage — in or outside';
+  if (p.pos === 'RB') return 'Find the first down lineman';
+  if (p.pos === 'TE') return 'Release inside or outside LB';
+  if (p.pos === 'OL') return 'Identify your gap assignment';
+  if (p.pos === 'DL') return 'Read the guard\'s first step';
+  if (p.pos === 'LB') return 'Key the near back, read mesh';
+  if (p.pos === 'CB') return 'Watch #1 release — press or bail';
+  if (p.pos === 'S')  return 'Read QB eyes post-snap';
+  return 'Execute assignment';
+}
+
+// ── Position camera behind selected player ─────────────
+function positionPOVCamera(px2d, py2d, smooth) {
+  const w = canvasToWorld(px2d, py2d);
+
+  // Camera sits 3.5 units behind player (toward own end zone) and 2.2 units up
+  const camX = w.x;
+  const camY = 2.2;
+  const camZ = w.z + 3.5; // +z = toward own end zone (camera behind player)
+
+  // Look toward opponent end zone (negative z = upfield)
+  const lookX = w.x;
+  const lookY = 0.8;
+  const lookZ = w.z - 15;
+
+  if (smooth) {
+    // Lerp used during animation — see povStep
+    povCamera._targetPos = { x: camX, y: camY, z: camZ };
+    povCamera._targetLook = { x: lookX, y: lookY, z: lookZ };
+  } else {
+    povCamera.position.set(camX, camY, camZ);
+    povCamera.lookAt(lookX, lookY, lookZ);
+  }
+}
+
+// ── Open POV modal ─────────────────────────────────────
+function openPOV() {
+  const overlay = document.getElementById('povOverlay');
+  overlay.classList.add('open');
+
+  // Load Three.js if not already loaded
+  if (typeof THREE === 'undefined') {
+    const script = document.createElement('script');
+    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
+    script.onload = () => {
+      initPOV();
+      populatePOVScene();
+      // Default: select QB or first offensive player
+      const defaultP = players.find(p => p.pos === 'QB') || players[0];
+      if (defaultP) {
+        povSelectedId   = defaultP.id;
+        povSelectedSide = 'offense';
+      }
+      buildPOVTabs();
+      updatePOVHUD();
+      resizePOV();
+      const p = players.find(x => x.id === povSelectedId);
+      if (p) positionPOVCamera(p.x, p.y, false);
+      povRenderLoop();
+    };
+    document.head.appendChild(script);
+  } else {
+    if (!povScene) initPOV();
+    populatePOVScene();
+    const defaultP = players.find(p => p.pos === 'QB') || players[0];
+    if (defaultP) { povSelectedId = defaultP.id; povSelectedSide = 'offense'; }
+    buildPOVTabs();
+    updatePOVHUD();
+    resizePOV();
+    const p = players.find(x => x.id === povSelectedId);
+    if (p) positionPOVCamera(p.x, p.y, false);
+    povRenderLoop();
+  }
+}
+
+function closePOV() {
+  document.getElementById('povOverlay').classList.remove('open');
+  povAnimating = false;
+  if (povRaf) cancelAnimationFrame(povRaf);
+  // Reset all meshes to original positions
+  povPlayerMeshes.forEach(pm => {
+    const w = canvasToWorld(pm.ox, pm.oy);
+    pm.group.position.set(w.x, 0, w.z);
+  });
+  povDefMeshes.forEach(dm => {
+    const w = canvasToWorld(dm.ox, dm.oy);
+    dm.group.position.set(w.x, 0, w.z);
+  });
+  if (povBallMesh) povBallMesh.visible = false;
+}
+
+// ── Render loop ────────────────────────────────────────
+function povRenderLoop() {
+  if (!document.getElementById('povOverlay').classList.contains('open')) return;
+  povRaf = requestAnimationFrame(povRenderLoop);
+  if (povScene && povCamera && povRenderer) {
+    povRenderer.render(povScene, povCamera);
+  }
+}
+
+// ── Animate play in POV ────────────────────────────────
+function povRunPlay() {
+  if (povAnimating) return;
+
+  const allActions = [...motions, ...routes, ...blocks];
+  if (!allActions.length) { alert('Generate a play first then open POV.'); return; }
+
+  povAnimating = true;
+  document.getElementById('povRunBtn').textContent = '■ Stop';
+  document.getElementById('povRunBtn').onclick = stopPOVPlay;
+
+  const hasMotionP = motions.length > 0;
+  const MOTION_END = hasMotionP ? 0.28 : 0;
+  const TOTAL_MS   = hasMotionP ? 4200 : 3400;
+
+  // Build same tracks as main animation
+  const offTracks = {};
+  players.forEach(p => {
+    const pMotions = motions.filter(a => a.pid === p.id);
+    const pPlay    = [...routes, ...blocks].filter(a => a.pid === p.id);
+    const startPos = { x: p.x, y: p.y };
+
+    let motPts = [];
+    pMotions.forEach(a => {
+      const seg = a.pts?.length ? a.pts : [startPos, startPos];
+      motPts = motPts.concat(motPts.length ? seg.slice(1) : seg);
+    });
+
+    const mEnd = motPts.length ? motPts[motPts.length - 1] : startPos;
+    let playPts = [mEnd];
+    pPlay.forEach(a => {
+      let seg = a.pts?.length ? a.pts : [mEnd, mEnd];
+      if (a.type === 'block') {
+        const last = seg[seg.length - 1];
+        const prev = seg.length >= 2 ? seg[seg.length - 2] : seg[0];
+        seg = [...seg, { x: last.x + (last.x - prev.x) * .15, y: last.y + (last.y - prev.y) * .15 }];
+      }
+      playPts = playPts.concat(seg.slice(1));
+    });
+
+    offTracks[p.id] = {
+      motion: motPts.length > 1 ? motPts : null,
+      play:   playPts.length > 1 ? playPts : [startPos, startPos],
+      isQB:   p.pos === 'QB' || p.label === 'QB',
+      isOL:   p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)
+    };
+  });
+
+  const defT = computeDefenderTracks();
+
+  const startTime = performance.now();
+
+  function ptAt2D(pts, e) {
+    if (!pts || pts.length < 2) return pts ? pts[0] : { x: 0, y: 0 };
+    const clamped = Math.max(0, Math.min(1, e));
+    const idx   = Math.min(pts.length - 2, Math.floor(clamped * (pts.length - 1)));
+    const local = clamped * (pts.length - 1) - idx;
+    const a = pts[idx], b = pts[idx + 1] || a;
+    return { x: a.x + (b.x - a.x) * local, y: a.y + (b.y - a.y) * local };
+  }
+
+  function eIO(t) { return t < .5 ? 2*t*t : -1+(4-2*t)*t; }
+
+  function povStep(ts) {
+    if (!povAnimating) return;
+    povRaf = requestAnimationFrame(povStep);
+
+    const raw  = Math.min((ts - startTime) / TOTAL_MS, 1);
+
+    // Move offensive players
+    players.forEach(p => {
+      const pm = povPlayerMeshes.find(m => m.id === p.id);
+      if (!pm) return;
+      const tr = offTracks[p.id];
+
+      let pos2d;
+      if (hasMotionP && raw < MOTION_END) {
+        const motE = eIO(raw / MOTION_END);
+        pos2d = tr.motion ? ptAt2D(tr.motion, motE) : { x: p.x, y: p.y };
+      } else {
+        const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
+        const spd     = tr.isQB ? Math.min(playRaw / 0.62, 1) : tr.isOL ? Math.min(playRaw / 0.75, 1) : playRaw;
+        pos2d = ptAt2D(tr.play, eIO(spd));
+      }
+
+      const w = canvasToWorld(pos2d.x, pos2d.y);
+      pm.group.position.set(w.x, 0, w.z);
+
+      // Orient player toward movement direction
+      if (tr.play.length > 1) {
+        const nextE  = Math.min((raw + 0.02), 1);
+        const playRN = hasMotionP ? (nextE - MOTION_END) / (1 - MOTION_END) : nextE;
+        const npos   = ptAt2D(tr.play, eIO(Math.max(0, Math.min(1, playRN))));
+        const dx = npos.x - pos2d.x, dz = npos.y - pos2d.y;
+        if (Math.abs(dx) > 0.5 || Math.abs(dz) > 0.5) {
+          pm.group.rotation.y = Math.atan2(dx, dz);
+        }
+      }
+    });
+
+    // Move defenders
+    defenders.forEach(d => {
+      const dm = povDefMeshes.find(m => m.id === d.id);
+      if (!dm) return;
+      if (hasMotionP && raw < MOTION_END) return;
+      const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
+      const pts = defT[d.id] || [{ x: d.x, y: d.y }];
+      const pos2d = ptAt2D(pts.length > 1 ? pts : [pts[0], pts[0]], eIO(playRaw));
+      const w = canvasToWorld(pos2d.x, pos2d.y);
+      dm.group.position.set(w.x, 0, w.z);
+    });
+
+    // Throw arc ball
+    if (povThrowArc && povBallMesh) {
+      const playRaw = hasMotionP ? (raw - MOTION_END) / (1 - MOTION_END) : raw;
+      const delay   = povThrowArc._throwDelay || 0.58;
+      if (playRaw >= delay) {
+        const throwT = Math.min((playRaw - delay) / (1 - delay), 1);
+        const p0 = povThrowArc[0], p1 = povThrowArc[1], p2 = povThrowArc[2];
+        const bx = (1-throwT)*(1-throwT)*p0.x + 2*(1-throwT)*throwT*p1.x + throwT*throwT*p2.x;
+        const by2d = (1-throwT)*(1-throwT)*p0.y + 2*(1-throwT)*throwT*p1.y + throwT*throwT*p2.y;
+        const bArc = Math.sin(throwT * Math.PI) * 6; // arc height
+        const w  = canvasToWorld(bx, by2d);
+        povBallMesh.position.set(w.x, bArc + 0.5, w.z);
+        povBallMesh.visible = true;
+      } else {
+        povBallMesh.visible = false;
+      }
+    }
+
+    // Follow camera — track selected player
+    const selList = povSelectedSide === 'offense' ? players : defenders;
+    const selP    = selList.find(x => x.id === povSelectedId);
+    const meshArr = povSelectedSide === 'offense' ? povPlayerMeshes : povDefMeshes;
+    const selMesh = meshArr.find(m => m.id === povSelectedId);
+
+    if (selMesh) {
+      const mp = selMesh.group.position;
+      const facing = selMesh.group.rotation.y;
+      // Camera stays 3.5 units behind player, follows their rotation
+      const behindX = mp.x + Math.sin(facing) * 3.5;
+      const behindZ = mp.z + Math.cos(facing) * 3.5;
+      povCamera.position.lerp(new THREE.Vector3(behindX, 2.2, behindZ), 0.08);
+      povCamera.lookAt(mp.x - Math.sin(facing)*8, 0.8, mp.z - Math.cos(facing)*8);
+    }
+
+    povRenderer.render(povScene, povCamera);
+
+    if (raw >= 1) {
+      povAnimating = false;
+      document.getElementById('povRunBtn').textContent = '▶ Run Play';
+      document.getElementById('povRunBtn').onclick = povRunPlay;
+    }
+  }
+
+  povRaf = requestAnimationFrame(povStep);
+}
+
+function stopPOVPlay() {
+  povAnimating = false;
+  document.getElementById('povRunBtn').textContent = '▶ Run Play';
+  document.getElementById('povRunBtn').onclick = povRunPlay;
+  if (povBallMesh) povBallMesh.visible = false;
+  // Reset positions
+  players.forEach(p => {
+    const pm = povPlayerMeshes.find(m => m.id === p.id);
+    if (pm) { const w = canvasToWorld(p.x, p.y); pm.group.position.set(w.x, 0, w.z); }
+  });
+  defenders.forEach(d => {
+    const dm = povDefMeshes.find(m => m.id === d.id);
+    if (dm) { const w = canvasToWorld(d.x, d.y); dm.group.position.set(w.x, 0, w.z); }
+  });
+  const p = (povSelectedSide === 'offense' ? players : defenders).find(x => x.id === povSelectedId);
+  if (p) positionPOVCamera(p.x, p.y, false);
+}
+// ═══════════════════════════════════════════════════════
+
 init();
 </script>
+<!-- ── POV FIRST-PERSON OVERLAY ── -->
+<div id="povOverlay">
+  <canvas id="povCanvas"></canvas>
+  <div class="pov-top">
+    <div class="pov-top-left">
+      <span class="pov-player-badge" id="povPlayerBadge">QB</span>
+      <span class="pov-assignment" id="povAssignmentBadge">Select a player</span>
+    </div>
+    <div style="display:flex;gap:8px;pointer-events:all">
+      <button class="pov-run-btn" id="povRunBtn" onclick="povRunPlay()">▶ Run Play</button>
+      <button class="pov-close" onclick="closePOV()">✕ Close</button>
+    </div>
+  </div>
+  <div class="pov-tabs" id="povTabs"></div>
+  <div class="pov-info">
+    <div class="pov-info-chip"><div class="lbl">Formation</div><div class="val" id="povFormation">Shotgun</div></div>
+    <div class="pov-info-chip"><div class="lbl">Coverage</div><div class="val" id="povCoverage">Cover 3</div></div>
+    <div class="pov-info-chip"><div class="lbl">Key read</div><div class="val" id="povKeyRead">—</div></div>
+  </div>
+  <div class="pov-hud">
+    <div class="pov-hud-block"><div class="pov-hud-label">down & distance</div><div class="pov-hud-val" id="povDn">—</div></div>
+    <div class="pov-hud-block" style="text-align:center"><div class="pov-hud-label">player</div><div class="pov-hud-val" id="povHudPlayer">—</div></div>
+    <div class="pov-hud-block" style="text-align:right"><div class="pov-hud-label">assignment</div><div class="pov-hud-val" id="povHudAssign">—</div></div>
+  </div>
+</div>
 </body>
 </html>
