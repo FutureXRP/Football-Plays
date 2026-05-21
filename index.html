@@ -3024,9 +3024,9 @@ function initPOV() {
     post.position.set(0, 0, z);
     return post;
   }
-  // Goal posts at 0.78 — well behind both end zone cameras at 0.62, never in FOV
-  povScene.add(makeGoalPost(-H3*0.78));
-  povScene.add(makeGoalPost( H3*0.78));
+  // Goal posts at 0.85 — well behind both end zone cameras at 0.58
+  povScene.add(makeGoalPost(-H3*0.85));
+  povScene.add(makeGoalPost( H3*0.85));
 
   // ── Crowd stands (simple colored boxes) ───────────
   for (const sx of [-W3*0.82, W3*0.82]) {
@@ -3120,22 +3120,28 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     povCamera.lookAt(px, 1.2, pz - 5);
 
   } else if (povCamMode === 'ezoff') {
-    // OFFENSIVE end zone — camera behind the offense (positive z = own end zone)
-    // Looking upfield toward NEGATIVE z (toward defense and opponent end zone)
-    const ezCamZ = (H3 / 2) * 0.62;
+    // OFFENSIVE End Zone — NFL "High End Zone" spec
+    // Camera: high above goal posts, behind own end zone, looking upfield
+    // Offense is at positive z, attacks toward negative z
+    // Camera sits at positive z (behind offense), looks toward negative z (downfield)
     const zoomD  = povZoom;
-    povCamera.fov = 70;
-    povCamera.position.set(0, 8 * zoomD, ezCamZ);
-    povCamera.lookAt(0, 1.5, LOS3 - 20); // look toward LOS and beyond — negative z
+    const camZ   =  (H3 / 2) * 0.58;   // just behind the offensive end line
+    const camY   =  20 * zoomD;         // well above goal posts (~30-50ft real world)
+    const lookZ  = -(H3 / 2) * 0.15;   // look toward middle of the field / LOS area
+    povCamera.fov = 52 / zoomD;         // tight FOV compresses depth, makes all 22 visible
+    povCamera.position.set(0, camY, camZ);
+    povCamera.lookAt(0, 0, lookZ);
 
   } else {
-    // DEFENSIVE end zone — camera behind the defense (negative z = opponent end zone)
-    // Looking back toward positive z (toward the defense formation and backfield)
-    const ezCamZ = -(H3 / 2) * 0.62;
+    // DEFENSIVE End Zone — mirror of offensive, looking back toward offense
+    // Camera behind opponent end zone (negative z), looks toward positive z (toward offense)
     const zoomD  = povZoom;
-    povCamera.fov = 70;
-    povCamera.position.set(0, 8 * zoomD, ezCamZ);
-    povCamera.lookAt(0, 1.5, LOS3 + 6); // look toward LOS from defense side
+    const camZ   = -(H3 / 2) * 0.58;
+    const camY   =  20 * zoomD;
+    const lookZ  =  (H3 / 2) * 0.15;
+    povCamera.fov = 52 / zoomD;
+    povCamera.position.set(0, camY, camZ);
+    povCamera.lookAt(0, 0, lookZ);
   }
   povCamera.updateProjectionMatrix();
 }
@@ -3427,17 +3433,19 @@ function povRunPlay() {
         povCamera.position.lerp(new THREE.Vector3(W3*0.52*zoomD, 10*zoomD, mp.z+4*zoomD), 0.05);
         povCamera.lookAt(mp.x, 1.2, mp.z-5);
       } else if(povCamMode==='ezoff'){
-        // Offensive end zone — fixed, behind offense (positive z), looking upfield (negative z)
-        const ezCamZ = (H3/2)*0.62;
-        const zoomD  = povZoom;
-        povCamera.position.set(0, 8*zoomD, ezCamZ);
-        povCamera.lookAt(0, 1.5, LOS3-20);
+        // Offensive end zone — high above, behind offense (positive z), looking downfield
+        const zoomD = povZoom;
+        povCamera.fov = 52 / zoomD;
+        povCamera.updateProjectionMatrix();
+        povCamera.position.set(0, 20*zoomD, (H3/2)*0.58);
+        povCamera.lookAt(0, 0, -(H3/2)*0.15);
       } else {
-        // Defensive end zone — fixed, behind defense (negative z), looking toward backfield
-        const ezCamZ = -(H3/2)*0.62;
-        const zoomD  = povZoom;
-        povCamera.position.set(0, 8*zoomD, ezCamZ);
-        povCamera.lookAt(0, 1.5, LOS3+6);
+        // Defensive end zone — mirror, high above, behind defense (negative z), looking upfield
+        const zoomD = povZoom;
+        povCamera.fov = 52 / zoomD;
+        povCamera.updateProjectionMatrix();
+        povCamera.position.set(0, 20*zoomD, -(H3/2)*0.58);
+        povCamera.lookAt(0, 0, (H3/2)*0.15);
       }
     }
 
