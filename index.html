@@ -3572,12 +3572,12 @@ function initPOV() {
   fill.position.set(-20, 25, 15);
   povScene.add(fill);
   // Hemisphere — sky/ground bounce
-  povScene.add(new THREE.HemisphereLight(0x87ceeb, 0x2a5a1a, 0.3));
+  povScene.add(new THREE.HemisphereLight(0x87ceeb, 0x1a3a10, 0.3));
 
   // ── Field — realistic deep turf tones ────────────
   // NFL fields read as deep forest green, not bright lime
-  const turfA = new THREE.MeshLambertMaterial({ color: 0x2d5a27 }); // darker stripe
-  const turfB = new THREE.MeshLambertMaterial({ color: 0x336b2c }); // slightly lighter
+  const turfA = new THREE.MeshLambertMaterial({ color: 0x1e3d1a }); // dark stripe
+  const turfB = new THREE.MeshLambertMaterial({ color: 0x24491f }); // slightly lighter
   for (let i=0; i<10; i++) {
     const zFrom = (-H3/2) + i*(H3/10);
     const mesh = new THREE.Mesh(
@@ -3633,7 +3633,7 @@ function initPOV() {
   for (const zOff of [-H3*0.54, H3*0.54]) {
     const ez = new THREE.Mesh(
       new THREE.PlaneGeometry(W3*1.6, H3*0.08),
-      new THREE.MeshLambertMaterial({ color: 0x1e4a1e })
+      new THREE.MeshLambertMaterial({ color: 0x152e12 })
     );
     ez.rotation.x = -Math.PI/2;
     ez.position.set(0, 0.01, zOff);
