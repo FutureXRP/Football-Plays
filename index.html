@@ -7950,31 +7950,53 @@ function populatePOVScene() {
   povRoutelines.forEach(l   => povScene.remove(l));
   if (povBallMesh) povScene.remove(povBallMesh);
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
-  // Clear old mixers
   gltfMixers = [];
 
-  const buildPlayers = () => {
-    const useGLTF = !!gltfModelCache;
-
+  const buildWithGLTF = () => {
+    if (!povScene) return; // scene may have been closed
+    console.log('Building with GLTF models. Scene children before:', gltfModelCache.scene.children.length);
     players.forEach(p => {
-      const group = useGLTF ? makeGLTFPlayer(p, false) : makeFootballPlayer(p, false);
+      const group = makeGLTFPlayer(p, false);
       povScene.add(group);
       povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
     });
     defenders.forEach(d => {
-      const group = useGLTF ? makeGLTFPlayer(d, true) : makeFootballPlayer(d, true);
+      const group = makeGLTFPlayer(d, true);
       povScene.add(group);
       povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
     });
-
     routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
     blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
     motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-
     povBallMesh = makeBallMesh();
     povScene.add(povBallMesh);
     povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+    buildPOVTabs();
+    updatePOVHUD();
+    updateSelfVisibility();
+    applyStaticCamera();
+    if (povRenderer && povScene && povCamera) povRenderer.render(povScene, povCamera);
+  };
 
+  const buildWithProcedural = () => {
+    if (!povScene) return;
+    console.log('Building with procedural models');
+    players.forEach(p => {
+      const group = makeFootballPlayer(p, false);
+      povScene.add(group);
+      povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
+    });
+    defenders.forEach(d => {
+      const group = makeFootballPlayer(d, true);
+      povScene.add(group);
+      povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
+    });
+    routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    povBallMesh = makeBallMesh();
+    povScene.add(povBallMesh);
+    povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
     buildPOVTabs();
     updatePOVHUD();
     updateSelfVisibility();
@@ -7982,33 +8004,21 @@ function populatePOVScene() {
   };
 
   if (gltfModelCache) {
-    // Already loaded — build immediately
-    buildPlayers();
+    // Already cached — use GLTF directly
+    console.log('GLTF already cached, building immediately');
+    buildWithGLTF();
   } else {
-    // Show loading indicator, build procedural first, then swap when loaded
-    buildPlayers(); // procedural fallback renders immediately
-
-    // Load GLTF in background
+    // Procedural first, swap when GLTF loads
+    buildWithProcedural();
     loadGLTFModel(() => {
-      // Swap to GLTF models once loaded
-      povPlayerMeshes.forEach(m => povScene.remove(m.group));
-      povDefMeshes.forEach(m    => povScene.remove(m.group));
+      if (!povScene) return; // POV was closed during load
+      // Clear procedural, rebuild with GLTF
+      povPlayerMeshes.forEach(m => { if(povScene) povScene.remove(m.group); });
+      povDefMeshes.forEach(m    => { if(povScene) povScene.remove(m.group); });
       povPlayerMeshes=[]; povDefMeshes=[];
       gltfMixers = [];
-      players.forEach(p => {
-        const group = makeGLTFPlayer(p, false);
-        povScene.add(group);
-        povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
-      });
-      defenders.forEach(d => {
-        const group = makeGLTFPlayer(d, true);
-        povScene.add(group);
-        povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
-      });
-      buildPOVTabs();
-      updateSelfVisibility();
-      applyStaticCamera();
-      status('3D models loaded.', 'success');
+      buildWithGLTF();
+      status('3D models loaded ✓', 'success');
     });
   }
 }
