@@ -285,6 +285,20 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn" onclick="exportPNG()" title="Download PNG image">📸 PNG</button>
         <button class="btn" onclick="exportVideo()" title="Record animation as .webm video (Chrome/Edge)">🎬 Video</button>
         <button class="btn active" id="btnPaths" onclick="togglePaths()" title="Show/hide route and block lines">👁 Paths</button>
+        <span style="width:1px;height:18px;background:rgba(255,255,255,.12);margin:0 2px"></span>
+        <label style="font:700 10px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer" title="Offense team color">
+          OFF
+          <input type="color" id="teamColorOffPicker" value="#3498db"
+            style="width:26px;height:22px;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px;background:none"
+            oninput="setTeamColor('off',this.value)">
+        </label>
+        <label style="font:700 10px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer" title="Defense team color">
+          DEF
+          <input type="color" id="teamColorDefPicker" value="#8b0000"
+            style="width:26px;height:22px;border:1px solid var(--border);border-radius:3px;cursor:pointer;padding:1px;background:none"
+            oninput="setTeamColor('def',this.value)">
+        </label>
+        <span style="width:1px;height:18px;background:rgba(255,255,255,.12);margin:0 2px"></span>
         <button class="btn" onclick="resetAll()" title="Reset routes/blocks, keep formation">↺ Reset</button>
         <button class="btn red" onclick="hardReset()" title="Reset everything including formation">⬛ Full Reset</button>
       </div>
@@ -447,6 +461,27 @@ let ballPending   = null;  // { pts, fromPos, snapExists } waiting for popup cho
 const PLAYER_RADIUS = 15;
 const DEF_RADIUS = 12;
 const MIN_PLAYER_DIST = 32; // minimum px between player centers
+
+// ── TEAM COLORS — persist across all resets ───────────
+let teamColorOff = '#3498db'; // offense default: blue
+let teamColorDef = '#8b0000'; // defense default: dark red
+
+function setTeamColor(side, val) {
+  if (side === 'off') {
+    teamColorOff = val;
+    players.forEach(p => { p.color = val; });
+  } else {
+    teamColorDef = val;
+    defenders.forEach(d => { d.color = val; });
+  }
+  buildList(); draw();
+  // If POV is open, rebuild player meshes with new color
+  if (document.getElementById('povOverlay').classList.contains('open') && povScene) {
+    populatePOVScene();
+    updateSelfVisibility();
+    applyStaticCamera();
+  }
+}
 
 const colors = {
   QB:'#c8a84b', RB:'#e74c3c', WR:'#3498db', TE:'#9b59b6',
@@ -651,7 +686,7 @@ function mkPlayer(arr, i) {
     x: arr[2] * W, y: arr[3] * H,
     ox: arr[2] * W, oy: arr[3] * H,
     assignment: '',
-    color: colors[arr[1]] || '#999',
+    color: teamColorOff,
     animX: arr[2] * W, animY: arr[3] * H
   };
 }
@@ -959,7 +994,7 @@ function autoDefense() {
       x: d[2] * W, y: d[3] * H,
       ox: d[2] * W, oy: d[3] * H,
       assignment: cov,
-      color: colors[d[1]] || colors.DEF,
+      color: teamColorDef,
       animX: d[2] * W, animY: d[3] * H
     }))
   );
@@ -2988,6 +3023,7 @@ function serialize() {
     version: 7,
     name: document.getElementById('playName').value || 'Untitled Play',
     formation: currentFormation, flipped,
+    teamColorOff, teamColorDef,
     players, defenders, routes, blocks, motions, defRoutes,
     ballPath: bp, ballScript,
     date: Date.now()
@@ -3005,6 +3041,18 @@ function deserialize(data) {
   currentFormation = data.formation || 'Shotgun';
   flipped      = data.flipped      || false;
   ballScript   = data.ballScript   || [];
+
+  // Restore team colors if saved
+  if (data.teamColorOff) {
+    teamColorOff = data.teamColorOff;
+    const offPicker = document.getElementById('teamColorOffPicker');
+    if (offPicker) offPicker.value = teamColorOff;
+  }
+  if (data.teamColorDef) {
+    teamColorDef = data.teamColorDef;
+    const defPicker = document.getElementById('teamColorDefPicker');
+    if (defPicker) defPicker.value = teamColorDef;
+  }
 
   // Restore ballPath with throw metadata
   if (data.ballPath) {
