@@ -284,7 +284,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <button class="btn blue" onclick="openPlayFile()" title="Open .pdpro save file">📂 Open</button>
         <button class="btn" onclick="exportPNG()" title="Download PNG image">📸 PNG</button>
         <button class="btn" onclick="exportVideo()" title="Record animation as .webm video (Chrome/Edge)">🎬 Video</button>
-        <button class="btn active" id="btnPaths" onclick="togglePaths()" title="Show/hide route and block lines">👁 Paths</button>
+        <button class="btn" id="btnPaths" onclick="togglePaths()" title="Show/hide route and block lines">👁 Paths</button>
         <span style="width:1px;height:18px;background:rgba(255,255,255,.12);margin:0 2px"></span>
         <label style="font:700 10px 'Barlow Condensed';letter-spacing:1.5px;text-transform:uppercase;color:var(--muted);display:flex;align-items:center;gap:5px;cursor:pointer" title="Offense team color">
           OFF
@@ -450,7 +450,7 @@ let animTotalMs  = 3400;
 let animRenderFn = null;   // shared render-at-progress function for scrub
 
 // ── Path visibility ───────────────────────────
-let showPaths = true;
+let showPaths = false;
 
 // ── Ball script state ──────────────────────────
 let ballScript    = [];
@@ -2535,8 +2535,7 @@ function runPlay() {
   // Show playback row, auto-hide paths
   const row3 = document.getElementById('playbackRow');
   if (row3) row3.classList.remove('hidden');
-  const wasShowingPaths = showPaths;
-  showPaths = false; // auto-hide on run
+  showPaths = false; // hide paths during animation
   const btn = document.getElementById('btnPaths');
   if (btn) btn.classList.remove('active');
 
@@ -2696,12 +2695,11 @@ function stopPlay(done = false) {
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
 
-  // Hide row 3, restore paths
+  // Hide row 3 — paths stay at whatever the user set, no auto-restore
   const row3 = document.getElementById('playbackRow');
   if (row3) row3.classList.add('hidden');
-  showPaths = true;
   const btnP = document.getElementById('btnPaths');
-  if (btnP) btnP.classList.add('active');
+  if (btnP) btnP.classList.toggle('active', showPaths);
   const pauseBtn = document.getElementById('animPauseBtn');
   if (pauseBtn) pauseBtn.textContent = '⏸';
   updateAnimScrubUI();
@@ -3335,6 +3333,31 @@ function init() {
 let povScene, povCamera, povRenderer;
 let povPlayerMeshes = [];
 let povDefMeshes    = [];
+
+// ── GLTF MODEL SYSTEM ─────────────────────────────────
+const GLB_URL = 'https://raw.githubusercontent.com/FutureXRP/Football-Plays/main/american_football_players_animated_rigged.glb';
+let gltfModelCache  = null;   // cached loaded GLTF scene
+let gltfMixers      = [];     // AnimationMixer per player instance
+let gltfClockDelta  = 0;
+const gltfClock     = { then: performance.now() };
+
+// Character root node names in the GLB (6 variants)
+// Man.005=idx3, Man.006=idx50, Man.013=idx97
+// Woman.019=idx144, Football.006=idx191, Woman.021=idx238
+// Position → which character variant to use
+function getCharacterName(pos, isDef) {
+  // Men for offense skill + all defense; use different variants by position
+  if (!isDef) {
+    if (pos === 'OL') return 'AmericanFootballMan.003';  // bulkier stance
+    if (pos === 'QB') return 'AmericanFootballMan.003';
+    if (pos === 'RB' || pos === 'FB') return 'AmericanFootballMan.006';
+    return 'AmericanFootballMan.006'; // WR, TE, etc
+  } else {
+    if (pos === 'DL') return 'AmericanFootballMan.013';
+    if (pos === 'LB') return 'AmericanFootballMan.003';
+    return 'AmericanFootballMan.006'; // CB, S
+  }
+}
 let povRoutelines   = [];
 let povBallMesh     = null;
 let povSelectedId   = null;
@@ -3447,7 +3470,139 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
   return mesh;
 }
 
-// ── NFL BLITZ-STYLE PLAYER — exaggerated cartoon proportions ─
+// ── GLTF PLAYER — clone from loaded model ─────────────
+function makeGLTFPlayer(p, isDef) {
+  const group = new THREE.Group();
+  const charName = getCharacterName(p.pos, isDef);
+
+  // Deep clone the target character subtree
+  let sourceNode = null;
+  gltfModelCache.scene.traverse(node => {
+    if (node.name && node.name.includes(charName.split('.')[0]) &&
+        node.name.includes(charName.split('.')[1] || '')) {
+      // Find the mesh node (not the armature root)
+      if (!sourceNode && node.isMesh) sourceNode = node;
+    }
+  });
+
+  // Clone the full character — find armature root for this character
+  let armRoot = null;
+  gltfModelCache.scene.children.forEach(child => {
+    if (child.name && child.name.includes('Metarig')) {
+      // Check if this armature's mesh matches our target
+      child.traverse(n => {
+        if (n.isMesh && n.name && n.name.includes(charName.replace('AmericanFootball',''))) {
+          armRoot = child;
+        }
+      });
+    }
+  });
+
+  // Fallback: clone the whole scene and hide non-target characters
+  const sceneClone = gltfModelCache.scene.clone(true);
+
+  // Hide all character roots except our target, find and keep target
+  const charRoots = ['Man.005','Man.006','Man.013','Woman.019','Football.006','Woman.021'];
+  const targetKey = charName.includes('Man.005') ? 'Man.005' :
+                    charName.includes('Man.006') ? 'Man.006' :
+                    charName.includes('Man.013') ? 'Man.013' :
+                    charName.includes('Woman.019') ? 'Woman.019' :
+                    charName.includes('Football.006') ? 'Football.006' : 'Woman.021';
+
+  sceneClone.traverse(node => {
+    // Hide characters that aren't our target
+    const isOtherChar = charRoots.some(key =>
+      key !== targetKey && node.name && node.name.includes(key)
+    );
+    if (isOtherChar) node.visible = false;
+  });
+
+  // Apply team color tint to jersey material
+  const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  const r = ((col >> 16) & 0xff) / 255;
+  const g = ((col >> 8)  & 0xff) / 255;
+  const b = (col & 0xff) / 255;
+  // Brighten slightly so tint reads well
+  const boost = 1.3;
+
+  sceneClone.traverse(node => {
+    if (node.isMesh && node.visible) {
+      // Clone material so we don't affect other instances
+      if (node.material) {
+        node.material = node.material.clone();
+        // baseColorFactor tints the whole texture — jersey + helmet
+        // We use a subtle tint so skin stays readable
+        node.material.color = new THREE.Color(
+          Math.min(1, 0.6 + r * boost * 0.4),
+          Math.min(1, 0.6 + g * boost * 0.4),
+          Math.min(1, 0.6 + b * boost * 0.4)
+        );
+        node.castShadow = true;
+        node.receiveShadow = true;
+      }
+    }
+  });
+
+  // Scale and orient — GLB models are typically 1 unit = 1 meter
+  // Our world: players should be ~2.8 units tall
+  sceneClone.scale.setScalar(0.022);
+  sceneClone.rotation.y = isDef ? 0 : Math.PI;
+
+  group.add(sceneClone);
+
+  // Animation mixer for this instance
+  if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
+    const mixer = new THREE.AnimationMixer(sceneClone);
+    const clip  = gltfModelCache.animations[0];
+    const action = mixer.clipAction(clip);
+    action.play();
+    // Stagger animation start so players don't all move in sync
+    mixer.setTime(Math.random() * clip.duration);
+    gltfMixers.push(mixer);
+    group._mixer = mixer;
+  }
+
+  // Soft shadow under player
+  const shadowCanvas = document.createElement('canvas');
+  shadowCanvas.width = shadowCanvas.height = 128;
+  const sctx = shadowCanvas.getContext('2d');
+  const grad = sctx.createRadialGradient(64,64,0,64,64,64);
+  grad.addColorStop(0,   'rgba(0,0,0,0.55)');
+  grad.addColorStop(0.45,'rgba(0,0,0,0.30)');
+  grad.addColorStop(0.75,'rgba(0,0,0,0.10)');
+  grad.addColorStop(1.0, 'rgba(0,0,0,0)');
+  sctx.fillStyle = grad;
+  sctx.fillRect(0,0,128,128);
+  const blobShadow = new THREE.Mesh(
+    new THREE.PlaneGeometry(2.8, 1.8),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false })
+  );
+  blobShadow.rotation.x = -Math.PI / 2;
+  blobShadow.position.set(0, 0.01, 0.3);
+  group.add(blobShadow);
+
+  // Label sprite
+  const labelSprite = makeLabelCrisp(
+    p.label,
+    isDef ? '#ff9999' : '#ffffff',
+    isDef ? '#550000' : '#002255'
+  );
+  labelSprite.position.y = 3.4;
+  labelSprite.scale.set(2.4, 0.95, 1);
+  group._labelSprite = labelSprite;
+  group.add(labelSprite);
+
+  const w = canvasToWorld(p.x, p.y);
+  group.position.set(w.x, 0, w.z);
+  group._eyeY  = EYE_HEIGHT;
+  group._bodyH = 3.0;
+  group._isDef = isDef;
+  group._animT = Math.random() * Math.PI * 2;
+
+  return group;
+}
+
+
 // Key ratios vs realistic:
 //   Helmet  : ~42% of total height  (realistic ~14%)
 //   Legs    : ~22% of total height  (realistic ~45%)
@@ -4188,25 +4343,67 @@ function populatePOVScene() {
   povRoutelines.forEach(l   => povScene.remove(l));
   if (povBallMesh) povScene.remove(povBallMesh);
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
+  // Clear old mixers
+  gltfMixers = [];
 
-  players.forEach(p => {
-    const group = makeFootballPlayer(p, false);
-    povScene.add(group);
-    povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
-  });
-  defenders.forEach(d => {
-    const group = makeFootballPlayer(d, true);
-    povScene.add(group);
-    povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
-  });
+  const buildPlayers = () => {
+    const useGLTF = !!gltfModelCache;
 
-  routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-  blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-  motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    players.forEach(p => {
+      const group = useGLTF ? makeGLTFPlayer(p, false) : makeFootballPlayer(p, false);
+      povScene.add(group);
+      povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
+    });
+    defenders.forEach(d => {
+      const group = useGLTF ? makeGLTFPlayer(d, true) : makeFootballPlayer(d, true);
+      povScene.add(group);
+      povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
+    });
 
-  povBallMesh = makeBallMesh();
-  povScene.add(povBallMesh);
-  povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+    routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+
+    povBallMesh = makeBallMesh();
+    povScene.add(povBallMesh);
+    povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+
+    buildPOVTabs();
+    updatePOVHUD();
+    updateSelfVisibility();
+    applyStaticCamera();
+  };
+
+  if (gltfModelCache) {
+    // Already loaded — build immediately
+    buildPlayers();
+  } else {
+    // Show loading indicator, build procedural first, then swap when loaded
+    buildPlayers(); // procedural fallback renders immediately
+
+    // Load GLTF in background
+    loadGLTFModel(() => {
+      // Swap to GLTF models once loaded
+      povPlayerMeshes.forEach(m => povScene.remove(m.group));
+      povDefMeshes.forEach(m    => povScene.remove(m.group));
+      povPlayerMeshes=[]; povDefMeshes=[];
+      gltfMixers = [];
+      players.forEach(p => {
+        const group = makeGLTFPlayer(p, false);
+        povScene.add(group);
+        povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
+      });
+      defenders.forEach(d => {
+        const group = makeGLTFPlayer(d, true);
+        povScene.add(group);
+        povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
+      });
+      buildPOVTabs();
+      updateSelfVisibility();
+      applyStaticCamera();
+      status('3D models loaded.', 'success');
+    });
+  }
 }
 
 // ── Build player tab buttons ───────────────────────────
@@ -4247,6 +4444,37 @@ function updatePOVHUD() {
 function getKeyRead(p) {
   const reads = {QB:'Watch safety rotation pre-snap',WR:'Read CB leverage — inside or outside',RB:'Hit the first down lineman',TE:'Release inside or outside the LB',OL:'Gap assignment — who do you fire on?',DL:'Read guard\'s first step',LB:'Key the near back — read mesh',CB:'Watch #1 release — press or bail',S:'Read QB eyes post-snap'};
   return reads[p.pos] || 'Execute your assignment';
+}
+
+// ── GLTF Model Loader ──────────────────────────────────
+function loadGLTFModel(onLoaded) {
+  if (gltfModelCache) { if (onLoaded) onLoaded(); return; }
+  if (!window.THREE || !THREE.GLTFLoader) {
+    // Load GLTFLoader script first
+    const s = document.createElement('script');
+    s.src = 'https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/examples/js/loaders/GLTFLoader.js';
+    s.onload = () => loadGLTFModel(onLoaded);
+    document.head.appendChild(s);
+    return;
+  }
+  status('Loading 3D models…', '');
+  const loader = new THREE.GLTFLoader();
+  loader.load(
+    GLB_URL,
+    gltf => {
+      gltfModelCache = gltf;
+      console.log('GLTF loaded:', gltf.scene.children.length, 'root children,', gltf.animations.length, 'animations');
+      if (onLoaded) onLoaded();
+    },
+    xhr => {
+      const pct = Math.round(xhr.loaded / xhr.total * 100);
+      status('Loading 3D models… ' + pct + '%', '');
+    },
+    err => {
+      console.error('GLTF load error:', err);
+      status('3D model load failed — using procedural models.', '');
+    }
+  );
 }
 
 // ── Open POV ──────────────────────────────────────────
@@ -4301,6 +4529,9 @@ function closePOV() {
   povProgress  = 0;
   if (povRaf) cancelAnimationFrame(povRaf);
   if (povRecording) stopPOVVideo();
+  // Stop all mixers
+  gltfMixers.forEach(m => m.stopAllAction());
+  gltfMixers = [];
   // Fully dispose and null — next open rebuilds scene with current materials
   if (povRenderer) { povRenderer.dispose(); povRenderer = null; }
   povScene = null; povCamera = null;
@@ -4311,6 +4542,13 @@ function closePOV() {
 function povRenderLoop() {
   if (!document.getElementById('povOverlay').classList.contains('open')) return;
   povRaf = requestAnimationFrame(povRenderLoop);
+  // Tick GLTF animation mixers
+  if (gltfMixers.length > 0) {
+    const now = performance.now();
+    const delta = (now - gltfClock.then) / 1000;
+    gltfClock.then = now;
+    gltfMixers.forEach(m => m.update(delta));
+  }
   if (povScene && povCamera && povRenderer) povRenderer.render(povScene, povCamera);
 }
 
