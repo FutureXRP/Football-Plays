@@ -6977,23 +6977,7 @@ let gltfMixers      = [];     // AnimationMixer per player instance
 let gltfClockDelta  = 0;
 const gltfClock     = { then: performance.now() };
 
-// Character root node names in the GLB (6 variants)
-// Man.005=idx3, Man.006=idx50, Man.013=idx97
-// Woman.019=idx144, Football.006=idx191, Woman.021=idx238
-// Position → which character variant to use
-function getCharacterName(pos, isDef) {
-  // Men for offense skill + all defense; use different variants by position
-  if (!isDef) {
-    if (pos === 'OL') return 'AmericanFootballMan.003';  // bulkier stance
-    if (pos === 'QB') return 'AmericanFootballMan.003';
-    if (pos === 'RB' || pos === 'FB') return 'AmericanFootballMan.006';
-    return 'AmericanFootballMan.006'; // WR, TE, etc
-  } else {
-    if (pos === 'DL') return 'AmericanFootballMan.013';
-    if (pos === 'LB') return 'AmericanFootballMan.003';
-    return 'AmericanFootballMan.006'; // CB, S
-  }
-}
+// Position → character root node index (see getCharRootIndex below)
 let povRoutelines   = [];
 let povBallMesh     = null;
 let povSelectedId   = null;
@@ -7107,31 +7091,86 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
 }
 
 // ── GLTF PLAYER — clone individual character from loaded model ─
-// The GLB has 6 characters packed together. Each character root is at
-// a known index in the scene hierarchy. We clone just that subtree.
-const CHAR_NODE_INDICES = {
-  'AmericanFootballMan.003':   0,   // scene child 0 = Metarig Man.005
-  'AmericanFootballMan.006':   1,   // scene child 1 = Metarig Man.006
-  'AmericanFootballMan.013':   2,   // scene child 2 = Metarig Man.013
-  'AmericanFootballWoman.019': 3,   // scene child 3 = Metarig Woman.019
-  'AmericanFootball.006':      4,   // scene child 4 = AmericanFootball.006
-  'AmericanFootballWoman.021': 5,   // scene child 5 = Metarig Woman.021
-};
+// GLB hierarchy: scene → Sketchfab_model → root → [6 Metarig nodes]
+// Each Metarig contains one character mesh.
+// Node indices confirmed from GLB inspection:
+//   [3]  Metarig Man.005  → AmericanFootballMan.003  (athletic stance)
+//   [50] Metarig Man.006  → AmericanFootballMan.002  (running)
+//   [97] Metarig Man.013  → AmericanFootballMan.001  (upright)
+//   [144] Metarig Woman.019 → AmericanFootballWoman.001
+//   [191] Metarig Woman.020 → AmericanFootball.006   (crouching lineman)
+//   [238] Metarig Woman.021 → AmericanFootballWoman.002
+
+function getCharRootIndex(pos, isDef) {
+  // Map position to Metarig node index
+  if (!isDef) {
+    if (pos === 'OL') return 191;   // crouching stance — lineman
+    if (pos === 'QB') return 3;     // athletic upright
+    if (pos === 'RB' || pos === 'FB') return 50; // running pose
+    return 97;                      // WR/TE — upright ready
+  } else {
+    if (pos === 'DL') return 191;   // crouching — defensive lineman
+    if (pos === 'LB') return 3;     // athletic stance
+    return 50;                      // CB/S — running/ready
+  }
+}
 
 function makeGLTFPlayer(p, isDef) {
   const group = new THREE.Group();
-  const charName = getCharacterName(p.pos, isDef);
-  const charIdx  = CHAR_NODE_INDICES[charName] ?? 0;
+  const targetNodeIdx = getCharRootIndex(p.pos, isDef);
 
-  // Clone just this character's root node from the scene
-  const srcNode = gltfModelCache.scene.children[charIdx];
+  // Find the Metarig node by index and clone it
+  // We need to find it in the cloned scene tree
+  // The scene structure is: scene.children[0] = Sketchfab_model
+  //   .children[0] = root
+  //     .children[0..5] = the 6 Metarig nodes
+  const sceneRoot = gltfModelCache.scene;
+  let srcNode = null;
+  sceneRoot.traverse(n => {
+    if (!srcNode && n.userData && n.userData.nodeIndex === targetNodeIdx) {
+      srcNode = n;
+    }
+  });
+
+  // Fallback: traverse by node order
   if (!srcNode) {
-    console.warn('Character node not found:', charName, charIdx);
-    return makeFootballPlayer(p, isDef); // fallback
+    let nodeCount = 0;
+    sceneRoot.traverse(n => {
+      if (srcNode) return;
+      if (n === sceneRoot) return;
+      nodeCount++;
+      // Match by approximate position in traversal
+    });
+    // Direct index approach — traverse and count to find the right node
+    const allNodes = [];
+    sceneRoot.traverse(n => allNodes.push(n));
+    // The Metarig nodes are at specific positions in the flat traversal
+    // Based on our inspection: idx 3,50,97,144,191,238 in the GLB node array
+    // In Three.js traversal order they map differently — find by name pattern
+    const metarigMap = {
+      3:   'Man.005',
+      50:  'Man.006',
+      97:  'Man.013',
+      144: 'Woman.019',
+      191: 'Woman.020',
+      238: 'Woman.021',
+    };
+    const targetSuffix = metarigMap[targetNodeIdx];
+    sceneRoot.traverse(n => {
+      if (!srcNode && n.name && n.name.includes('Metarig') && n.name.includes(targetSuffix)) {
+        srcNode = n;
+      }
+    });
   }
+
+  if (!srcNode) {
+    console.warn('Character node not found for pos:', p.pos, 'idx:', targetNodeIdx);
+    return makeFootballPlayer(p, isDef);
+  }
+
   const charClone = srcNode.clone(true);
 
-  // Apply team color tint — multiply baseColor toward team color
+  // Apply team color tint
   const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
   const tr = ((col >> 16) & 0xff) / 255;
   const tg = ((col >> 8)  & 0xff) / 255;
@@ -7140,26 +7179,20 @@ function makeGLTFPlayer(p, isDef) {
   charClone.traverse(node => {
     if (node.isMesh && node.material) {
       node.material = node.material.clone();
-      // Strong tint toward team color — mix 70% team color with 30% original white
       node.material.color = new THREE.Color(
         0.30 + tr * 0.70,
         0.30 + tg * 0.70,
         0.30 + tb * 0.70
       );
-      node.castShadow    = true;
-      node.receiveShadow = false;
+      node.castShadow = true;
     }
   });
 
-  // Scale — GLB units are meters, world units ~2.8 units per player height
   charClone.scale.setScalar(0.026);
-
-  // Rotate to face correct direction
   charClone.rotation.y = isDef ? 0 : Math.PI;
-
   group.add(charClone);
 
-  // Animation mixer for this instance
+  // Animation mixer
   if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
     const mixer  = new THREE.AnimationMixer(charClone);
     const clip   = gltfModelCache.animations[0];
@@ -7170,34 +7203,30 @@ function makeGLTFPlayer(p, isDef) {
     group._mixer = mixer;
   }
 
-  // Soft gradient shadow
-  const shadowCanvas = document.createElement('canvas');
-  shadowCanvas.width = shadowCanvas.height = 128;
-  const sctx = shadowCanvas.getContext('2d');
-  const grad = sctx.createRadialGradient(64,64,0,64,64,64);
-  grad.addColorStop(0,   'rgba(0,0,0,0.55)');
-  grad.addColorStop(0.45,'rgba(0,0,0,0.30)');
-  grad.addColorStop(0.75,'rgba(0,0,0,0.10)');
-  grad.addColorStop(1.0, 'rgba(0,0,0,0)');
-  sctx.fillStyle = grad; sctx.fillRect(0,0,128,128);
-  const blobShadow = new THREE.Mesh(
+  // Soft shadow
+  const sc = document.createElement('canvas');
+  sc.width = sc.height = 128;
+  const sx = sc.getContext('2d');
+  const sg = sx.createRadialGradient(64,64,0,64,64,64);
+  sg.addColorStop(0,   'rgba(0,0,0,0.55)');
+  sg.addColorStop(0.45,'rgba(0,0,0,0.30)');
+  sg.addColorStop(0.75,'rgba(0,0,0,0.10)');
+  sg.addColorStop(1.0, 'rgba(0,0,0,0)');
+  sx.fillStyle = sg; sx.fillRect(0,0,128,128);
+  const shadow = new THREE.Mesh(
     new THREE.PlaneGeometry(2.8, 1.8),
-    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(shadowCanvas), transparent: true, depthWrite: false })
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false })
   );
-  blobShadow.rotation.x = -Math.PI / 2;
-  blobShadow.position.set(0, 0.01, 0.3);
-  group.add(blobShadow);
+  shadow.rotation.x = -Math.PI / 2;
+  shadow.position.set(0, 0.01, 0.3);
+  group.add(shadow);
 
-  // Label sprite
-  const labelSprite = makeLabelCrisp(
-    p.label,
-    isDef ? '#ff9999' : '#ffffff',
-    isDef ? '#550000' : '#002255'
-  );
-  labelSprite.position.y = 3.4;
-  labelSprite.scale.set(2.4, 0.95, 1);
-  group._labelSprite = labelSprite;
-  group.add(labelSprite);
+  // Label
+  const label = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#550000' : '#002255');
+  label.position.y = 3.4;
+  label.scale.set(2.4, 0.95, 1);
+  group._labelSprite = label;
+  group.add(label);
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
