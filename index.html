@@ -4010,15 +4010,7 @@ function povRunPlay() {
     pP.forEach(a=>{ let seg=a.pts?.length?a.pts:[mEnd,mEnd]; if(a.type==='block'){const l=seg[seg.length-1];const pv=seg.length>=2?seg[seg.length-2]:seg[0];seg=[...seg,{x:l.x+(l.x-pv.x)*.15,y:l.y+(l.y-pv.y)*.15}];} plPts=plPts.concat(seg.slice(1)); });
     offTrk[p.id]={ motion:mPts.length>1?mPts:null, play:plPts.length>1?plPts:[sp,sp], isQB:p.pos==='QB'||p.label==='QB', isOL:p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label) };
   });
-  // Force AI reactions for POV — the 2D panel default is 'custom' (stationary)
-  // but in POV we always want defenders to react so the view is useful
-  const defReactionEl = document.getElementById('defReactionMode');
-  const savedReactionMode = defReactionEl?.value;
-  if (defReactionEl && defReactionEl.value === 'custom') defReactionEl.value = 'ai';
   const defTrk = computeDefenderTracks();
-  // Restore the user's setting
-  if (defReactionEl && savedReactionMode) defReactionEl.value = savedReactionMode;
-
   const isDef = povSelectedSide === 'defense';
 
   function eIO(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
