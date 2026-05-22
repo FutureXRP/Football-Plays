@@ -3315,38 +3315,73 @@ function canvasToWorld(cx, cy) {
 }
 function hexColor(h) { return parseInt((h||'#888888').replace('#',''),16); }
 
-// ── Material helpers — Phong hybrid system ────────────
-// Body/jersey: Phong with low shininess (soft fabric feel)
-// Helmet: Phong with HIGH shininess (glossy shell)
-// Pads: Lambert (matte white)
-// Field: Lambert (matte turf)
+// ── CEL-SHADING SYSTEM — Nintendo/Fortnite quality ─────
+// gradientMap is the KEY to real cel-shading with MeshToonMaterial.
+// Without it you get flat Lambert. With it: hard 3-band shadow/mid/highlight.
+let _celGradMap = null;
+function getCelGradMap() {
+  if (_celGradMap) return _celGradMap;
+  // 4-pixel wide gradient: deep shadow / shadow / midtone / highlight
+  const data = new Uint8Array([
+    38,  38,  38,  255,   // deep shadow
+    100, 100, 100, 255,   // shadow
+    195, 195, 195, 255,   // midtone
+    255, 255, 255, 255    // highlight
+  ]);
+  const tex = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
+  tex.magFilter = THREE.NearestFilter;  // HARD edges — no smoothing
+  tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  _celGradMap = tex;
+  return tex;
+}
+
+// Helmet-specific gradient: slightly shinier (fewer shadow bands)
+let _helmetGradMap = null;
+function getHelmetGradMap() {
+  if (_helmetGradMap) return _helmetGradMap;
+  const data = new Uint8Array([
+    30,  30,  30,  255,   // deep shadow
+    80,  80,  80,  255,   // shadow edge
+    175, 175, 175, 255,   // body
+    255, 255, 255, 255    // specular highlight
+  ]);
+  const tex = new THREE.DataTexture(data, 4, 1, THREE.RGBAFormat);
+  tex.magFilter = THREE.NearestFilter;
+  tex.minFilter = THREE.NearestFilter;
+  tex.needsUpdate = true;
+  _helmetGradMap = tex;
+  return tex;
+}
+
 function jerseyMat(color) {
-  return new THREE.MeshPhongMaterial({
-    color, shininess: 18, specular: new THREE.Color(0x222222)
+  return new THREE.MeshToonMaterial({
+    color, gradientMap: getCelGradMap()
   });
 }
 function helmetMat(color) {
-  return new THREE.MeshPhongMaterial({
-    color, shininess: 90, specular: new THREE.Color(0x888888)
+  // Slightly brightened helmet color for more shine
+  return new THREE.MeshToonMaterial({
+    color, gradientMap: getHelmetGradMap()
   });
 }
 function padMat() {
-  return new THREE.MeshPhongMaterial({
-    color: 0xf0f0f0, shininess: 12, specular: new THREE.Color(0x111111)
+  return new THREE.MeshToonMaterial({
+    color: 0xf4f4f4, gradientMap: getCelGradMap()
   });
 }
-function skinPhong() {
-  return new THREE.MeshPhongMaterial({
-    color: 0xc8855a, shininess: 22, specular: new THREE.Color(0x331100)
+function skinMat() {
+  return new THREE.MeshToonMaterial({
+    color: 0xc8855a, gradientMap: getCelGradMap()
   });
 }
 function fmMat() {
-  return new THREE.MeshPhongMaterial({
-    color: 0xaaaaaa, shininess: 55, specular: new THREE.Color(0x555555)
+  return new THREE.MeshToonMaterial({
+    color: 0x999999, gradientMap: getHelmetGradMap()
   });
 }
-// Thick outline — only on key pieces (helmet, torso)
-function addOutline(mesh, scale=1.07, col=0x0a0a0a) {
+// Thick outline — back-face expansion on all key pieces
+function addOutline(mesh, scale=1.08, col=0x080808) {
   const o = new THREE.Mesh(
     mesh.geometry,
     new THREE.MeshBasicMaterial({ color: col, side: THREE.BackSide })
@@ -3356,156 +3391,235 @@ function addOutline(mesh, scale=1.07, col=0x0a0a0a) {
   return mesh;
 }
 
-// ── Football player model — Phong hybrid ─────────────
+// ── Football player model — Cel-shaded Nintendo style ─
 function makeFootballPlayer(p, isDef) {
   const group  = new THREE.Group();
   const col    = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  // Darken jersey slightly for better contrast
   const jerseyColor = isDef ? Math.max(0, col - 0x221100) : col;
 
-  const jMat  = jerseyMat(jerseyColor);
-  const pMat  = padMat();
-  const hMat  = helmetMat(jerseyColor);
-  const sMat  = skinPhong();
-  const fMat  = fmMat();
-  // Pants slightly lighter/darker than jersey for contrast
-  const pantMat = jerseyMat(isDef ? 0x6a0000 : 0x1a5a8a);
+  const jMat   = jerseyMat(jerseyColor);
+  const pMat   = padMat();
+  const hMat   = helmetMat(jerseyColor);
+  const sMat   = skinMat();
+  const fMat   = fmMat();
+  // Pants — complementary contrast color
+  const pantCol = isDef ? 0x5a0000 : 0x14406a;
+  const pantMat = jerseyMat(pantCol);
+  // Cleat color
+  const cleatMat = new THREE.MeshToonMaterial({ color: 0x1a1a1a, gradientMap: getCelGradMap() });
 
-  // ── Legs / pants ───────────────────────────────────
-  const legGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
-  [-0.16, 0.16].forEach(x => {
-    const leg = new THREE.Mesh(legGeo, pantMat);
-    leg.position.set(x, 0.35, 0);
-    leg.castShadow = true;
-    group.add(leg);
+  // ── LEGS — longer, tapered for realism ─────────────
+  const upperLegGeo = new THREE.CylinderGeometry(0.135, 0.12, 0.52, 8);
+  const lowerLegGeo = new THREE.CylinderGeometry(0.11, 0.09, 0.45, 8);
+  const cleatGeo    = new THREE.BoxGeometry(0.18, 0.1, 0.28);
+
+  const legL = new THREE.Group(); // left leg group
+  const legR = new THREE.Group(); // right leg group
+  group._legL = legL;
+  group._legR = legR;
+
+  [-1, 1].forEach((side, i) => {
+    const legGrp = side < 0 ? legL : legR;
+    const x = side * 0.175;
+
+    const upper = new THREE.Mesh(upperLegGeo, pantMat);
+    upper.position.set(0, -0.26, 0);
+    upper.castShadow = true;
+    addOutline(upper, 1.07);
+    legGrp.add(upper);
+
+    const lower = new THREE.Mesh(lowerLegGeo, pantMat);
+    lower.position.set(0, -0.71, 0);
+    lower.castShadow = true;
+    addOutline(lower, 1.07);
+    legGrp.add(lower);
+
+    const cleat = new THREE.Mesh(cleatGeo, cleatMat);
+    cleat.position.set(0.02, -0.97, 0.04);
+    legGrp.add(cleat);
+
+    legGrp.position.set(x, 1.1, 0);  // pivot at hip
+    group.add(legGrp);
   });
 
-  // ── Thigh pads ────────────────────────────────────
-  const tpadGeo = new THREE.BoxGeometry(0.24, 0.2, 0.26);
-  [-0.16, 0.16].forEach(x => {
-    const tp = new THREE.Mesh(tpadGeo, pMat);
-    tp.position.set(x, 0.64, 0.04);
+  // ── THIGH PADS ──────────────────────────────────────
+  [-0.175, 0.175].forEach(x => {
+    const tp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.24), pMat);
+    tp.position.set(x, 0.78, 0.06);
     group.add(tp);
   });
 
-  // ── Torso / jersey ─────────────────────────────────
-  const torsoGeo = new THREE.BoxGeometry(0.58, 0.65, 0.34);
+  // ── TORSO — taller, more athletic ──────────────────
+  const torsoGeo = new THREE.BoxGeometry(0.56, 0.78, 0.32);
   const torso = new THREE.Mesh(torsoGeo, jMat);
-  torso.position.set(0, 1.12, 0);
+  torso.position.set(0, 1.34, 0);
   torso.castShadow = true;
-  addOutline(torso, 1.06); // outline on torso
+  addOutline(torso, 1.065);
   group.add(torso);
 
-  // ── Jersey number ─────────────────────────────────
+  // ── JERSEY NUMBER ───────────────────────────────────
   const numCanvas = document.createElement('canvas');
-  numCanvas.width = 64; numCanvas.height = 64;
+  numCanvas.width = 128; numCanvas.height = 128;
   const nc = numCanvas.getContext('2d');
-  nc.fillStyle = isDef ? '#ffbbbb' : '#ffffff';
-  nc.font = 'bold 38px Arial';
+  // Shadow for depth
+  nc.shadowColor = 'rgba(0,0,0,0.6)';
+  nc.shadowBlur = 4;
+  nc.fillStyle = isDef ? '#ffcccc' : '#ffffff';
+  nc.font = 'bold 72px Barlow Condensed, Arial Black, sans-serif';
   nc.textAlign = 'center'; nc.textBaseline = 'middle';
-  nc.fillText(p.label.slice(0,2), 32, 32);
+  nc.fillText(p.label.slice(0, 2), 64, 64);
   const numMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.30, 0.30),
+    new THREE.PlaneGeometry(0.32, 0.32),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(numCanvas), transparent: true, depthTest: false })
   );
-  numMesh.position.set(0, 1.12, 0.18);
+  numMesh.position.set(0, 1.34, 0.17);
   group.add(numMesh);
 
-  // ── Shoulder pads ─────────────────────────────────
-  const spad = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.18, 0.46), pMat);
-  spad.position.set(0, 1.50, 0);
+  // ── SHOULDER PADS — wider, flatter, more realistic ──
+  // Main yoke
+  const spad = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.16, 0.44), pMat);
+  spad.position.set(0, 1.76, 0);
+  addOutline(spad, 1.06);
   group.add(spad);
-  [-0.42, 0.42].forEach(x => {
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.38), pMat);
-    wing.position.set(x, 1.46, 0);
-    wing.rotation.z = x > 0 ? -0.22 : 0.22;
+  // Front/back cantilever plates
+  for (const z of [-0.12, 0.12]) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.22), pMat);
+    plate.position.set(0, 1.68, z);
+    group.add(plate);
+  }
+  // Side wing drops
+  [-0.48, 0.48].forEach(x => {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.36), pMat);
+    wing.position.set(x, 1.62, 0);
+    wing.rotation.z = x > 0 ? -0.28 : 0.28;
+    addOutline(wing, 1.07);
     group.add(wing);
   });
 
-  // ── Arms ──────────────────────────────────────────
-  const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.55, 7);
-  [[-0.56, 0.55], [0.56, -0.55]].forEach(([x, rz]) => {
-    const arm = new THREE.Mesh(armGeo, jMat);
-    arm.position.set(x, 1.28, 0);
-    arm.rotation.z = rz;
-    arm.castShadow = true;
-    group.add(arm);
+  // ── ARMS — better anatomy, upper/lower segments ────
+  const upperArmGeo = new THREE.CylinderGeometry(0.105, 0.095, 0.38, 8);
+  const lowerArmGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.32, 8);
+  [[-1, 0.55], [1, -0.55]].forEach(([side, rz]) => {
+    const x = side * 0.62;
+    const uArm = new THREE.Mesh(upperArmGeo, jMat);
+    uArm.position.set(x, 1.64, 0);
+    uArm.rotation.z = rz;
+    uArm.castShadow = true;
+    addOutline(uArm, 1.07);
+    group.add(uArm);
+
+    const lArm = new THREE.Mesh(lowerArmGeo, sMat);
+    const lx = x + Math.sin(rz) * 0.36;
+    const ly = 1.64 - Math.abs(Math.cos(rz)) * 0.36;
+    lArm.position.set(lx, ly, 0);
+    lArm.rotation.z = rz * 0.7;
+    lArm.castShadow = true;
+    group.add(lArm);
   });
 
-  // ── Neck ──────────────────────────────────────────
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.14,7), sMat);
-  neck.position.set(0, 1.63, 0);
+  // ── NECK ────────────────────────────────────────────
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.16, 8), sMat);
+  neck.position.set(0, 1.90, 0);
   group.add(neck);
 
-  // ── Helmet — glossy Phong ──────────────────────────
-  const helmGeo = new THREE.SphereGeometry(0.33, 14, 10);
+  // ── HELMET — larger, rounder, cel-shaded shine ──────
+  const helmGeo = new THREE.SphereGeometry(0.40, 16, 12);
   const helm = new THREE.Mesh(helmGeo, hMat);
-  helm.scale.set(1, 0.92, 1.05);
-  helm.position.set(0, 1.92, 0);
+  helm.scale.set(1, 0.94, 1.08);
+  helm.position.set(0, 2.20, 0);
   helm.castShadow = true;
-  addOutline(helm, 1.07); // outline on helmet — most visible piece
+  addOutline(helm, 1.065); // prominent outline on helmet
   group.add(helm);
 
-  // Helmet stripe — team accent color slightly lighter
-  const stripeCol = Math.min(0xffffff, jerseyColor + 0x404040);
+  // Helmet crown stripe
+  const stripeCol = Math.min(0xffffff, jerseyColor + 0x505050);
   const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.38, 0.68),
-    new THREE.MeshPhongMaterial({ color: stripeCol, shininess: 25 })
+    new THREE.BoxGeometry(0.08, 0.46, 0.82),
+    new THREE.MeshToonMaterial({ color: stripeCol, gradientMap: getCelGradMap() })
   );
-  stripe.position.set(0, 2.12, 0);
+  stripe.position.set(0, 2.42, 0);
   group.add(stripe);
 
-  // ── Facemask bars ─────────────────────────────────
+  // Ear holes
+  [-0.38, 0.38].forEach(x => {
+    const ear = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8),
+      new THREE.MeshToonMaterial({ color: 0x111111, gradientMap: getCelGradMap() })
+    );
+    ear.rotation.z = Math.PI / 2;
+    ear.position.set(x, 2.22, 0.05);
+    group.add(ear);
+  });
+
+  // ── FACEMASK — 3 bars + vertical ────────────────────
   for (let i = 0; i < 3; i++) {
-    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.54,6), fMat);
-    fm.rotation.z = Math.PI/2;
-    fm.position.set(0, 1.83 + i*0.1, 0.3);
+    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.58, 7), fMat);
+    fm.rotation.z = Math.PI / 2;
+    fm.position.set(0, 2.08 + i * 0.1, 0.35);
+    addOutline(fm, 1.12);
     group.add(fm);
   }
-  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.3,6), fMat);
-  fmV.position.set(0, 1.86, 0.34);
+  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.32, 7), fMat);
+  fmV.position.set(0, 2.11, 0.40);
+  addOutline(fmV, 1.12);
   group.add(fmV);
 
-  // ── Visor ─────────────────────────────────────────
+  // ── VISOR — tinted transparent ──────────────────────
   const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.5,0.08,0.06),
-    new THREE.MeshPhongMaterial({ color: 0x111122, transparent:true, opacity:0.82, shininess:80, specular: new THREE.Color(0x4444aa) })
+    new THREE.BoxGeometry(0.54, 0.09, 0.07),
+    new THREE.MeshToonMaterial({ color: 0x112233, transparent: true, opacity: 0.78, gradientMap: getHelmetGradMap() })
   );
-  visor.position.set(0, 1.97, 0.3);
+  visor.position.set(0, 2.24, 0.35);
   group.add(visor);
 
-  // ── Label ─────────────────────────────────────────
-  const labelSprite = makeLabel(p.label, isDef ? '#ffaaaa' : '#ffffff');
-  labelSprite.position.y = 2.6;
-  labelSprite.scale.set(1.6, 0.7, 1);
+  // ── LABEL SPRITE — crisp with background pill ───────
+  const labelSprite = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#440000' : '#002244');
+  labelSprite.position.y = 3.05;
+  labelSprite.scale.set(2.2, 0.9, 1);
   group.add(labelSprite);
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
   group.rotation.y = isDef ? 0 : Math.PI;
   group._eyeY  = EYE_HEIGHT;
-  group._bodyH = 2.25;
+  group._bodyH = 2.65;
   group._isDef = isDef;
+  group._animT = Math.random() * Math.PI * 2; // phase offset so players don't all step in sync
 
   return group;
 }
 
-// ── Football mesh — Phong with leather specular ──────
+// ── Football mesh — cel-shaded leather ball ──────────
 function makeBallMesh() {
   const g = new THREE.Group();
-  const bMat = new THREE.MeshPhongMaterial({
-    color: 0x7a3410, shininess: 35, specular: new THREE.Color(0x442200)
+  const bMat = new THREE.MeshToonMaterial({
+    color: 0x7a3410, gradientMap: getCelGradMap()
   });
-  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 7), bMat);
-  ball.scale.set(0.7, 1, 0.7);
-  addOutline(ball, 1.08, 0x2a0a00);
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.28, 12, 8), bMat);
+  ball.scale.set(0.65, 1, 0.65);
+  addOutline(ball, 1.09, 0x2a0a00);
   g.add(ball);
-  const lace = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08,0.28,0.06),
-    new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 10 })
-  );
-  lace.position.set(0.01, 0, 0.22);
-  g.add(lace);
+
+  // White laces
+  const laceMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getCelGradMap() });
+  const laceMain = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.30, 0.07), laceMat);
+  laceMain.position.set(0.02, 0, 0.24);
+  g.add(laceMain);
+  // Crosshatches
+  for (let i = -1; i <= 1; i++) {
+    const lh = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.025, 0.05), laceMat);
+    lh.position.set(0.02, i * 0.08, 0.25);
+    g.add(lh);
+  }
+
+  // Seam lines
+  const seamMat = new THREE.MeshBasicMaterial({ color: 0x3a1505 });
+  const seamGeo = new THREE.TorusGeometry(0.18, 0.012, 4, 20);
+  const seam = new THREE.Mesh(seamGeo, seamMat);
+  seam.rotation.y = Math.PI / 2;
+  seam.position.set(0, 0, 0);
+  g.add(seam);
+
   g.visible = false;
   return g;
 }
@@ -3518,7 +3632,7 @@ function makeLine3D(pts2d, color, ht=0.06) {
   return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, linewidth:2 }));
 }
 
-// ── Floating label sprite ──────────────────────────────
+// ── Floating label sprite (original, kept for compat) ─
 function makeLabel(text, color) {
   const c2 = document.createElement('canvas');
   c2.width=128; c2.height=56;
@@ -3534,6 +3648,43 @@ function makeLabel(text, color) {
   return s;
 }
 
+// ── Crisp label with pill background (new) ────────────
+function makeLabelCrisp(text, textColor, bgColor) {
+  const c2 = document.createElement('canvas');
+  c2.width = 192; c2.height = 72;
+  const cx = c2.getContext('2d');
+  // Pill background
+  const r = 16;
+  cx.fillStyle = bgColor || 'rgba(0,20,60,0.85)';
+  cx.beginPath();
+  cx.moveTo(r, 4); cx.lineTo(c2.width - r, 4);
+  cx.quadraticCurveTo(c2.width - 4, 4, c2.width - 4, r);
+  cx.lineTo(c2.width - 4, c2.height - r);
+  cx.quadraticCurveTo(c2.width - 4, c2.height - 4, c2.width - r, c2.height - 4);
+  cx.lineTo(r, c2.height - 4);
+  cx.quadraticCurveTo(4, c2.height - 4, 4, c2.height - r);
+  cx.lineTo(4, r);
+  cx.quadraticCurveTo(4, 4, r, 4);
+  cx.closePath();
+  cx.fill();
+  // Pill border
+  cx.strokeStyle = textColor || '#ffffff';
+  cx.lineWidth = 3;
+  cx.globalAlpha = 0.5;
+  cx.stroke();
+  cx.globalAlpha = 1.0;
+  // Text
+  cx.fillStyle = textColor || '#ffffff';
+  cx.font = 'bold 34px Barlow Condensed, Arial Black, sans-serif';
+  cx.textAlign = 'center';
+  cx.textBaseline = 'middle';
+  cx.fillText(text.slice(0, 4), c2.width / 2, c2.height / 2);
+  const tex = new THREE.CanvasTexture(c2);
+  const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+  const s = new THREE.Sprite(mat);
+  return s;
+}
+
 // ── Init Three.js scene ───────────────────────────────
 function initPOV() {
   if (povScene) return;
@@ -3542,47 +3693,117 @@ function initPOV() {
   povRenderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
   povRenderer.shadowMap.enabled = true;
   povRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
-  povRenderer.setClearColor(0x87ceeb); // sky blue
+  povRenderer.setClearColor(0x87ceeb);
+  // Tone mapping for more saturated/vibrant game-engine feel
+  povRenderer.outputEncoding = THREE.sRGBEncoding || 3001;
+  povRenderer.toneMapping = THREE.ACESFilmicToneMapping || 4;
+  povRenderer.toneMappingExposure = 1.15;
 
   povScene = new THREE.Scene();
-  // Deep stadium sky — not cartoon blue, more like evening game atmosphere
-  const skyCol = new THREE.Color(0x6aa8d0);
-  povScene.fog = new THREE.FogExp2(0x8bbfd4, 0.008);
-  povScene.background = skyCol;
+  // Stadium sky — deep afternoon blue-purple
+  const skyGrad = new THREE.Color(0x3a6fa0);
+  povScene.fog = new THREE.FogExp2(0x6090b8, 0.006);
+  povScene.background = skyGrad;
 
-  povCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 250);
+  povCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 300);
 
-  // ── Lighting — tuned for Phong hybrid ────────────
-  // Balanced ambient so dark sides aren't pure black
-  povScene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
-  // Main sun — warm afternoon game light
-  const sun = new THREE.DirectionalLight(0xfff8d0, 1.4);
-  sun.position.set(25, 50, -20);
+  // ── LIGHTING — tuned for MeshToonMaterial ─────────
+  // Toon needs STRONG directional lights to produce visible band transitions.
+  // Ambient fills the dark sides. No specular in toon so dial up intensity.
+  povScene.add(new THREE.AmbientLight(0xfff0cc, 0.85)); // warm fill
+  
+  // Primary sun — hard, bright, creates the toon shadow band
+  const sun = new THREE.DirectionalLight(0xfffae0, 2.2);
+  sun.position.set(30, 55, -25);
   sun.castShadow = true;
-  sun.shadow.mapSize.width  = 2048;
-  sun.shadow.mapSize.height = 2048;
+  sun.shadow.mapSize.width  = 4096;
+  sun.shadow.mapSize.height = 4096;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far  = 160;
-  sun.shadow.camera.left = sun.shadow.camera.bottom = -60;
-  sun.shadow.camera.right = sun.shadow.camera.top   =  60;
-  sun.shadow.bias = -0.001;
+  sun.shadow.camera.far  = 200;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -80;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  80;
+  sun.shadow.bias = -0.0005;
   povScene.add(sun);
-  // Cool fill from opposite side — stadium lights
-  const fill = new THREE.DirectionalLight(0xc8e0ff, 0.45);
-  fill.position.set(-20, 25, 15);
-  povScene.add(fill);
-  // Hemisphere — sky/ground bounce
-  povScene.add(new THREE.HemisphereLight(0x87ceeb, 0x1a3a10, 0.3));
 
-  // ── Field — realistic deep turf tones ────────────
-  // NFL fields read as deep forest green, not bright lime
-  const turfA = new THREE.MeshLambertMaterial({ color: 0x1e3d1a }); // dark stripe
-  const turfB = new THREE.MeshLambertMaterial({ color: 0x24491f }); // slightly lighter
-  for (let i=0; i<10; i++) {
+  // Cool rim/fill from camera-left — adds depth separation
+  const fill = new THREE.DirectionalLight(0xaaddff, 0.6);
+  fill.position.set(-30, 20, 20);
+  povScene.add(fill);
+
+  // Hemisphere — sky-ground bounce for turf reflection
+  povScene.add(new THREE.HemisphereLight(0x88bbdd, 0x224422, 0.5));
+
+  // ── STADIUM LIGHTS — 4 rigs, emissive + point lights ──
+  const lightRigPositions = [
+    [-W3*0.72, 28,  H3*0.3],
+    [ W3*0.72, 28,  H3*0.3],
+    [-W3*0.72, 28, -H3*0.3],
+    [ W3*0.72, 28, -H3*0.3],
+  ];
+  const lightRigMat = new THREE.MeshBasicMaterial({ color: 0xffffee });
+  lightRigPositions.forEach(([lx, ly, lz]) => {
+    // Visual rig: horizontal bar with lamp clusters
+    const bar = new THREE.Mesh(new THREE.BoxGeometry(4.5, 0.2, 0.4), new THREE.MeshToonMaterial({ color: 0x888888, gradientMap: getCelGradMap() }));
+    bar.position.set(lx, ly, lz);
+    povScene.add(bar);
+    // Lamp clusters on bar
+    for (let dx = -1.8; dx <= 1.8; dx += 0.9) {
+      const lamp = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.35, 0.35), lightRigMat);
+      lamp.position.set(lx + dx, ly - 0.28, lz);
+      povScene.add(lamp);
+    }
+    // Support pole
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.18, ly - 8, 8),
+      new THREE.MeshToonMaterial({ color: 0x777777, gradientMap: getCelGradMap() })
+    );
+    pole.position.set(lx, (ly - 8) / 2 + 4, lz);
+    povScene.add(pole);
+    // Point light — contributes to band shading on nearby players
+    const pt = new THREE.PointLight(0xfff8e0, 0.6, 60);
+    pt.position.set(lx, ly - 2, lz);
+    povScene.add(pt);
+  });
+
+  // ── PROCEDURAL TURF TEXTURE — realistic grass blades ──
+  function makeTurfTexture(darkMode) {
+    const sz = 256;
+    const tc = document.createElement('canvas');
+    tc.width = sz; tc.height = sz;
+    const tx = tc.getContext('2d');
+    const base = darkMode ? '#1a3d17' : '#20491b';
+    const blade = darkMode ? '#162e13' : '#1c4018';
+    tx.fillStyle = base;
+    tx.fillRect(0, 0, sz, sz);
+    // Grass blade noise
+    tx.fillStyle = blade;
+    for (let i = 0; i < 800; i++) {
+      const bx = Math.random() * sz;
+      const by = Math.random() * sz;
+      const bh = 3 + Math.random() * 6;
+      const bw = 0.8 + Math.random() * 1.2;
+      tx.fillRect(bx, by, bw, bh);
+    }
+    // Slight horizontal sheen (mowing pattern)
+    const sheen = tx.createLinearGradient(0, 0, 0, sz);
+    sheen.addColorStop(0, 'rgba(255,255,255,0.04)');
+    sheen.addColorStop(0.5, 'rgba(0,0,0,0.0)');
+    sheen.addColorStop(1, 'rgba(255,255,255,0.04)');
+    tx.fillStyle = sheen;
+    tx.fillRect(0, 0, sz, sz);
+    const tex = new THREE.CanvasTexture(tc);
+    tex.wrapS = tex.wrapT = THREE.RepeatWrapping;
+    tex.repeat.set(8, 6);
+    return tex;
+  }
+
+  const turfMatA = new THREE.MeshLambertMaterial({ map: makeTurfTexture(true) });
+  const turfMatB = new THREE.MeshLambertMaterial({ map: makeTurfTexture(false) });
+  for (let i = 0; i < 10; i++) {
     const zFrom = (-H3/2) + i*(H3/10);
     const mesh = new THREE.Mesh(
       new THREE.PlaneGeometry(W3*1.6, H3/10),
-      i%2===0 ? turfA : turfB
+      i%2===0 ? turfMatA : turfMatB
     );
     mesh.rotation.x = -Math.PI/2;
     mesh.position.set(0, 0, zFrom + H3/20);
@@ -3590,24 +3811,23 @@ function initPOV() {
     povScene.add(mesh);
   }
 
-  // ── Yard lines ────────────────────────────────────
+  // ── Yard lines ─────────────────────────────────────
   for (let i=0; i<=10; i++) {
     const z = (-H3/2) + i*(H3/10);
     const isLOS = Math.abs(z - ((LOS-H/2)*PX)) < 0.3;
     const col   = isLOS ? 0xffdd00 : 0xffffff;
-    const op    = isLOS ? 0.8 : 0.22;
+    const op    = isLOS ? 0.9 : 0.28;
     const pts = [new THREE.Vector3(-W3*0.75,0.02,z), new THREE.Vector3(W3*0.75,0.02,z)];
     const geo = new THREE.BufferGeometry().setFromPoints(pts);
     const line = new THREE.Line(geo, new THREE.LineBasicMaterial({color:col,transparent:true,opacity:op}));
     povScene.add(line);
-    // Number markers
     if (!isLOS && i>0 && i<10) {
       const yardNum = Math.abs(i*10-50);
       for (const sx of [-W3*0.28, W3*0.28]) {
         const nc2 = document.createElement('canvas'); nc2.width=64; nc2.height=32;
         const nctx = nc2.getContext('2d');
-        nctx.fillStyle='rgba(255,255,255,0.55)';
-        nctx.font='bold 20px Arial'; nctx.textAlign='center'; nctx.textBaseline='middle';
+        nctx.fillStyle='rgba(255,255,255,0.6)';
+        nctx.font='bold 20px Barlow Condensed, Arial'; nctx.textAlign='center'; nctx.textBaseline='middle';
         nctx.fillText(yardNum, 32, 16);
         const sp = new THREE.Sprite(new THREE.SpriteMaterial({map:new THREE.CanvasTexture(nc2),transparent:true,depthTest:false}));
         sp.scale.set(2,1,1);
@@ -3617,43 +3837,42 @@ function initPOV() {
     }
   }
 
-  // ── Hash marks ────────────────────────────────────
+  // ── Hash marks ─────────────────────────────────────
   for (let i=0; i<=10; i++) {
     for (let j=0; j<8; j++) {
       const z = (-H3/2) + i*(H3/10) + j*(H3/80);
       for (const hx of [-W3*0.165, W3*0.165]) {
         const pts = [new THREE.Vector3(hx-0.4,0.02,z), new THREE.Vector3(hx+0.4,0.02,z)];
         const geo = new THREE.BufferGeometry().setFromPoints(pts);
-        povScene.add(new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.3})));
+        povScene.add(new THREE.Line(geo, new THREE.LineBasicMaterial({color:0xffffff,transparent:true,opacity:0.32})));
       }
     }
   }
 
-  // ── End zones ─────────────────────────────────────
+  // ── End zones ──────────────────────────────────────
   for (const zOff of [-H3*0.54, H3*0.54]) {
     const ez = new THREE.Mesh(
       new THREE.PlaneGeometry(W3*1.6, H3*0.08),
-      new THREE.MeshLambertMaterial({ color: 0x152e12 })
+      new THREE.MeshLambertMaterial({ color: 0x122810 })
     );
     ez.rotation.x = -Math.PI/2;
     ez.position.set(0, 0.01, zOff);
     povScene.add(ez);
   }
 
-  // ── Goal posts — Phong yellow ──────────────────────
+  // ── Goal posts — cel-shaded yellow ─────────────────
   function makeGoalPost(z) {
-    const mat = new THREE.MeshPhongMaterial({
-      color: 0xe8cc30, shininess: 45, specular: new THREE.Color(0x886600)
+    const mat = new THREE.MeshToonMaterial({
+      color: 0xf0cc28, gradientMap: getHelmetGradMap()
     });
     const post = new THREE.Group();
-    const uGeo = new THREE.CylinderGeometry(0.12,0.12,8,8);
-    const u = new THREE.Mesh(uGeo, mat); u.position.set(0,4,0); post.add(u);
-    const cbGeo = new THREE.CylinderGeometry(0.08,0.08,6,6);
-    const cb = new THREE.Mesh(cbGeo, mat);
-    cb.rotation.z = Math.PI/2; cb.position.set(0,5.5,0); post.add(cb);
-    for (const x of [-3,3]) {
-      const up = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,4,6), mat);
-      up.position.set(x,7.5,0); post.add(up);
+    const u = new THREE.Mesh(new THREE.CylinderGeometry(0.14,0.14,8,10), mat);
+    u.position.set(0,4,0); addOutline(u,1.08); post.add(u);
+    const cb = new THREE.Mesh(new THREE.CylinderGeometry(0.09,0.09,6.2,8), mat);
+    cb.rotation.z = Math.PI/2; cb.position.set(0,5.5,0); addOutline(cb,1.08); post.add(cb);
+    for (const x of [-3.1,3.1]) {
+      const up = new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.08,4.2,8), mat);
+      up.position.set(x,7.6,0); addOutline(up,1.08); post.add(up);
     }
     post.position.set(0,0,z);
     return post;
@@ -3661,20 +3880,26 @@ function initPOV() {
   povScene.add(makeGoalPost(-H3*0.85));
   povScene.add(makeGoalPost( H3*0.85));
 
-  // ── Stands — realistic concrete + crowd color rows ──
-  for (const sx of [-W3*0.82, W3*0.82]) {
-    const standMat = new THREE.MeshLambertMaterial({ color: 0x3a3d4a });
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, H3*1.1), standMat);
-    stand.position.set(sx, 4.5, 0);
-    povScene.add(stand);
-    // Crowd rows — muted realistic fan colors
-    const rowColors = [0x4a5fa0, 0x8a2020, 0x4a5fa0, 0xcccccc, 0x8a2020, 0x4a5fa0];
+  // ── STANDS — tiered, with cel-shaded crowd color blocks ──
+  for (const sx of [-W3*0.84, W3*0.84]) {
+    // Main concrete structure — tiers
+    for (let tier = 0; tier < 3; tier++) {
+      const h = 4 + tier * 2;
+      const w = 3.8 - tier * 0.3;
+      const standMat = new THREE.MeshToonMaterial({ color: 0x3a3d4a, gradientMap: getCelGradMap() });
+      const stand = new THREE.Mesh(new THREE.BoxGeometry(w, h, H3*1.1), standMat);
+      stand.position.set(sx + (tier * (sx > 0 ? 0.3 : -0.3)), h/2, 0);
+      povScene.add(stand);
+    }
+
+    // Crowd color rows — bright saturated for game feel
+    const rowColors = [0x2244aa, 0xcc2222, 0x2244aa, 0xeeeeee, 0xcc2222, 0x2244aa, 0xeeeeee, 0xcc2222];
     rowColors.forEach((c, row) => {
       const rowMesh = new THREE.Mesh(
-        new THREE.BoxGeometry(3.4, 0.55, H3*1.05),
-        new THREE.MeshLambertMaterial({ color: c, transparent:true, opacity:0.8 })
+        new THREE.BoxGeometry(3.5, 0.6, H3*1.05),
+        new THREE.MeshToonMaterial({ color: c, gradientMap: getCelGradMap() })
       );
-      rowMesh.position.set(sx, 1.2 + row*1.25, 0);
+      rowMesh.position.set(sx, 1.0 + row * 1.05, 0);
       povScene.add(rowMesh);
     });
   }
@@ -4017,7 +4242,12 @@ function povRunPlay() {
   function ptAt2D(pts,e){if(!pts||pts.length<2)return pts?pts[0]:{x:0,y:0};const ci=Math.max(0,Math.min(1,e));const idx=Math.min(pts.length-2,Math.floor(ci*(pts.length-1)));const loc=ci*(pts.length-1)-idx;const a=pts[idx],b=pts[idx+1]||a;return{x:a.x+(b.x-a.x)*loc,y:a.y+(b.y-a.y)*loc};}
 
   // ── Core render-at-progress function (shared by rAF and scrub) ──
+  // Track time for leg animation
+  let _animFrameTime = 0;
+
   function renderAtProgress(raw) {
+    _animFrameTime += 0.016 * povSpeed; // advance animation clock
+
     // Move offense
     players.forEach(p=>{
       const pm=povPlayerMeshes.find(m=>m.id===p.id); if(!pm) return;
@@ -4026,13 +4256,30 @@ function povRunPlay() {
       if(hasM&&raw<MEND){ pos2d=tr.motion?ptAt2D(tr.motion,eIO(raw/MEND)):{x:p.x,y:p.y}; }
       else{ const pr=hasM?(raw-MEND)/(1-MEND):raw; const sp=tr.isQB?Math.min(pr/0.62,1):tr.isOL?Math.min(pr/0.75,1):pr; pos2d=ptAt2D(tr.play,eIO(sp)); }
       const w=canvasToWorld(pos2d.x,pos2d.y);
+
+      // Check movement speed for leg animation
+      const prevPos = pm.group.position.clone();
       pm.group.position.set(w.x,0,w.z);
+      const moveSpd = prevPos.distanceTo(pm.group.position);
+
       // Face direction
       const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
       const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
       const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
-      // Offset by PI for offense since their base rotation is Math.PI (facing negative z)
       if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz)+Math.PI;
+
+      // ── LEG ANIMATION ──────────────────────────────
+      // Swing legs if moving; settle into stance if stopped
+      if (pm.group._legL && pm.group._legR) {
+        const phase = pm.group._animT || 0;
+        const spd   = moveSpd > 0.004 ? 18 : 0;
+        const swing = spd > 0 ? Math.sin(_animFrameTime * spd + phase) * 0.45 : 0;
+        const bob   = spd > 0 ? Math.abs(Math.sin(_animFrameTime * spd + phase)) * 0.04 : 0;
+        pm.group._legL.rotation.x =  swing;
+        pm.group._legR.rotation.x = -swing;
+        // Slight body bob on step
+        pm.group.position.y = bob;
+      }
     });
 
     // Move defense
@@ -4043,7 +4290,20 @@ function povRunPlay() {
       const pts=defTrk[d.id]||[{x:d.x,y:d.y}];
       const pos2d=ptAt2D(pts.length>1?pts:[pts[0],pts[0]],eIO(pr));
       const w=canvasToWorld(pos2d.x,pos2d.y);
+
+      const prevPos = dm.group.position.clone();
       dm.group.position.set(w.x,0,w.z);
+      const moveSpd = prevPos.distanceTo(dm.group.position);
+
+      if (dm.group._legL && dm.group._legR) {
+        const phase = dm.group._animT || 0;
+        const spd   = moveSpd > 0.004 ? 18 : 0;
+        const swing = spd > 0 ? Math.sin(_animFrameTime * spd + phase) * 0.42 : 0;
+        const bob   = spd > 0 ? Math.abs(Math.sin(_animFrameTime * spd + phase)) * 0.04 : 0;
+        dm.group._legL.rotation.x =  swing;
+        dm.group._legR.rotation.x = -swing;
+        dm.group.position.y = bob;
+      }
     });
 
     // Ball arc
