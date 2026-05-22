@@ -3315,143 +3315,167 @@ function canvasToWorld(cx, cy) {
 }
 function hexColor(h) { return parseInt((h||'#888888').replace('#',''),16); }
 
-// ── Toon material helpers ─────────────────────────────
-function toonMat(color, opts={}) {
-  // MeshToonMaterial gives hard cel-shaded look
-  return new THREE.MeshToonMaterial({ color, ...opts });
+// ── Material helpers — Phong hybrid system ────────────
+// Body/jersey: Phong with low shininess (soft fabric feel)
+// Helmet: Phong with HIGH shininess (glossy shell)
+// Pads: Lambert (matte white)
+// Field: Lambert (matte turf)
+function jerseyMat(color) {
+  return new THREE.MeshPhongMaterial({
+    color, shininess: 18, specular: new THREE.Color(0x222222)
+  });
 }
-function outlineMat(color=0x000000) {
-  // Rendered backface-only + slightly scaled = cartoon outline
-  return new THREE.MeshBasicMaterial({ color, side: THREE.BackSide });
+function helmetMat(color) {
+  return new THREE.MeshPhongMaterial({
+    color, shininess: 90, specular: new THREE.Color(0x888888)
+  });
 }
-// Add an outline shell around any mesh
-function withOutline(mesh, scale=1.055, col=0x111111) {
-  const outline = new THREE.Mesh(mesh.geometry, outlineMat(col));
-  outline.scale.setScalar(scale);
-  mesh.add(outline);
+function padMat() {
+  return new THREE.MeshPhongMaterial({
+    color: 0xf0f0f0, shininess: 12, specular: new THREE.Color(0x111111)
+  });
+}
+function skinPhong() {
+  return new THREE.MeshPhongMaterial({
+    color: 0xc8855a, shininess: 22, specular: new THREE.Color(0x331100)
+  });
+}
+function fmMat() {
+  return new THREE.MeshPhongMaterial({
+    color: 0xaaaaaa, shininess: 55, specular: new THREE.Color(0x555555)
+  });
+}
+// Thick outline — only on key pieces (helmet, torso)
+function addOutline(mesh, scale=1.07, col=0x0a0a0a) {
+  const o = new THREE.Mesh(
+    mesh.geometry,
+    new THREE.MeshBasicMaterial({ color: col, side: THREE.BackSide })
+  );
+  o.scale.setScalar(scale);
+  mesh.add(o);
   return mesh;
 }
 
-// ── Low-poly football player model — TOON SHADING ────
+// ── Football player model — Phong hybrid ─────────────
 function makeFootballPlayer(p, isDef) {
-  const group = new THREE.Group();
-  const col   = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  const group  = new THREE.Group();
+  const col    = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  // Darken jersey slightly for better contrast
+  const jerseyColor = isDef ? Math.max(0, col - 0x221100) : col;
 
-  const bodyMat  = toonMat(col);
-  const whiteMat = toonMat(0xffffff);
-  const skinMat  = toonMat(0xd4956a);
-  const darkMat  = toonMat(0x222244);
-  const fmMat    = toonMat(0xbbbbbb);
+  const jMat  = jerseyMat(jerseyColor);
+  const pMat  = padMat();
+  const hMat  = helmetMat(jerseyColor);
+  const sMat  = skinPhong();
+  const fMat  = fmMat();
+  // Pants slightly lighter/darker than jersey for contrast
+  const pantMat = jerseyMat(isDef ? 0x6a0000 : 0x1a5a8a);
 
-  // ── Legs ──────────────────────────────────────────
+  // ── Legs / pants ───────────────────────────────────
   const legGeo = new THREE.BoxGeometry(0.22, 0.7, 0.22);
   [-0.16, 0.16].forEach(x => {
-    const leg = new THREE.Mesh(legGeo, bodyMat);
+    const leg = new THREE.Mesh(legGeo, pantMat);
     leg.position.set(x, 0.35, 0);
     leg.castShadow = true;
-    withOutline(leg);
     group.add(leg);
   });
 
   // ── Thigh pads ────────────────────────────────────
-  const tpadGeo = new THREE.BoxGeometry(0.24, 0.22, 0.28);
+  const tpadGeo = new THREE.BoxGeometry(0.24, 0.2, 0.26);
   [-0.16, 0.16].forEach(x => {
-    const tp = new THREE.Mesh(tpadGeo, whiteMat);
+    const tp = new THREE.Mesh(tpadGeo, pMat);
     tp.position.set(x, 0.64, 0.04);
-    withOutline(tp, 1.05);
     group.add(tp);
   });
 
-  // ── Torso ─────────────────────────────────────────
+  // ── Torso / jersey ─────────────────────────────────
   const torsoGeo = new THREE.BoxGeometry(0.58, 0.65, 0.34);
-  const torso = new THREE.Mesh(torsoGeo, bodyMat);
+  const torso = new THREE.Mesh(torsoGeo, jMat);
   torso.position.set(0, 1.12, 0);
   torso.castShadow = true;
-  withOutline(torso);
+  addOutline(torso, 1.06); // outline on torso
   group.add(torso);
 
   // ── Jersey number ─────────────────────────────────
   const numCanvas = document.createElement('canvas');
   numCanvas.width = 64; numCanvas.height = 64;
   const nc = numCanvas.getContext('2d');
-  nc.fillStyle = isDef ? '#ffaaaa' : '#ffffff';
+  nc.fillStyle = isDef ? '#ffbbbb' : '#ffffff';
   nc.font = 'bold 38px Arial';
   nc.textAlign = 'center'; nc.textBaseline = 'middle';
   nc.fillText(p.label.slice(0,2), 32, 32);
-  const numTex = new THREE.CanvasTexture(numCanvas);
   const numMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.32, 0.32),
-    new THREE.MeshBasicMaterial({ map: numTex, transparent: true, depthTest: false })
+    new THREE.PlaneGeometry(0.30, 0.30),
+    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(numCanvas), transparent: true, depthTest: false })
   );
   numMesh.position.set(0, 1.12, 0.18);
   group.add(numMesh);
 
   // ── Shoulder pads ─────────────────────────────────
-  const spadGeo = new THREE.BoxGeometry(0.96, 0.18, 0.46);
-  const spad = new THREE.Mesh(spadGeo, whiteMat);
+  const spad = new THREE.Mesh(new THREE.BoxGeometry(0.96, 0.18, 0.46), pMat);
   spad.position.set(0, 1.50, 0);
-  withOutline(spad, 1.04);
   group.add(spad);
-  const wingGeo = new THREE.BoxGeometry(0.24, 0.12, 0.38);
   [-0.42, 0.42].forEach(x => {
-    const wing = new THREE.Mesh(wingGeo, whiteMat);
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.24, 0.12, 0.38), pMat);
     wing.position.set(x, 1.46, 0);
     wing.rotation.z = x > 0 ? -0.22 : 0.22;
-    withOutline(wing, 1.05);
     group.add(wing);
   });
 
   // ── Arms ──────────────────────────────────────────
-  const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.55, 6);
+  const armGeo = new THREE.CylinderGeometry(0.1, 0.09, 0.55, 7);
   [[-0.56, 0.55], [0.56, -0.55]].forEach(([x, rz]) => {
-    const arm = new THREE.Mesh(armGeo, bodyMat);
+    const arm = new THREE.Mesh(armGeo, jMat);
     arm.position.set(x, 1.28, 0);
     arm.rotation.z = rz;
-    withOutline(arm);
+    arm.castShadow = true;
     group.add(arm);
   });
 
   // ── Neck ──────────────────────────────────────────
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.14,6), skinMat);
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.14,7), sMat);
   neck.position.set(0, 1.63, 0);
   group.add(neck);
 
-  // ── Helmet — toon with shiny gradient feel ─────────
-  const helmGeo = new THREE.SphereGeometry(0.33, 12, 10);
-  const helmMat = toonMat(col);
-  const helm = new THREE.Mesh(helmGeo, helmMat);
+  // ── Helmet — glossy Phong ──────────────────────────
+  const helmGeo = new THREE.SphereGeometry(0.33, 14, 10);
+  const helm = new THREE.Mesh(helmGeo, hMat);
   helm.scale.set(1, 0.92, 1.05);
   helm.position.set(0, 1.92, 0);
   helm.castShadow = true;
-  withOutline(helm, 1.06);
+  addOutline(helm, 1.07); // outline on helmet — most visible piece
   group.add(helm);
 
-  // Helmet center stripe
-  const stripe = new THREE.Mesh(new THREE.BoxGeometry(0.1,0.38,0.68), whiteMat);
+  // Helmet stripe — team accent color slightly lighter
+  const stripeCol = Math.min(0xffffff, jerseyColor + 0x404040);
+  const stripe = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.38, 0.68),
+    new THREE.MeshPhongMaterial({ color: stripeCol, shininess: 25 })
+  );
   stripe.position.set(0, 2.12, 0);
   group.add(stripe);
 
-  // ── Facemask ──────────────────────────────────────
+  // ── Facemask bars ─────────────────────────────────
   for (let i = 0; i < 3; i++) {
-    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.54,5), fmMat);
+    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.54,6), fMat);
     fm.rotation.z = Math.PI/2;
     fm.position.set(0, 1.83 + i*0.1, 0.3);
     group.add(fm);
   }
-  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.3,5), fmMat);
+  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.025,0.025,0.3,6), fMat);
   fmV.position.set(0, 1.86, 0.34);
   group.add(fmV);
 
-  // ── Visor — dark tinted ───────────────────────────
+  // ── Visor ─────────────────────────────────────────
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.5,0.08,0.06),
-    toonMat(0x1a1a3e, { transparent:true, opacity:0.88 })
+    new THREE.MeshPhongMaterial({ color: 0x111122, transparent:true, opacity:0.82, shininess:80, specular: new THREE.Color(0x4444aa) })
   );
   visor.position.set(0, 1.97, 0.3);
   group.add(visor);
 
-  // ── Label sprite ──────────────────────────────────
-  const labelSprite = makeLabel(p.label, isDef ? '#ff9090' : '#ffffff');
+  // ── Label ─────────────────────────────────────────
+  const labelSprite = makeLabel(p.label, isDef ? '#ffaaaa' : '#ffffff');
   labelSprite.position.y = 2.6;
   labelSprite.scale.set(1.6, 0.7, 1);
   group.add(labelSprite);
@@ -3466,16 +3490,20 @@ function makeFootballPlayer(p, isDef) {
   return group;
 }
 
-// ── Football mesh — toon shaded ──────────────────────
+// ── Football mesh — Phong with leather specular ──────
 function makeBallMesh() {
   const g = new THREE.Group();
-  const bGeo = new THREE.SphereGeometry(0.25, 10, 7);
-  const bMat = toonMat(0x8B4513);
-  const ball = new THREE.Mesh(bGeo, bMat);
+  const bMat = new THREE.MeshPhongMaterial({
+    color: 0x7a3410, shininess: 35, specular: new THREE.Color(0x442200)
+  });
+  const ball = new THREE.Mesh(new THREE.SphereGeometry(0.25, 10, 7), bMat);
   ball.scale.set(0.7, 1, 0.7);
-  withOutline(ball, 1.08, 0x3a1a00);
+  addOutline(ball, 1.08, 0x2a0a00);
   g.add(ball);
-  const lace = new THREE.Mesh(new THREE.BoxGeometry(0.08,0.28,0.06), toonMat(0xffffff));
+  const lace = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08,0.28,0.06),
+    new THREE.MeshPhongMaterial({ color: 0xffffff, shininess: 10 })
+  );
   lace.position.set(0.01, 0, 0.22);
   g.add(lace);
   g.visible = false;
@@ -3517,41 +3545,45 @@ function initPOV() {
   povRenderer.setClearColor(0x87ceeb); // sky blue
 
   povScene = new THREE.Scene();
-  // Warmer sky blue — more stadium feel
-  const skyCol = new THREE.Color(0x87ceeb);
-  povScene.fog = new THREE.Fog(0x9fd8f0, 50, 120);
+  // Deep stadium sky — not cartoon blue, more like evening game atmosphere
+  const skyCol = new THREE.Color(0x6aa8d0);
+  povScene.fog = new THREE.FogExp2(0x8bbfd4, 0.008);
   povScene.background = skyCol;
 
-  povCamera = new THREE.PerspectiveCamera(85, 1, 0.05, 250);
+  povCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 250);
 
-  // ── Lighting — tuned for toon shading ────────────
-  // Toon needs strong directional contrast — reduce ambient, punch sun
-  povScene.add(new THREE.AmbientLight(0xffffff, 0.45));
-  const sun = new THREE.DirectionalLight(0xfffce8, 1.6);
-  sun.position.set(20, 45, -15);
+  // ── Lighting — tuned for Phong hybrid ────────────
+  // Balanced ambient so dark sides aren't pure black
+  povScene.add(new THREE.AmbientLight(0xfff5e0, 0.55));
+  // Main sun — warm afternoon game light
+  const sun = new THREE.DirectionalLight(0xfff8d0, 1.4);
+  sun.position.set(25, 50, -20);
   sun.castShadow = true;
   sun.shadow.mapSize.width  = 2048;
   sun.shadow.mapSize.height = 2048;
   sun.shadow.camera.near = 1;
-  sun.shadow.camera.far  = 150;
-  sun.shadow.camera.left = sun.shadow.camera.bottom = -55;
-  sun.shadow.camera.right = sun.shadow.camera.top   =  55;
+  sun.shadow.camera.far  = 160;
+  sun.shadow.camera.left = sun.shadow.camera.bottom = -60;
+  sun.shadow.camera.right = sun.shadow.camera.top   =  60;
+  sun.shadow.bias = -0.001;
   povScene.add(sun);
-  // Rim light from behind — gives players depth and separation from field
-  const rim = new THREE.DirectionalLight(0xaaddff, 0.5);
-  rim.position.set(-15, 20, 25);
-  povScene.add(rim);
-  // Subtle fill from below (stadium lights bouncing off turf)
-  const fill = new THREE.HemisphereLight(0x88cc88, 0x334422, 0.35);
+  // Cool fill from opposite side — stadium lights
+  const fill = new THREE.DirectionalLight(0xc8e0ff, 0.45);
+  fill.position.set(-20, 25, 15);
   povScene.add(fill);
+  // Hemisphere — sky/ground bounce
+  povScene.add(new THREE.HemisphereLight(0x87ceeb, 0x2a5a1a, 0.3));
 
-  // ── Checkerboard field — toon materials ──────────
-  const turfColors = [0x2d7a2d, 0x286628];
+  // ── Field — realistic deep turf tones ────────────
+  // NFL fields read as deep forest green, not bright lime
+  const turfA = new THREE.MeshLambertMaterial({ color: 0x2d5a27 }); // darker stripe
+  const turfB = new THREE.MeshLambertMaterial({ color: 0x336b2c }); // slightly lighter
   for (let i=0; i<10; i++) {
     const zFrom = (-H3/2) + i*(H3/10);
-    const geo = new THREE.PlaneGeometry(W3*1.6, H3/10);
-    const mat = new THREE.MeshToonMaterial({ color: turfColors[i%2] });
-    const mesh = new THREE.Mesh(geo, mat);
+    const mesh = new THREE.Mesh(
+      new THREE.PlaneGeometry(W3*1.6, H3/10),
+      i%2===0 ? turfA : turfB
+    );
     mesh.rotation.x = -Math.PI/2;
     mesh.position.set(0, 0, zFrom + H3/20);
     mesh.receiveShadow = true;
@@ -3599,48 +3631,49 @@ function initPOV() {
 
   // ── End zones ─────────────────────────────────────
   for (const zOff of [-H3*0.54, H3*0.54]) {
-    const ezGeo = new THREE.PlaneGeometry(W3*1.6, H3*0.08);
-    const ezMat = new THREE.MeshLambertMaterial({ color: 0x1a5218 });
-    const ez = new THREE.Mesh(ezGeo, ezMat);
+    const ez = new THREE.Mesh(
+      new THREE.PlaneGeometry(W3*1.6, H3*0.08),
+      new THREE.MeshLambertMaterial({ color: 0x1e4a1e })
+    );
     ez.rotation.x = -Math.PI/2;
     ez.position.set(0, 0.01, zOff);
     povScene.add(ez);
   }
 
-  // ── Goal posts ────────────────────────────────────
+  // ── Goal posts — Phong yellow ──────────────────────
   function makeGoalPost(z) {
-    const mat = new THREE.MeshToonMaterial({ color: 0xf0d040 });
+    const mat = new THREE.MeshPhongMaterial({
+      color: 0xe8cc30, shininess: 45, specular: new THREE.Color(0x886600)
+    });
     const post = new THREE.Group();
     const uGeo = new THREE.CylinderGeometry(0.12,0.12,8,8);
     const u = new THREE.Mesh(uGeo, mat); u.position.set(0,4,0); post.add(u);
-    // Crossbar
     const cbGeo = new THREE.CylinderGeometry(0.08,0.08,6,6);
     const cb = new THREE.Mesh(cbGeo, mat);
     cb.rotation.z = Math.PI/2; cb.position.set(0,5.5,0); post.add(cb);
-    // Two uprights
     for (const x of [-3,3]) {
-      const upGeo = new THREE.CylinderGeometry(0.07,0.07,4,6);
-      const up = new THREE.Mesh(upGeo, mat);
+      const up = new THREE.Mesh(new THREE.CylinderGeometry(0.07,0.07,4,6), mat);
       up.position.set(x,7.5,0); post.add(up);
     }
-    post.position.set(0, 0, z);
+    post.position.set(0,0,z);
     return post;
   }
   povScene.add(makeGoalPost(-H3*0.85));
   povScene.add(makeGoalPost( H3*0.85));
 
-  // ── Stands — layered toon rows suggest crowd ───────
+  // ── Stands — realistic concrete + crowd color rows ──
   for (const sx of [-W3*0.82, W3*0.82]) {
-    // Base stand structure
-    const sMat = new THREE.MeshToonMaterial({ color: 0x2a3355 });
-    const stand = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, H3*1.1), sMat);
+    const standMat = new THREE.MeshLambertMaterial({ color: 0x3a3d4a });
+    const stand = new THREE.Mesh(new THREE.BoxGeometry(3.5, 9, H3*1.1), standMat);
     stand.position.set(sx, 4.5, 0);
     povScene.add(stand);
-    // Crowd rows — alternating team colors to simulate fans
-    const rowColors = [0x4466cc, 0xcc3333, 0x4466cc, 0xeeeeee, 0x4466cc, 0xcc3333];
+    // Crowd rows — muted realistic fan colors
+    const rowColors = [0x4a5fa0, 0x8a2020, 0x4a5fa0, 0xcccccc, 0x8a2020, 0x4a5fa0];
     rowColors.forEach((c, row) => {
-      const rowMat = new THREE.MeshToonMaterial({ color: c, transparent:true, opacity:0.72 });
-      const rowMesh = new THREE.Mesh(new THREE.BoxGeometry(3.4, 0.55, H3*1.05), rowMat);
+      const rowMesh = new THREE.Mesh(
+        new THREE.BoxGeometry(3.4, 0.55, H3*1.05),
+        new THREE.MeshLambertMaterial({ color: c, transparent:true, opacity:0.8 })
+      );
       rowMesh.position.set(sx, 1.2 + row*1.25, 0);
       povScene.add(rowMesh);
     });
