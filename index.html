@@ -7119,48 +7119,42 @@ function makeGLTFPlayer(p, isDef) {
   const group = new THREE.Group();
   const targetNodeIdx = getCharRootIndex(p.pos, isDef);
 
-  // Find the Metarig node by index and clone it
-  // We need to find it in the cloned scene tree
-  // The scene structure is: scene.children[0] = Sketchfab_model
-  //   .children[0] = root
-  //     .children[0..5] = the 6 Metarig nodes
-  const sceneRoot = gltfModelCache.scene;
-  let srcNode = null;
-  sceneRoot.traverse(n => {
-    if (!srcNode && n.userData && n.userData.nodeIndex === targetNodeIdx) {
-      srcNode = n;
-    }
-  });
+  // Find character node by collecting all nodes in traversal order
+  // then picking by the known GLB node index
+  // GLB node indices confirmed: Man.005=3, Man.006=50, Man.013=97,
+  // Woman.019=144, Woman.020=191, Woman.021=238
+  const allNodes = [];
+  gltfModelCache.scene.traverse(n => allNodes.push(n));
 
-  // Fallback: traverse by node order
+  // Find by name suffix pattern — names are like "Metarig Man.005_44"
+  const targetPatterns = {
+    3:   ['Metarig Man.005', 'Man.005_'],
+    50:  ['Metarig Man.006', 'Man.006_'],
+    97:  ['Metarig Man.013', 'Man.013_'],
+    144: ['Metarig Woman.019', 'Woman.019_'],
+    191: ['Metarig Woman.020', 'Woman.020_'],
+    238: ['Metarig Woman.021', 'Woman.021_'],
+  };
+  const patterns = targetPatterns[targetNodeIdx] || [];
+  let srcNode = null;
+  for (const n of allNodes) {
+    if (!n.name) continue;
+    if (patterns.some(pat => n.name.includes(pat))) {
+      srcNode = n;
+      break;
+    }
+  }
+
+  // Last resort fallback — pick by position in traversal
+  // The 6 Metarig roots appear at predictable positions
   if (!srcNode) {
-    let nodeCount = 0;
-    sceneRoot.traverse(n => {
-      if (srcNode) return;
-      if (n === sceneRoot) return;
-      nodeCount++;
-      // Match by approximate position in traversal
-    });
-    // Direct index approach — traverse and count to find the right node
-    const allNodes = [];
-    sceneRoot.traverse(n => allNodes.push(n));
-    // The Metarig nodes are at specific positions in the flat traversal
-    // Based on our inspection: idx 3,50,97,144,191,238 in the GLB node array
-    // In Three.js traversal order they map differently — find by name pattern
-    const metarigMap = {
-      3:   'Man.005',
-      50:  'Man.006',
-      97:  'Man.013',
-      144: 'Woman.019',
-      191: 'Woman.020',
-      238: 'Woman.021',
-    };
-    const targetSuffix = metarigMap[targetNodeIdx];
-    sceneRoot.traverse(n => {
-      if (!srcNode && n.name && n.name.includes('Metarig') && n.name.includes(targetSuffix)) {
-        srcNode = n;
-      }
-    });
+    const metarigNodes = allNodes.filter(n => n.name && n.name.startsWith('Metarig'));
+    const metarigOrder = [3, 50, 97, 144, 191, 238];
+    const metarigIdx = metarigOrder.indexOf(targetNodeIdx);
+    if (metarigIdx >= 0 && metarigNodes[metarigIdx]) {
+      srcNode = metarigNodes[metarigIdx];
+      console.log('Used fallback metarig[' + metarigIdx + ']:', srcNode.name);
+    }
   }
 
   if (!srcNode) {
