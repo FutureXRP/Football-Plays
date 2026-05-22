@@ -3381,7 +3381,7 @@ function fmMat() {
   });
 }
 // Thick outline — back-face expansion on all key pieces
-function addOutline(mesh, scale=1.08, col=0x080808) {
+function addOutline(mesh, scale=1.115, col=0x050505) {
   const o = new THREE.Mesh(
     mesh.geometry,
     new THREE.MeshBasicMaterial({ color: col, side: THREE.BackSide })
@@ -3391,200 +3391,213 @@ function addOutline(mesh, scale=1.08, col=0x080808) {
   return mesh;
 }
 
-// ── Football player model — Cel-shaded Nintendo style ─
+// ── NFL BLITZ-STYLE PLAYER — exaggerated cartoon proportions ─
+// Key ratios vs realistic:
+//   Helmet  : ~42% of total height  (realistic ~14%)
+//   Legs    : ~22% of total height  (realistic ~45%)
+//   Torso   : ~22% of total height
+//   Shoulders: wider than player is tall
+// Total height ~2.8 units
 function makeFootballPlayer(p, isDef) {
   const group  = new THREE.Group();
   const col    = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  const jerseyColor = isDef ? Math.max(0, col - 0x221100) : col;
+  const jerseyColor = isDef ? Math.max(0, col - 0x111000) : col;
 
   const jMat   = jerseyMat(jerseyColor);
   const pMat   = padMat();
   const hMat   = helmetMat(jerseyColor);
   const sMat   = skinMat();
   const fMat   = fmMat();
-  // Pants — complementary contrast color
-  const pantCol = isDef ? 0x5a0000 : 0x14406a;
+  // White pants for offense (Blitz style), dark for defense
+  const pantCol = isDef ? 0x6a0808 : 0xf0f0f0;
   const pantMat = jerseyMat(pantCol);
-  // Cleat color
-  const cleatMat = new THREE.MeshToonMaterial({ color: 0x1a1a1a, gradientMap: getCelGradMap() });
+  const cleatMat = new THREE.MeshToonMaterial({ color: 0x050505, gradientMap: getCelGradMap() });
 
-  // ── LEGS — longer, tapered for realism ─────────────
-  const upperLegGeo = new THREE.CylinderGeometry(0.135, 0.12, 0.52, 8);
-  const lowerLegGeo = new THREE.CylinderGeometry(0.11, 0.09, 0.45, 8);
-  const cleatGeo    = new THREE.BoxGeometry(0.18, 0.1, 0.28);
+  // ── BLOB SHADOW — always visible flat ellipse on turf ─
+  const shadowGeo = new THREE.CircleGeometry(0.55, 16);
+  const shadowMat = new THREE.MeshBasicMaterial({
+    color: 0x000000, transparent: true, opacity: 0.38,
+    depthWrite: false
+  });
+  const blobShadow = new THREE.Mesh(shadowGeo, shadowMat);
+  blobShadow.rotation.x = -Math.PI / 2;
+  blobShadow.position.set(0, 0.01, 0.1); // slightly forward (player leans forward)
+  blobShadow.scale.set(1, 0.55, 1); // flatten into ellipse
+  group.add(blobShadow);
 
-  const legL = new THREE.Group(); // left leg group
-  const legR = new THREE.Group(); // right leg group
+  // ── LEGS — SHORT, Blitz-style stumpy ───────────────
+  // Blitz legs are about 22% of body height — very short
+  const legGeo = new THREE.CylinderGeometry(0.145, 0.12, 0.38, 8);
+  const shinguardGeo = new THREE.CylinderGeometry(0.11, 0.095, 0.28, 8);
+  const cleatGeo = new THREE.BoxGeometry(0.2, 0.1, 0.3);
+
+  const legL = new THREE.Group();
+  const legR = new THREE.Group();
   group._legL = legL;
   group._legR = legR;
 
-  [-1, 1].forEach((side, i) => {
+  [-1, 1].forEach(side => {
     const legGrp = side < 0 ? legL : legR;
-    const x = side * 0.175;
+    const x = side * 0.19;
 
-    const upper = new THREE.Mesh(upperLegGeo, pantMat);
-    upper.position.set(0, -0.26, 0);
+    const upper = new THREE.Mesh(legGeo, pantMat);
+    upper.position.set(0, -0.19, 0);
     upper.castShadow = true;
-    addOutline(upper, 1.07);
+    addOutline(upper, 1.09);
     legGrp.add(upper);
 
-    const lower = new THREE.Mesh(lowerLegGeo, pantMat);
-    lower.position.set(0, -0.71, 0);
+    const lower = new THREE.Mesh(shinguardGeo, pantMat);
+    lower.position.set(0, -0.48, 0);
     lower.castShadow = true;
-    addOutline(lower, 1.07);
+    addOutline(lower, 1.09);
     legGrp.add(lower);
 
     const cleat = new THREE.Mesh(cleatGeo, cleatMat);
-    cleat.position.set(0.02, -0.97, 0.04);
+    cleat.position.set(0.02, -0.65, 0.05);
     legGrp.add(cleat);
 
-    legGrp.position.set(x, 1.1, 0);  // pivot at hip
+    legGrp.position.set(x, 0.85, 0);
     group.add(legGrp);
   });
 
-  // ── THIGH PADS ──────────────────────────────────────
-  [-0.175, 0.175].forEach(x => {
-    const tp = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.18, 0.24), pMat);
-    tp.position.set(x, 0.78, 0.06);
-    group.add(tp);
-  });
-
-  // ── TORSO — taller, more athletic ──────────────────
-  const torsoGeo = new THREE.BoxGeometry(0.56, 0.78, 0.32);
+  // ── TORSO — compact, powerful ──────────────────────
+  // Slightly trapezoidal — wider at shoulders
+  const torsoGeo = new THREE.BoxGeometry(0.62, 0.60, 0.36);
   const torso = new THREE.Mesh(torsoGeo, jMat);
-  torso.position.set(0, 1.34, 0);
+  torso.position.set(0, 1.25, 0);
   torso.castShadow = true;
-  addOutline(torso, 1.065);
+  addOutline(torso, 1.07);
   group.add(torso);
 
-  // ── JERSEY NUMBER ───────────────────────────────────
+  // ── JERSEY NUMBER — large, readable ────────────────
   const numCanvas = document.createElement('canvas');
   numCanvas.width = 128; numCanvas.height = 128;
   const nc = numCanvas.getContext('2d');
-  // Shadow for depth
-  nc.shadowColor = 'rgba(0,0,0,0.6)';
-  nc.shadowBlur = 4;
-  nc.fillStyle = isDef ? '#ffcccc' : '#ffffff';
-  nc.font = 'bold 72px Barlow Condensed, Arial Black, sans-serif';
+  nc.shadowColor = 'rgba(0,0,0,0.7)';
+  nc.shadowBlur = 5;
+  nc.fillStyle = isDef ? '#ffdddd' : '#ffffff';
+  nc.font = 'bold 76px Barlow Condensed, Arial Black, sans-serif';
   nc.textAlign = 'center'; nc.textBaseline = 'middle';
   nc.fillText(p.label.slice(0, 2), 64, 64);
   const numMesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(0.32, 0.32),
+    new THREE.PlaneGeometry(0.38, 0.38),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(numCanvas), transparent: true, depthTest: false })
   );
-  numMesh.position.set(0, 1.34, 0.17);
+  numMesh.position.set(0, 1.24, 0.19);
   group.add(numMesh);
 
-  // ── SHOULDER PADS — wider, flatter, more realistic ──
-  // Main yoke
-  const spad = new THREE.Mesh(new THREE.BoxGeometry(1.06, 0.16, 0.44), pMat);
-  spad.position.set(0, 1.76, 0);
-  addOutline(spad, 1.06);
-  group.add(spad);
-  // Front/back cantilever plates
-  for (const z of [-0.12, 0.12]) {
-    const plate = new THREE.Mesh(new THREE.BoxGeometry(0.94, 0.1, 0.22), pMat);
-    plate.position.set(0, 1.68, z);
+  // ── SHOULDER PADS — WIDE flying saucer, Blitz signature ─
+  // This is the most important proportion — pads span ~1.4 units wide
+  const spadMain = new THREE.Mesh(new THREE.BoxGeometry(1.42, 0.18, 0.52), pMat);
+  spadMain.position.set(0, 1.64, 0);
+  addOutline(spadMain, 1.065);
+  group.add(spadMain);
+
+  // Front/back plates hanging down
+  for (const z of [-0.14, 0.14]) {
+    const plate = new THREE.Mesh(new THREE.BoxGeometry(1.2, 0.14, 0.24), pMat);
+    plate.position.set(0, 1.54, z);
     group.add(plate);
   }
-  // Side wing drops
-  [-0.48, 0.48].forEach(x => {
-    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.18, 0.36), pMat);
-    wing.position.set(x, 1.62, 0);
-    wing.rotation.z = x > 0 ? -0.28 : 0.28;
-    addOutline(wing, 1.07);
+  // Angled side wings — droop outward
+  [-0.64, 0.64].forEach(x => {
+    const wing = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.44), pMat);
+    wing.position.set(x, 1.56, 0);
+    wing.rotation.z = x > 0 ? -0.35 : 0.35;
+    addOutline(wing, 1.08);
     group.add(wing);
   });
 
-  // ── ARMS — better anatomy, upper/lower segments ────
-  const upperArmGeo = new THREE.CylinderGeometry(0.105, 0.095, 0.38, 8);
-  const lowerArmGeo = new THREE.CylinderGeometry(0.09, 0.08, 0.32, 8);
-  [[-1, 0.55], [1, -0.55]].forEach(([side, rz]) => {
-    const x = side * 0.62;
-    const uArm = new THREE.Mesh(upperArmGeo, jMat);
-    uArm.position.set(x, 1.64, 0);
-    uArm.rotation.z = rz;
-    uArm.castShadow = true;
-    addOutline(uArm, 1.07);
-    group.add(uArm);
+  // ── ARMS — short, powerful, Blitz style ────────────
+  const armGeo = new THREE.CylinderGeometry(0.115, 0.1, 0.44, 8);
+  const foreGeo = new THREE.CylinderGeometry(0.095, 0.085, 0.28, 8);
+  [[-1, 0.62], [1, -0.62]].forEach(([side, rz]) => {
+    const x = side * 0.76;
+    const arm = new THREE.Mesh(armGeo, jMat);
+    arm.position.set(x, 1.52, 0);
+    arm.rotation.z = rz;
+    arm.castShadow = true;
+    addOutline(arm, 1.08);
+    group.add(arm);
 
-    const lArm = new THREE.Mesh(lowerArmGeo, sMat);
-    const lx = x + Math.sin(rz) * 0.36;
-    const ly = 1.64 - Math.abs(Math.cos(rz)) * 0.36;
-    lArm.position.set(lx, ly, 0);
-    lArm.rotation.z = rz * 0.7;
-    lArm.castShadow = true;
-    group.add(lArm);
+    const fore = new THREE.Mesh(foreGeo, sMat);
+    fore.position.set(x + side * 0.28, 1.28, 0);
+    fore.rotation.z = rz * 0.65;
+    fore.castShadow = true;
+    group.add(fore);
   });
 
-  // ── NECK ────────────────────────────────────────────
-  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.16, 8), sMat);
-  neck.position.set(0, 1.90, 0);
+  // ── NECK — thick, Blitz bull neck ──────────────────
+  const neck = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.18, 0.18, 8), sMat);
+  neck.position.set(0, 1.72, 0);
+  addOutline(neck, 1.07);
   group.add(neck);
 
-  // ── HELMET — larger, rounder, cel-shaded shine ──────
-  const helmGeo = new THREE.SphereGeometry(0.40, 16, 12);
+  // ── HELMET — MASSIVE, ~42% of total body ───────────
+  // This is THE defining Blitz characteristic
+  const helmGeo = new THREE.SphereGeometry(0.52, 16, 12);
   const helm = new THREE.Mesh(helmGeo, hMat);
-  helm.scale.set(1, 0.94, 1.08);
-  helm.position.set(0, 2.20, 0);
+  helm.scale.set(1.0, 0.95, 1.1);
+  helm.position.set(0, 2.30, 0.04);
   helm.castShadow = true;
-  addOutline(helm, 1.065); // prominent outline on helmet
+  addOutline(helm, 1.07); // thick outline on helmet
   group.add(helm);
 
-  // Helmet crown stripe
-  const stripeCol = Math.min(0xffffff, jerseyColor + 0x505050);
+  // Crown stripe — team accent
+  const stripeCol = Math.min(0xffffff, jerseyColor + 0x606060);
   const stripe = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.46, 0.82),
+    new THREE.BoxGeometry(0.09, 0.58, 1.02),
     new THREE.MeshToonMaterial({ color: stripeCol, gradientMap: getCelGradMap() })
   );
-  stripe.position.set(0, 2.42, 0);
+  stripe.position.set(0, 2.52, 0.04);
   group.add(stripe);
 
-  // Ear holes
-  [-0.38, 0.38].forEach(x => {
+  // Ear flaps
+  [-0.48, 0.48].forEach(x => {
     const ear = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.08, 0.08, 0.04, 8),
-      new THREE.MeshToonMaterial({ color: 0x111111, gradientMap: getCelGradMap() })
+      new THREE.BoxGeometry(0.1, 0.28, 0.34),
+      new THREE.MeshToonMaterial({ color: jerseyColor, gradientMap: getCelGradMap() })
     );
-    ear.rotation.z = Math.PI / 2;
-    ear.position.set(x, 2.22, 0.05);
+    ear.position.set(x, 2.14, 0.06);
+    addOutline(ear, 1.08);
     group.add(ear);
   });
 
-  // ── FACEMASK — 3 bars + vertical ────────────────────
+  // ── FACEMASK — bold bars ────────────────────────────
   for (let i = 0; i < 3; i++) {
-    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.58, 7), fMat);
+    const fm = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.72, 7), fMat);
     fm.rotation.z = Math.PI / 2;
-    fm.position.set(0, 2.08 + i * 0.1, 0.35);
-    addOutline(fm, 1.12);
+    fm.position.set(0, 2.14 + i * 0.11, 0.46);
+    addOutline(fm, 1.14);
     group.add(fm);
   }
-  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.028, 0.028, 0.32, 7), fMat);
-  fmV.position.set(0, 2.11, 0.40);
-  addOutline(fmV, 1.12);
+  const fmV = new THREE.Mesh(new THREE.CylinderGeometry(0.035, 0.035, 0.34, 7), fMat);
+  fmV.position.set(0, 2.17, 0.53);
+  addOutline(fmV, 1.14);
   group.add(fmV);
 
-  // ── VISOR — tinted transparent ──────────────────────
+  // ── VISOR ───────────────────────────────────────────
   const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.54, 0.09, 0.07),
-    new THREE.MeshToonMaterial({ color: 0x112233, transparent: true, opacity: 0.78, gradientMap: getHelmetGradMap() })
+    new THREE.BoxGeometry(0.66, 0.1, 0.08),
+    new THREE.MeshToonMaterial({ color: 0x0a1520, transparent: true, opacity: 0.82, gradientMap: getHelmetGradMap() })
   );
-  visor.position.set(0, 2.24, 0.35);
+  visor.position.set(0, 2.32, 0.46);
   group.add(visor);
 
-  // ── LABEL SPRITE — crisp with background pill ───────
-  const labelSprite = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#440000' : '#002244');
-  labelSprite.position.y = 3.05;
-  labelSprite.scale.set(2.2, 0.9, 1);
+  // ── LABEL SPRITE ────────────────────────────────────
+  const labelSprite = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#550000' : '#002255');
+  labelSprite.position.y = 3.20;
+  labelSprite.scale.set(2.4, 0.95, 1);
+  group._labelSprite = labelSprite;
   group.add(labelSprite);
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
   group.rotation.y = isDef ? 0 : Math.PI;
   group._eyeY  = EYE_HEIGHT;
-  group._bodyH = 2.65;
+  group._bodyH = 2.85;
   group._isDef = isDef;
-  group._animT = Math.random() * Math.PI * 2; // phase offset so players don't all step in sync
+  group._animT = Math.random() * Math.PI * 2;
 
   return group;
 }
@@ -3713,7 +3726,7 @@ function initPOV() {
   povScene.add(new THREE.AmbientLight(0xfff0cc, 0.85)); // warm fill
   
   // Primary sun — hard, bright, creates the toon shadow band
-  const sun = new THREE.DirectionalLight(0xfffae0, 2.2);
+  const sun = new THREE.DirectionalLight(0xfff1c4, 4.2);
   sun.position.set(30, 55, -25);
   sun.castShadow = true;
   sun.shadow.mapSize.width  = 4096;
@@ -3726,7 +3739,7 @@ function initPOV() {
   povScene.add(sun);
 
   // Cool rim/fill from camera-left — adds depth separation
-  const fill = new THREE.DirectionalLight(0xaaddff, 0.6);
+  const fill = new THREE.DirectionalLight(0x8ecbff, 1.15);
   fill.position.set(-30, 20, 20);
   povScene.add(fill);
 
@@ -3918,14 +3931,25 @@ function resizePOV() {
 }
 
 // ── Camera mode switching ─────────────────────────────
+let povRedZoneMode = false; // red zone: offense at def 30
+
 function setCamMode(mode) {
   povCamMode = mode;
   document.querySelectorAll('.pov-cam-btn').forEach(b => b.classList.remove('active'));
   const btn = document.getElementById('camBtn-'+mode);
   if (btn) btn.classList.add('active');
-  // Hide self-player mesh in FP mode so we don't see our own head
   updateSelfVisibility();
   if (!povAnimating) applyStaticCamera();
+}
+
+// Red zone world-space offset — how far downfield offense is spotted
+// In red zone mode, offense is at defense's 30 (30 yards from end zone)
+function getRedZoneOffset() {
+  if (!povRedZoneMode) return 0;
+  // Move scene so offense lines up at what would be the defense's 30
+  // LOS3 is the line of scrimmage in world units
+  // We want offense to appear ~18 world units closer to def end zone
+  return -14.0;
 }
 
 function updateSelfVisibility() {
@@ -3951,53 +3975,61 @@ function applyStaticCamera() {
 
 function applyCameraForMode(px, py, pz, facingY, selP) {
   const isDef = povSelectedSide === 'defense';
+  const rzOff = getRedZoneOffset();
 
   if (povCamMode === 'fp') {
-    // Scroll zoom adjusts FOV — zoom in = narrower FOV, zoom out = wider
-    povCamera.fov = Math.max(30, Math.min(110, 85 * povZoom));
-    povCamera.position.set(px, EYE_HEIGHT, pz);
+    // Tightened FOV — more game camera, less browser demo
+    povCamera.fov = Math.max(42, Math.min(90, 68 * povZoom));
+    povCamera.position.set(px, EYE_HEIGHT, pz + rzOff);
 
-    // After rotation fix: offense faces negative z (rotation.y = PI), defense faces positive z (rotation.y = 0)
-    // FP camera looks in the SAME direction the player's face points
     const forwardZ = isDef ? 1 : -1;
-
     let lx, lz;
     if (facingY !== 0) {
-      // Use actual movement direction from animation
       lx = px + Math.sin(facingY) * 20;
-      lz = pz - Math.cos(facingY) * 20 * (isDef ? -1 : 1);
+      lz = (pz + rzOff) - Math.cos(facingY) * 20 * (isDef ? -1 : 1);
     } else {
-      // Default: straight ahead based on side
       lx = px;
-      lz = pz + forwardZ * 20;
+      lz = (pz + rzOff) + forwardZ * 20;
     }
     povCamera.lookAt(lx, EYE_HEIGHT - 0.12, lz);
 
   } else if (povCamMode === 'broadcast') {
-    // Elevated sideline — follows selected player's z position
     const zoomD = povZoom;
-    povCamera.fov = 65;
-    povCamera.position.set(W3 * 0.52 * zoomD, 10 * zoomD, pz + 4 * zoomD);
-    povCamera.lookAt(px, 1.2, pz - 5);
+    povCamera.fov = 58;
+    povCamera.position.set(W3 * 0.52 * zoomD, 10 * zoomD, pz + rzOff + 4 * zoomD);
+    povCamera.lookAt(px, 1.2, pz + rzOff - 5);
+
+  } else if (povCamMode === 'blitz') {
+    // ── BLITZ ISOMETRIC — the signature Blitz camera ──
+    // Low angle, slightly behind offense, looking upfield at ~45°
+    // Tight FOV makes players fill the frame
+    const zoomD = povZoom;
+    povCamera.fov = Math.max(38, Math.min(72, 56 * zoomD));
+    // Position: behind and above offense looking toward defense
+    // Offset slightly to the right for that classic Blitz angle
+    const behindZ = (H3 / 2) * 0.38 * zoomD;  // behind offensive LOS
+    const camH    = 11.5 / zoomD;
+    const camX    = W3 * 0.12; // slight right offset
+    // Look target: just past the LOS toward defense
+    const lookZ   = -(H3 / 2) * 0.18 + rzOff;
+    povCamera.position.set(camX, camH, behindZ + rzOff);
+    povCamera.lookAt(0, 0.5, lookZ);
 
   } else if (povCamMode === 'ezoff') {
-    // OFFENSIVE end zone — behind offense (positive z), looking downfield (toward negative z)
-    // Height 14 units = above goal posts but not so steep players are tiny specks
-    // Look target deep into the field so far receivers are in frame
     const zoomD = povZoom;
-    const camZ  =  (H3 / 2) * 0.62;        // behind offensive end line
-    const camY  =  14 / zoomD;              // zoom out = higher = wider view
-    const lookZ = -(H3 / 2) * 0.55;        // look deep toward opponent end zone
-    povCamera.fov = Math.min(88, 62 * zoomD); // zoom in = narrower
-    povCamera.position.set(0, camY, camZ);
+    const camZ  =  (H3 / 2) * 0.62;
+    const camY  =  14 / zoomD;
+    const lookZ = -(H3 / 2) * 0.55 + rzOff;
+    povCamera.fov = Math.min(88, 62 * zoomD);
+    povCamera.position.set(0, camY, camZ + rzOff);
     povCamera.lookAt(0, 0, lookZ);
 
   } else {
-    // DEFENSIVE end zone — behind defense (negative z), looking toward offense (positive z)
+    // ezdef
     const zoomD = povZoom;
-    const camZ  = -(H3 / 2) * 0.62;
+    const camZ  = -(H3 / 2) * 0.62 + rzOff;
     const camY  =  14 / zoomD;
-    const lookZ =  (H3 / 2) * 0.55;
+    const lookZ =  (H3 / 2) * 0.55 + rzOff;
     povCamera.fov = Math.min(88, 62 * zoomD);
     povCamera.position.set(0, camY, camZ);
     povCamera.lookAt(0, 0, lookZ);
@@ -4085,6 +4117,9 @@ function openPOV() {
     povPaused   = false;
     povSpeed    = 1;
     povZoom     = 1.0;
+    povLabelsVisible = true; // reset labels to visible on open
+    const lBtn = document.getElementById('povLabelBtn');
+    if (lBtn) { lBtn.textContent = '🏷 IDs On'; lBtn.style.opacity = '1'; }
     buildPOVTabs();
     updatePOVHUD();
     updateSelfVisibility();
@@ -4326,42 +4361,51 @@ function povRunPlay() {
     // Camera follow
     const sArr=povSelectedSide==='offense'?povPlayerMeshes:povDefMeshes;
     const sMesh=sArr.find(m=>m.id===povSelectedId);
+    const rzOff = getRedZoneOffset();
     if(sMesh){
       const mp=sMesh.group.position;
       const fy=sMesh.group.rotation.y;
       if(povCamMode==='fp'){
-        povCamera.fov = Math.max(30, Math.min(110, 85 * povZoom));
+        povCamera.fov = Math.max(42, Math.min(90, 68 * povZoom));
         povCamera.updateProjectionMatrix();
-        povCamera.position.lerp(new THREE.Vector3(mp.x,EYE_HEIGHT,mp.z),0.18);
-        // After rotation fix: offense faces -z (rotation PI), defense faces +z (rotation 0)
+        povCamera.position.lerp(new THREE.Vector3(mp.x,EYE_HEIGHT,mp.z+rzOff),0.18);
         const forwardZ=isDef?1:-1;
         let lx,lz;
         if(Math.abs(fy)>0.05){
-          // Use actual movement direction — fy is rotation.y
-          // For offense (PI base): sin/cos of fy gives facing direction
           lx=mp.x+Math.sin(fy)*20;
-          lz=mp.z-Math.cos(fy)*20*(isDef?-1:1);
+          lz=(mp.z+rzOff)-Math.cos(fy)*20*(isDef?-1:1);
         } else {
           lx=mp.x;
-          lz=mp.z+forwardZ*20;
+          lz=(mp.z+rzOff)+forwardZ*20;
         }
         povCamera.lookAt(lx,EYE_HEIGHT-0.12,lz);
       } else if(povCamMode==='broadcast'){
         const zoomD = povZoom;
-        povCamera.position.lerp(new THREE.Vector3(W3*0.52*zoomD, 10*zoomD, mp.z+4*zoomD), 0.05);
-        povCamera.lookAt(mp.x, 1.2, mp.z-5);
+        povCamera.fov = 58;
+        povCamera.updateProjectionMatrix();
+        povCamera.position.lerp(new THREE.Vector3(W3*0.52*zoomD, 10*zoomD, mp.z+rzOff+4*zoomD), 0.05);
+        povCamera.lookAt(mp.x, 1.2, mp.z+rzOff-5);
+      } else if(povCamMode==='blitz'){
+        // Static Blitz isometric — doesn't track individual player, shows the play
+        const zoomD = povZoom;
+        povCamera.fov = Math.max(38, Math.min(72, 56*zoomD));
+        povCamera.updateProjectionMatrix();
+        const behindZ = (H3/2)*0.38*zoomD;
+        const camH    = 11.5/zoomD;
+        povCamera.position.lerp(new THREE.Vector3(W3*0.12, camH, behindZ+rzOff), 0.04);
+        povCamera.lookAt(0, 0.5, -(H3/2)*0.18+rzOff);
       } else if(povCamMode==='ezoff'){
         const zoomD = povZoom;
         povCamera.fov = Math.min(88, 62*zoomD);
         povCamera.updateProjectionMatrix();
-        povCamera.position.set(0, 14/zoomD, (H3/2)*0.62);
-        povCamera.lookAt(0, 0, -(H3/2)*0.55);
+        povCamera.position.set(0, 14/zoomD, (H3/2)*0.62+rzOff);
+        povCamera.lookAt(0, 0, -(H3/2)*0.55+rzOff);
       } else {
         const zoomD = povZoom;
         povCamera.fov = Math.min(88, 62*zoomD);
         povCamera.updateProjectionMatrix();
-        povCamera.position.set(0, 14/zoomD, -(H3/2)*0.62);
-        povCamera.lookAt(0, 0, (H3/2)*0.55);
+        povCamera.position.set(0, 14/zoomD, -(H3/2)*0.62+rzOff);
+        povCamera.lookAt(0, 0, (H3/2)*0.55+rzOff);
       }
     }
 
@@ -4513,6 +4557,32 @@ function stopPOVPlay() {
 }
 // ═══════════════════════════════════════════════════════
 
+// ── Label visibility toggle ────────────────────────────
+let povLabelsVisible = true;
+function togglePOVLabels() {
+  povLabelsVisible = !povLabelsVisible;
+  [...povPlayerMeshes, ...povDefMeshes].forEach(pm => {
+    if (pm.group._labelSprite) pm.group._labelSprite.visible = povLabelsVisible;
+  });
+  const btn = document.getElementById('povLabelBtn');
+  if (btn) {
+    btn.textContent = povLabelsVisible ? '🏷 IDs On' : '🏷 IDs Off';
+    btn.style.opacity = povLabelsVisible ? '1' : '0.5';
+  }
+}
+
+// ── Red Zone mode toggle ───────────────────────────────
+function toggleRedZone() {
+  povRedZoneMode = !povRedZoneMode;
+  const btn = document.getElementById('povRedZoneBtn');
+  if (btn) {
+    btn.textContent = povRedZoneMode ? '🔴 Red Zone ON' : '🔴 Red Zone';
+    btn.style.background = povRedZoneMode ? 'rgba(160,20,20,0.9)' : 'rgba(80,10,10,0.7)';
+    btn.style.borderColor = povRedZoneMode ? '#ff4444' : '#882222';
+  }
+  if (!povAnimating) applyStaticCamera();
+}
+
 init();
 </script>
 <!-- ── POV FIRST-PERSON OVERLAY ── -->
@@ -4523,10 +4593,12 @@ init();
       <span class="pov-player-badge" id="povPlayerBadge">QB</span>
       <span class="pov-assignment" id="povAssignmentBadge">Select a player</span>
     </div>
-    <div style="display:flex;gap:8px;pointer-events:all">
+    <div style="display:flex;gap:8px;pointer-events:all;align-items:center">
+      <button class="pov-run-btn" id="povLabelBtn" onclick="togglePOVLabels()" title="Show/hide player ID labels" style="background:rgba(30,60,100,.85);border-color:#3a7acc">🏷 IDs On</button>
+      <button class="pov-run-btn" id="povRedZoneBtn" onclick="toggleRedZone()" title="Red zone: spot offense at defense's 30" style="background:rgba(80,10,10,.7);border-color:#882222">🔴 Red Zone</button>
       <button class="pov-run-btn" id="povRunBtn" onclick="povRunPlay()">▶ Run Play</button>
-      <button class="pov-run-btn" style="background:rgba(26,100,58,.85);border-color:#1a7c3a" onclick="savePOVPNG()" title="Save screenshot of current POV view">📸 PNG</button>
-      <button class="pov-run-btn" style="background:rgba(30,60,120,.85);border-color:#2a6fac" onclick="startPOVVideo()" id="povVideoBtn" title="Record POV animation as .webm">🎬 Video</button>
+      <button class="pov-run-btn" style="background:rgba(26,100,58,.85);border-color:#1a7c3a" onclick="savePOVPNG()" title="Save screenshot">📸 PNG</button>
+      <button class="pov-run-btn" style="background:rgba(30,60,120,.85);border-color:#2a6fac" onclick="startPOVVideo()" id="povVideoBtn" title="Record .webm">🎬 Video</button>
       <button class="pov-close" onclick="closePOV()">✕ Close</button>
     </div>
   </div>
@@ -4534,6 +4606,7 @@ init();
   <div class="pov-cam-bar">
     <button class="pov-cam-btn active" id="camBtn-fp"        onclick="setCamMode('fp')">👁 First Person</button>
     <button class="pov-cam-btn"        id="camBtn-broadcast" onclick="setCamMode('broadcast')">📺 Broadcast</button>
+    <button class="pov-cam-btn"        id="camBtn-blitz"     onclick="setCamMode('blitz')" style="color:#f5c842">🎮 Blitz Cam</button>
     <button class="pov-cam-btn"        id="camBtn-ezoff"     onclick="setCamMode('ezoff')">⚔ Off. End Zone</button>
     <button class="pov-cam-btn"        id="camBtn-ezdef"     onclick="setCamMode('ezdef')">🛡 Def. End Zone</button>
   </div>
