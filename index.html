@@ -3992,6 +3992,8 @@ function applyStaticCamera() {
   if (!selP) return;
   const w = canvasToWorld(selP.x, selP.y);
   applyCameraForMode(w.x, EYE_HEIGHT, w.z, 0, selP);
+  // Force an immediate render so the new camera position is visible right away
+  if (povRenderer && povScene && povCamera) povRenderer.render(povScene, povCamera);
 }
 
 function applyCameraForMode(px, py, pz, facingY, selP) {
@@ -4457,6 +4459,8 @@ function povRunPlay() {
       updateScrubUI();
       document.getElementById('povRunBtn').textContent = '▶ Run Play';
       document.getElementById('povRunBtn').onclick = povRunPlay;
+      povRaf = null;
+      povRenderLoop(); // restart idle render loop — camera/zoom must work after play ends
       return;
     }
     povRaf = requestAnimationFrame(povStep);
@@ -4564,6 +4568,7 @@ function stopPOVPlay() {
   povPaused    = false;
   povProgress  = 0;
   if (povRaf) cancelAnimationFrame(povRaf);
+  povRaf = null;
   // Auto-stop POV video recording if active
   if (povRecording) stopPOVVideo();
   document.getElementById('povRunBtn').textContent = '▶ Run Play';
@@ -4575,6 +4580,7 @@ function stopPOVPlay() {
   players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=Math.PI;}});
   defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;}});
   applyStaticCamera();
+  povRenderLoop(); // restart idle render loop so camera/zoom changes are visible
 }
 // ═══════════════════════════════════════════════════════
 
