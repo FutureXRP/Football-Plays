@@ -3756,26 +3756,24 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     povCamera.lookAt(px, 1.2, pz - 5);
 
   } else if (povCamMode === 'ezoff') {
-    // OFFENSIVE End Zone — NFL "High End Zone" spec
-    // Camera: high above goal posts, behind own end zone, looking upfield
-    // Offense is at positive z, attacks toward negative z
-    // Camera sits at positive z (behind offense), looks toward negative z (downfield)
-    const zoomD  = povZoom;
-    const camZ   =  (H3 / 2) * 0.58;   // just behind the offensive end line
-    const camY   =  20 * zoomD;         // well above goal posts (~30-50ft real world)
-    const lookZ  = -(H3 / 2) * 0.15;   // look toward middle of the field / LOS area
-    povCamera.fov = 52 / zoomD;         // tight FOV compresses depth, makes all 22 visible
+    // OFFENSIVE end zone — behind offense (positive z), looking downfield (toward negative z)
+    // Height 14 units = above goal posts but not so steep players are tiny specks
+    // Look target deep into the field so far receivers are in frame
+    const zoomD = povZoom;
+    const camZ  =  (H3 / 2) * 0.62;        // behind offensive end line
+    const camY  =  14 / zoomD;              // zoom out = higher = wider view
+    const lookZ = -(H3 / 2) * 0.55;        // look deep toward opponent end zone
+    povCamera.fov = Math.min(88, 62 * zoomD); // zoom in = narrower
     povCamera.position.set(0, camY, camZ);
     povCamera.lookAt(0, 0, lookZ);
 
   } else {
-    // DEFENSIVE End Zone — mirror of offensive, looking back toward offense
-    // Camera behind opponent end zone (negative z), looks toward positive z (toward offense)
-    const zoomD  = povZoom;
-    const camZ   = -(H3 / 2) * 0.58;
-    const camY   =  20 * zoomD;
-    const lookZ  =  (H3 / 2) * 0.15;
-    povCamera.fov = 52 / zoomD;
+    // DEFENSIVE end zone — behind defense (negative z), looking toward offense (positive z)
+    const zoomD = povZoom;
+    const camZ  = -(H3 / 2) * 0.62;
+    const camY  =  14 / zoomD;
+    const lookZ =  (H3 / 2) * 0.55;
+    povCamera.fov = Math.min(88, 62 * zoomD);
     povCamera.position.set(0, camY, camZ);
     povCamera.lookAt(0, 0, lookZ);
   }
@@ -3866,17 +3864,21 @@ function openPOV() {
     updatePOVHUD();
     updateSelfVisibility();
     updateScrubUI();
+    updateZoomUI();
     resizePOV();
     applyStaticCamera();
     povRenderLoop();
 
-    // ── Scroll wheel zoom ──────────────────────────
+    // ── Scroll wheel zoom — normalized so speed is consistent ──
     const povCanvasEl = document.getElementById('povCanvas');
     povCanvasEl.onwheel = e => {
       e.preventDefault();
-      // scroll up = zoom in (smaller zoom value), scroll down = zoom out
-      const delta = e.deltaY > 0 ? 0.08 : -0.08;
-      povZoom = Math.max(0.3, Math.min(3.0, povZoom + delta));
+      // Normalize deltaY — trackpad gives small floats, mouse wheel gives 100+
+      // Cap at ±1 effective step per event
+      const raw   = e.deltaY;
+      const step  = Math.sign(raw) * Math.min(Math.abs(raw) / 400, 1) * 0.12;
+      povZoom = Math.max(0.25, Math.min(3.0, povZoom + step));
+      updateZoomUI();
       if (!povAnimating) applyStaticCamera();
     };
   };
@@ -3909,6 +3911,21 @@ function povRenderLoop() {
 }
 
 // ── Playback control functions ─────────────────────────
+function adjustZoom(delta) {
+  if (delta === 0) {
+    povZoom = 1.0; // reset
+  } else {
+    povZoom = Math.max(0.25, Math.min(3.0, povZoom + delta));
+  }
+  updateZoomUI();
+  if (!povAnimating) applyStaticCamera();
+}
+
+function updateZoomUI() {
+  const lbl = document.getElementById('povZoomLabel');
+  if (lbl) lbl.textContent = povZoom.toFixed(1) + '×';
+}
+
 function setPovSpeed(s) {
   povSpeed = s;
   document.querySelectorAll('.pov-ctrl-btn').forEach(b => {
@@ -4074,19 +4091,17 @@ function povRunPlay() {
         povCamera.position.lerp(new THREE.Vector3(W3*0.52*zoomD, 10*zoomD, mp.z+4*zoomD), 0.05);
         povCamera.lookAt(mp.x, 1.2, mp.z-5);
       } else if(povCamMode==='ezoff'){
-        // Offensive end zone — high above, behind offense (positive z), looking downfield
         const zoomD = povZoom;
-        povCamera.fov = 52 / zoomD;
+        povCamera.fov = Math.min(88, 62*zoomD);
         povCamera.updateProjectionMatrix();
-        povCamera.position.set(0, 20*zoomD, (H3/2)*0.58);
-        povCamera.lookAt(0, 0, -(H3/2)*0.15);
+        povCamera.position.set(0, 14/zoomD, (H3/2)*0.62);
+        povCamera.lookAt(0, 0, -(H3/2)*0.55);
       } else {
-        // Defensive end zone — mirror, high above, behind defense (negative z), looking upfield
         const zoomD = povZoom;
-        povCamera.fov = 52 / zoomD;
+        povCamera.fov = Math.min(88, 62*zoomD);
         povCamera.updateProjectionMatrix();
-        povCamera.position.set(0, 20*zoomD, -(H3/2)*0.58);
-        povCamera.lookAt(0, 0, (H3/2)*0.15);
+        povCamera.position.set(0, 14/zoomD, -(H3/2)*0.62);
+        povCamera.lookAt(0, 0, (H3/2)*0.55);
       }
     }
 
@@ -4277,6 +4292,12 @@ init();
     <button class="pov-ctrl-btn" onclick="stepFrame(1)">▶</button>
     <input type="range" class="pov-scrub" id="povScrub" min="0" max="100" value="0" oninput="scrubTo(this.value)">
     <span class="pov-progress-label" id="povProgressLabel">0%</span>
+    <span style="width:1px;height:18px;background:rgba(255,255,255,.15);margin:0 2px"></span>
+    <span class="pov-speed-label">Zoom</span>
+    <button class="pov-ctrl-btn" onclick="adjustZoom(-0.15)" title="Zoom out">−</button>
+    <span class="pov-progress-label" id="povZoomLabel" style="min-width:36px;text-align:center">1.0×</span>
+    <button class="pov-ctrl-btn" onclick="adjustZoom(0.15)" title="Zoom in">+</button>
+    <button class="pov-ctrl-btn" onclick="adjustZoom(0)" title="Reset zoom">↺</button>
   </div>
 
   <div class="pov-info">
