@@ -4,6 +4,8 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Play Designer Pro v7 — Coordinator Lab</title>
+<!-- Three.js loaded eagerly so inline GLTFLoader embed has THREE available -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@400;600;700;900&family=Barlow:wght@400;500;600;700&display=swap');
 *{box-sizing:border-box;margin:0;padding:0}
@@ -8119,12 +8121,8 @@ function openPOV() {
       if (!povAnimating) applyStaticCamera();
     };
   };
-  if (typeof THREE==='undefined') {
-    const s=document.createElement('script');
-    s.src='https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js';
-    s.onload=doInit;
-    document.head.appendChild(s);
-  } else { doInit(); }
+  // THREE.js loaded eagerly in <head> — always available
+  doInit();
 }
 
 function closePOV() {
