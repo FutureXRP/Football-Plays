@@ -700,13 +700,11 @@ function flipFormation() {
     p.x = mirrorX(p.x); p.ox = p.x; p.animX = p.x;
   });
 
-  // Flip defenders only when in Defense coordinator mode
-  if (coordinatorSide === 'defense') {
-    defenders.forEach(d => {
-      d.x = mirrorX(d.x); d.ox = d.x; d.animX = d.x;
-    });
-    defRoutes.forEach(r => { r.pts = flipPts(r.pts); });
-  }
+  // Defense always mirrors offense on flip — alignment is relative to the formation
+  defenders.forEach(d => {
+    d.x = mirrorX(d.x); d.ox = d.x; d.animX = d.x;
+  });
+  defRoutes.forEach(r => { r.pts = flipPts(r.pts); });
 
   // Flip all offensive path data (routes, blocks, motions, ball)
   // but only for non-OL players
