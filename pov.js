@@ -4,14 +4,14 @@
 let povScene, povCamera, povRenderer;
 let povPlayerMeshes = [];
 let povDefMeshes    = [];
-
+ 
 // ── GLTF MODEL SYSTEM ─────────────────────────────────
 const GLB_URL = 'https://raw.githubusercontent.com/FutureXRP/Football-Plays/main/american_football_players_animated_rigged.glb';
 let gltfModelCache  = null;   // cached loaded GLTF scene
 let gltfMixers      = [];     // AnimationMixer per player instance
 let gltfClockDelta  = 0;
 const gltfClock     = { then: performance.now() };
-
+ 
 // Position → character root node index (see getCharRootIndex below)
 let povRoutelines   = [];
 let povBallMesh     = null;
@@ -26,19 +26,19 @@ let povPaused       = false;
 let povProgress     = 0;
 let povStepFn       = null;
 let povZoom         = 1.0; // 0.4 = zoomed in, 2.0 = zoomed out
-
+ 
 // Field scale: 760px → 76 units
 const PX  = 1 / 10;
 const W3  = W * PX;
 const H3  = H * PX;
 const LOS3 = LOS * PX;
 const EYE_HEIGHT = 1.75; // camera at eye level for first-person
-
+ 
 function canvasToWorld(cx, cy) {
   return { x: (cx - W/2)*PX, z: (cy - H/2)*PX };
 }
 function hexColor(h) { return parseInt((h||'#888888').replace('#',''),16); }
-
+ 
 // ── CEL-SHADING SYSTEM — Nintendo/Fortnite quality ─────
 // gradientMap is the KEY to real cel-shading with MeshToonMaterial.
 // Without it you get flat Lambert. With it: hard 3-band shadow/mid/highlight.
@@ -59,7 +59,7 @@ function getCelGradMap() {
   _celGradMap = tex;
   return tex;
 }
-
+ 
 // Helmet-specific gradient: slightly shinier (fewer shadow bands)
 let _helmetGradMap = null;
 function getHelmetGradMap() {
@@ -77,7 +77,7 @@ function getHelmetGradMap() {
   _helmetGradMap = tex;
   return tex;
 }
-
+ 
 function jerseyMat(color) {
   return new THREE.MeshToonMaterial({
     color, gradientMap: getCelGradMap()
@@ -124,7 +124,7 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
   mesh.add(o);
   return mesh;
 }
-
+ 
 // ── GLTF PLAYER — clone individual character from loaded model ─
 // GLB hierarchy: scene → Sketchfab_model → root → [6 Metarig nodes]
 // Each Metarig contains one character mesh.
@@ -135,7 +135,7 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
 //   [144] Metarig Woman.019 → AmericanFootballWoman.001
 //   [191] Metarig Woman.020 → AmericanFootball.006   (crouching lineman)
 //   [238] Metarig Woman.021 → AmericanFootballWoman.002
-
+ 
 // ── Character mapping: position → [armaturePattern, skinnedMeshName]
 // GLB structure: armatures are under scene→root, SkinnedMesh Objects are
 // siblings of root. Each pair shares a skin. Confirmed by GLB inspection.
@@ -153,7 +153,7 @@ const CHAR_PAIRS = [
   { armature: 'Metarig Woman.020', mesh: 'Object_194' }, // 4: crouching lineman
   { armature: 'Metarig Woman.021', mesh: 'Object_241' }, // 5: female running
 ];
-
+ 
 function getCharPairIdx(pos, isDef) {
   if (!isDef) {
     if (pos === 'OL') return 4;             // crouching lineman
@@ -166,38 +166,47 @@ function getCharPairIdx(pos, isDef) {
     return 1;                               // CB/S running
   }
 }
-
+ 
 function makeGLTFPlayer(p, isDef) {
   const group = new THREE.Group();
   const pairIdx = getCharPairIdx(p.pos, isDef);
   const pair    = CHAR_PAIRS[pairIdx];
-
+ 
   // Find armature and SkinnedMesh nodes by name
   let armNode  = null;
   let meshNode = null;
+  const allNodeNames = [];
   gltfModelCache.scene.traverse(n => {
-    if (!n.name) return;
+    if (n.name) allNodeNames.push(n.name);
     if (!armNode  && n.name.startsWith(pair.armature)) armNode  = n;
     if (!meshNode && n.name === pair.mesh)              meshNode = n;
   });
-
+ 
+  // Log first time only so we can see actual names
+  if (!makeGLTFPlayer._logged) {
+    makeGLTFPlayer._logged = true;
+    console.log('All node names in GLTF scene:', allNodeNames.slice(0, 30));
+    console.log('Looking for armature:', pair.armature, '→ found:', armNode?.name);
+    console.log('Looking for mesh:', pair.mesh, '→ found:', meshNode?.name);
+  }
+ 
   if (!armNode || !meshNode) {
     console.warn('GLTF pair not found:', pair, '— falling back to procedural');
     return makeFootballPlayer(p, isDef);
   }
-
+ 
   // Build a wrapper group containing both the armature clone AND the mesh clone.
   // SkeletonUtils.clone() handles bone rebinding correctly for the armature.
   // The SkinnedMesh clone then gets its skeleton rebound to the cloned bones.
   const armClone  = THREE.SkeletonUtils.clone(armNode);
   const meshClone = meshNode.clone(true);
-
+ 
   // Collect cloned bones from the armature
   const boneMap = new Map();
   armNode.traverse(n  => { if (n.isBone) boneMap.set(n.name, n); });
   const clonedBones = new Map();
   armClone.traverse(n => { if (n.isBone) clonedBones.set(n.name, n); });
-
+ 
   // Rebind the cloned SkinnedMesh to the cloned skeleton's bones
   meshClone.traverse(node => {
     if (!node.isSkinnedMesh) return;
@@ -209,13 +218,13 @@ function makeGLTFPlayer(p, isDef) {
     node.frustumCulled = false;
     node.visible = true;
   });
-
+ 
   // Apply team color tint to mesh materials
   const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
   const tr = ((col >> 16) & 0xff) / 255;
   const tg = ((col >> 8)  & 0xff) / 255;
   const tb = (col & 0xff) / 255;
-
+ 
   meshClone.traverse(node => {
     if (node.isMesh && node.material) {
       node.material = node.material.clone();
@@ -228,14 +237,14 @@ function makeGLTFPlayer(p, isDef) {
       node.frustumCulled = false;
     }
   });
-
+ 
   const charGroup = new THREE.Group();
   charGroup.add(armClone);
   charGroup.add(meshClone);
   charGroup.scale.setScalar(0.026);
   charGroup.rotation.y = isDef ? 0 : Math.PI;
   group.add(charGroup);
-
+ 
   // Animation mixer — drive the armature; SkinnedMesh follows via skeleton
   if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
     const mixer  = new THREE.AnimationMixer(armClone);
@@ -246,7 +255,7 @@ function makeGLTFPlayer(p, isDef) {
     gltfMixers.push(mixer);
     group._mixer = mixer;
   }
-
+ 
   // Soft shadow
   const sc = document.createElement('canvas');
   sc.width = sc.height = 128;
@@ -264,25 +273,25 @@ function makeGLTFPlayer(p, isDef) {
   shadow.rotation.x = -Math.PI / 2;
   shadow.position.set(0, 0.01, 0.3);
   group.add(shadow);
-
+ 
   // Label
   const label = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#550000' : '#002255');
   label.position.y = 3.4;
   label.scale.set(2.4, 0.95, 1);
   group._labelSprite = label;
   group.add(label);
-
+ 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
   group._eyeY  = EYE_HEIGHT;
   group._bodyH = 3.0;
   group._isDef = isDef;
   group._animT = Math.random() * Math.PI * 2;
-
+ 
   return group;
 }
-
-
+ 
+ 
 // Key ratios vs realistic:
 //   Helmet  : ~42% of total height  (realistic ~14%)
 //   Legs    : ~22% of total height  (realistic ~45%)
@@ -293,7 +302,7 @@ function makeFootballPlayer(p, isDef) {
   const group = new THREE.Group();
   const col   = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
   const jerseyColor = isDef ? Math.max(0, col - 0x111000) : col;
-
+ 
   const jMat  = jerseyMat(jerseyColor);
   const pMat  = padMat();
   const hMat  = helmetMat(jerseyColor);
@@ -304,7 +313,7 @@ function makeFootballPlayer(p, isDef) {
   const cleatMat = new THREE.MeshToonMaterial({ color: 0x050505, gradientMap: getCelGradMap() });
   // White collar/detail color
   const accentMat = new THREE.MeshToonMaterial({ color: isDef ? 0xffdddd : 0xffffff, gradientMap: getCelGradMap() });
-
+ 
   // ── SOFT-EDGE BLOB SHADOW ───────────────────────────
   // Radial gradient canvas: dark center fading to transparent edge
   const shadowCanvas = document.createElement('canvas');
@@ -325,13 +334,13 @@ function makeFootballPlayer(p, isDef) {
   blobShadow.rotation.x = -Math.PI / 2;
   blobShadow.position.set(0, 0.01, 0.12);
   group.add(blobShadow);
-
+ 
   // ── LEGS — Blitz-style short, tapered cylinders ────
   const legL = new THREE.Group();
   const legR = new THREE.Group();
   group._legL = legL;
   group._legR = legR;
-
+ 
   [-1, 1].forEach(side => {
     const legGrp = side < 0 ? legL : legR;
     const upper = new THREE.Mesh(
@@ -341,7 +350,7 @@ function makeFootballPlayer(p, isDef) {
     upper.castShadow = true;
     addOutline(upper, 1.09);
     legGrp.add(upper);
-
+ 
     const lower = new THREE.Mesh(
       new THREE.CylinderGeometry(0.105, 0.090, 0.30, 10), pantMat
     );
@@ -349,16 +358,16 @@ function makeFootballPlayer(p, isDef) {
     lower.castShadow = true;
     addOutline(lower, 1.09);
     legGrp.add(lower);
-
+ 
     // Cleat — low tapered box
     const cleat = new THREE.Mesh(new THREE.BoxGeometry(0.19, 0.09, 0.29), cleatMat);
     cleat.position.set(0.02, -0.67, 0.04);
     legGrp.add(cleat);
-
+ 
     legGrp.position.set(side * 0.185, 0.87, 0);
     group.add(legGrp);
   });
-
+ 
   // ── TORSO — LatheGeometry tapered silhouette ────────
   // Profile: [radius, y] from hip to shoulder
   // Wide at shoulder (top), narrow at waist, slight flare at hip
@@ -376,7 +385,7 @@ function makeFootballPlayer(p, isDef) {
   torso.castShadow = true;
   addOutline(torso, 1.07);
   group.add(torso);
-
+ 
   // ── JERSEY COLLAR — two-tone detail ─────────────────
   const collar = new THREE.Mesh(
     new THREE.CylinderGeometry(0.195, 0.21, 0.09, 12),
@@ -384,7 +393,7 @@ function makeFootballPlayer(p, isDef) {
   );
   collar.position.set(0, 1.62, 0);
   group.add(collar);
-
+ 
   // ── JERSEY NUMBER — two-tone panel + number ─────────
   // White/contrast panel behind the number
   const panelCanvas = document.createElement('canvas');
@@ -412,7 +421,7 @@ function makeFootballPlayer(p, isDef) {
   );
   numMesh.position.set(0, 1.32, 0.32);
   group.add(numMesh);
-
+ 
   // ── SHOULDER PADS — curved crescent via CylinderGeometry ─
   // Main yoke: flattened wide cylinder — rounded edge vs sharp box
   const spadGeo = new THREE.CylinderGeometry(0.72, 0.68, 0.17, 16, 1, false, 0, Math.PI * 2);
@@ -422,7 +431,7 @@ function makeFootballPlayer(p, isDef) {
   spad.castShadow = true;
   addOutline(spad, 1.06);
   group.add(spad);
-
+ 
   // Front/back arch plates — slightly curved slabs
   for (const [z, rz] of [[-0.10, 0.12], [0.10, -0.12]]) {
     const plate = new THREE.Mesh(
@@ -434,7 +443,7 @@ function makeFootballPlayer(p, isDef) {
     plate.rotation.x = rz;
     group.add(plate);
   }
-
+ 
   // Side wings — angled drop pads, rounded cylinder slice
   [-0.66, 0.66].forEach(x => {
     const wing = new THREE.Mesh(
@@ -447,7 +456,7 @@ function makeFootballPlayer(p, isDef) {
     addOutline(wing, 1.08);
     group.add(wing);
   });
-
+ 
   // ── ARMS — upper/lower with natural angle ───────────
   [[-1, 0.60], [1, -0.60]].forEach(([side, rz]) => {
     const x = side * 0.74;
@@ -459,7 +468,7 @@ function makeFootballPlayer(p, isDef) {
     uArm.castShadow = true;
     addOutline(uArm, 1.08);
     group.add(uArm);
-
+ 
     const lArm = new THREE.Mesh(
       new THREE.CylinderGeometry(0.090, 0.078, 0.30, 10), sMat
     );
@@ -468,7 +477,7 @@ function makeFootballPlayer(p, isDef) {
     lArm.castShadow = true;
     group.add(lArm);
   });
-
+ 
   // ── NECK — bull neck, tapered ───────────────────────
   const neck = new THREE.Mesh(
     new THREE.CylinderGeometry(0.155, 0.175, 0.19, 10), sMat
@@ -476,7 +485,7 @@ function makeFootballPlayer(p, isDef) {
   neck.position.set(0, 1.74, 0);
   addOutline(neck, 1.07);
   group.add(neck);
-
+ 
   // ── HELMET — high-res dome, proper proportions ──────
   // More segments = smoother dome, better light catch
   const helmGeo = new THREE.SphereGeometry(0.52, 24, 16);
@@ -486,7 +495,7 @@ function makeFootballPlayer(p, isDef) {
   helm.castShadow = true;
   addOutline(helm, 1.068);
   group.add(helm);
-
+ 
   // Helmet chin cup — small rounded box under front
   const chinCup = new THREE.Mesh(
     new THREE.BoxGeometry(0.22, 0.10, 0.12),
@@ -494,7 +503,7 @@ function makeFootballPlayer(p, isDef) {
   );
   chinCup.position.set(0, 1.96, 0.44);
   group.add(chinCup);
-
+ 
   // Crown stripe — slightly raised panel on top
   const stripeCol = Math.min(0xffffff, jerseyColor + 0x606060);
   const stripe = new THREE.Mesh(
@@ -503,7 +512,7 @@ function makeFootballPlayer(p, isDef) {
   );
   stripe.position.set(0, 2.54, 0.04);
   group.add(stripe);
-
+ 
   // Ear flaps — rounded via cylinder slice
   [-0.49, 0.49].forEach(x => {
     const ear = new THREE.Mesh(
@@ -515,7 +524,7 @@ function makeFootballPlayer(p, isDef) {
     addOutline(ear, 1.07);
     group.add(ear);
   });
-
+ 
   // ── FACEMASK — 3 bold rounded bars ──────────────────
   const fmRadius = 0.036;
   for (let i = 0; i < 3; i++) {
@@ -534,7 +543,7 @@ function makeFootballPlayer(p, isDef) {
   fmV.position.set(0, 2.16, 0.54);
   addOutline(fmV, 1.13);
   group.add(fmV);
-
+ 
   // ── VISOR — tinted with subtle curve ────────────────
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.68, 0.095, 0.07),
@@ -545,7 +554,7 @@ function makeFootballPlayer(p, isDef) {
   );
   visor.position.set(0, 2.32, 0.48);
   group.add(visor);
-
+ 
   // ── LABEL SPRITE ────────────────────────────────────
   const labelSprite = makeLabelCrisp(
     p.label,
@@ -556,7 +565,7 @@ function makeFootballPlayer(p, isDef) {
   labelSprite.scale.set(2.4, 0.95, 1);
   group._labelSprite = labelSprite;
   group.add(labelSprite);
-
+ 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
   group.rotation.y = isDef ? 0 : Math.PI;
@@ -564,10 +573,10 @@ function makeFootballPlayer(p, isDef) {
   group._bodyH = 2.88;
   group._isDef = isDef;
   group._animT = Math.random() * Math.PI * 2;
-
+ 
   return group;
 }
-
+ 
 // ── Football mesh — cel-shaded leather ball ──────────
 function makeBallMesh() {
   const g = new THREE.Group();
@@ -578,7 +587,7 @@ function makeBallMesh() {
   ball.scale.set(0.65, 1, 0.65);
   addOutline(ball, 1.09, 0x2a0a00);
   g.add(ball);
-
+ 
   // White laces
   const laceMat = new THREE.MeshToonMaterial({ color: 0xffffff, gradientMap: getCelGradMap() });
   const laceMain = new THREE.Mesh(new THREE.BoxGeometry(0.06, 0.30, 0.07), laceMat);
@@ -590,7 +599,7 @@ function makeBallMesh() {
     lh.position.set(0.02, i * 0.08, 0.25);
     g.add(lh);
   }
-
+ 
   // Seam lines
   const seamMat = new THREE.MeshBasicMaterial({ color: 0x3a1505 });
   const seamGeo = new THREE.TorusGeometry(0.18, 0.012, 4, 20);
@@ -598,11 +607,11 @@ function makeBallMesh() {
   seam.rotation.y = Math.PI / 2;
   seam.position.set(0, 0, 0);
   g.add(seam);
-
+ 
   g.visible = false;
   return g;
 }
-
+ 
 // ── 3D route line ──────────────────────────────────────
 function makeLine3D(pts2d, color, ht=0.06) {
   if (!pts2d || pts2d.length < 2) return null;
@@ -610,7 +619,7 @@ function makeLine3D(pts2d, color, ht=0.06) {
   const geo = new THREE.BufferGeometry().setFromPoints(pts);
   return new THREE.Line(geo, new THREE.LineBasicMaterial({ color, linewidth:2 }));
 }
-
+ 
 // ── Floating label sprite (original, kept for compat) ─
 function makeLabel(text, color) {
   const c2 = document.createElement('canvas');
@@ -626,7 +635,7 @@ function makeLabel(text, color) {
   s.scale.set(1.4,0.6,1);
   return s;
 }
-
+ 
 // ── Crisp label with pill background (new) ────────────
 function makeLabelCrisp(text, textColor, bgColor) {
   const c2 = document.createElement('canvas');
@@ -663,7 +672,7 @@ function makeLabelCrisp(text, textColor, bgColor) {
   const s = new THREE.Sprite(mat);
   return s;
 }
-
+ 
 // ── Init Three.js scene ───────────────────────────────
 function initPOV() {
   if (povScene) return;
@@ -677,19 +686,19 @@ function initPOV() {
   povRenderer.outputEncoding = THREE.sRGBEncoding || 3001;
   povRenderer.toneMapping = THREE.ACESFilmicToneMapping || 4;
   povRenderer.toneMappingExposure = 0.88;
-
+ 
   povScene = new THREE.Scene();
   // Blitz-style bright stadium sky — clear afternoon blue
   povScene.fog = new THREE.FogExp2(0x6aabdf, 0.004);
   povScene.background = new THREE.Color(0x4f8fd6);
-
+ 
   povCamera = new THREE.PerspectiveCamera(72, 1, 0.05, 300);
-
+ 
   // ── LIGHTING — tuned for MeshToonMaterial ─────────
   // Toon needs STRONG directional lights to produce visible band transitions.
   // Ambient fills the dark sides. No specular in toon so dial up intensity.
   povScene.add(new THREE.AmbientLight(0xffeedd, 0.70)); // warm fill — lower so shadows read
-
+ 
   // Primary sun — strong but not blowing out team colors
   const sun = new THREE.DirectionalLight(0xfff4d0, 3.2);
   sun.position.set(30, 55, -25);
@@ -702,14 +711,14 @@ function initPOV() {
   sun.shadow.camera.right = sun.shadow.camera.top   =  80;
   sun.shadow.bias = -0.0005;
   povScene.add(sun);
-
+ 
   const fill = new THREE.DirectionalLight(0x8ecbff, 0.75);
   fill.position.set(-30, 20, 20);
   povScene.add(fill);
-
+ 
   // Hemisphere — keep low so turf color stays deep
   povScene.add(new THREE.HemisphereLight(0x88bbdd, 0x1a3a10, 0.3));
-
+ 
   // ── STADIUM LIGHTS — 4 rigs, emissive + point lights ──
   const lightRigPositions = [
     [-W3*0.72, 28,  H3*0.3],
@@ -741,14 +750,14 @@ function initPOV() {
     pt.position.set(lx, ly - 2, lz);
     povScene.add(pt);
   });
-
+ 
   // ── TURF — Blitz style flat deep green alternating stripes ──
   // MeshBasicMaterial = completely immune to lighting blowout.
   // Deep saturated NFL green, subtle stripe contrast, clean.
   // Blitz turf reads as ~#1a5c20 dark / #1e6824 light
   const turfDark  = new THREE.MeshBasicMaterial({ color: 0x175218 }); // dark stripe
   const turfLight = new THREE.MeshBasicMaterial({ color: 0x1c6320 }); // lighter stripe — subtle diff
-
+ 
   // 10 stripes across the visible field
   for (let i = 0; i < 10; i++) {
     const zFrom = (-H3/2) + i*(H3/10);
@@ -761,7 +770,7 @@ function initPOV() {
     stripe.receiveShadow = false; // BasicMaterial ignores shadows — that's fine
     povScene.add(stripe);
   }
-
+ 
   // Sideline borders — white painted lines at field edge
   for (const sx of [-W3*0.755, W3*0.755]) {
     const sideline = new THREE.Mesh(
@@ -782,12 +791,12 @@ function initPOV() {
     ezline.position.set(0, 0.015, sz);
     povScene.add(ezline);
   }
-
+ 
   // ── Yard lines — bold painted white, Blitz style ──────
   for (let i = 0; i <= 10; i++) {
     const z = (-H3/2) + i*(H3/10);
     const isLOS = Math.abs(z - ((LOS-H/2)*PX)) < 0.3;
-
+ 
     // Painted line on turf — use PlaneGeometry so MeshBasicMaterial works
     const lineW = isLOS ? 0.28 : 0.18;
     const lineMat = new THREE.MeshBasicMaterial({
@@ -801,7 +810,7 @@ function initPOV() {
     lineMesh.rotation.x = -Math.PI/2;
     lineMesh.position.set(0, 0.02, z);
     povScene.add(lineMesh);
-
+ 
     // Yard number sprites — large, bold, Blitz painted style
     if (!isLOS && i > 0 && i < 10) {
       const yardNum = Math.abs(i*10 - 50);
@@ -824,7 +833,7 @@ function initPOV() {
       }
     }
   }
-
+ 
   // ── Hash marks — painted on turf ──────────────────
   const hashMat = new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.75 });
   for (let i = 0; i <= 10; i++) {
@@ -838,7 +847,7 @@ function initPOV() {
       }
     }
   }
-
+ 
   // ── End zones — deeper than field, Blitz style ─────
   for (const zOff of [-H3*0.54, H3*0.54]) {
     const ez = new THREE.Mesh(
@@ -849,7 +858,7 @@ function initPOV() {
     ez.position.set(0, 0.005, zOff);
     povScene.add(ez);
   }
-
+ 
   // ── Goal posts — cel-shaded yellow ─────────────────
   function makeGoalPost(z) {
     const mat = new THREE.MeshToonMaterial({
@@ -869,7 +878,7 @@ function initPOV() {
   }
   povScene.add(makeGoalPost(-H3*0.85));
   povScene.add(makeGoalPost( H3*0.85));
-
+ 
   // ── STANDS — tiered, with cel-shaded crowd color blocks ──
   for (const sx of [-W3*0.84, W3*0.84]) {
     // Main concrete structure — tiers
@@ -881,7 +890,7 @@ function initPOV() {
       stand.position.set(sx + (tier * (sx > 0 ? 0.3 : -0.3)), h/2, 0);
       povScene.add(stand);
     }
-
+ 
     // Crowd color rows — bright saturated for game feel
     const rowColors = [0x2244aa, 0xcc2222, 0x2244aa, 0xeeeeee, 0xcc2222, 0x2244aa, 0xeeeeee, 0xcc2222];
     rowColors.forEach((c, row) => {
@@ -893,11 +902,11 @@ function initPOV() {
       povScene.add(rowMesh);
     });
   }
-
+ 
   resizePOV();
   window.addEventListener('resize', resizePOV);
 }
-
+ 
 function resizePOV() {
   if (!povRenderer) return;
   const c = document.getElementById('povCanvas');
@@ -906,10 +915,10 @@ function resizePOV() {
   povRenderer.setSize(w, h, false);
   if (povCamera) { povCamera.aspect = w/h; povCamera.updateProjectionMatrix(); }
 }
-
+ 
 // ── Camera mode switching ─────────────────────────────
 let povRedZoneMode = false; // red zone: offense at def 30
-
+ 
 function setCamMode(mode) {
   povCamMode = mode;
   document.querySelectorAll('.pov-cam-btn').forEach(b => b.classList.remove('active'));
@@ -918,7 +927,7 @@ function setCamMode(mode) {
   updateSelfVisibility();
   if (!povAnimating) applyStaticCamera();
 }
-
+ 
 // Red zone world-space offset — how far downfield offense is spotted
 // In red zone mode, offense is at defense's 30 (30 yards from end zone)
 function getRedZoneOffset() {
@@ -928,7 +937,7 @@ function getRedZoneOffset() {
   // We want offense to appear ~18 world units closer to def end zone
   return -14.0;
 }
-
+ 
 function updateSelfVisibility() {
   const allMeshes = [...povPlayerMeshes, ...povDefMeshes];
   allMeshes.forEach(pm => {
@@ -941,7 +950,7 @@ function updateSelfVisibility() {
     });
   });
 }
-
+ 
 function applyStaticCamera() {
   const selList = povSelectedSide==='offense' ? players : defenders;
   const selP    = selList.find(x => x.id===povSelectedId);
@@ -951,16 +960,16 @@ function applyStaticCamera() {
   // Force an immediate render so the new camera position is visible right away
   if (povRenderer && povScene && povCamera) povRenderer.render(povScene, povCamera);
 }
-
+ 
 function applyCameraForMode(px, py, pz, facingY, selP) {
   const isDef = povSelectedSide === 'defense';
   const rzOff = getRedZoneOffset();
-
+ 
   if (povCamMode === 'fp') {
     // Tightened FOV — more game camera, less browser demo
     povCamera.fov = Math.max(42, Math.min(90, 68 * povZoom));
     povCamera.position.set(px, EYE_HEIGHT, pz + rzOff);
-
+ 
     const forwardZ = isDef ? 1 : -1;
     let lx, lz;
     if (facingY !== 0) {
@@ -971,13 +980,13 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
       lz = (pz + rzOff) + forwardZ * 20;
     }
     povCamera.lookAt(lx, EYE_HEIGHT - 0.12, lz);
-
+ 
   } else if (povCamMode === 'broadcast') {
     const zoomD = povZoom;
     povCamera.fov = 58;
     povCamera.position.set(W3 * 0.52 * zoomD, 10 * zoomD, pz + rzOff + 4 * zoomD);
     povCamera.lookAt(px, 1.2, pz + rzOff - 5);
-
+ 
   } else if (povCamMode === 'blitz') {
     // ── BLITZ ISOMETRIC — the signature Blitz camera ──
     // Low angle, slightly behind offense, looking upfield at ~45°
@@ -993,7 +1002,7 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     const lookZ   = -(H3 / 2) * 0.18 + rzOff;
     povCamera.position.set(camX, camH, behindZ + rzOff);
     povCamera.lookAt(0, 0.5, lookZ);
-
+ 
   } else if (povCamMode === 'ezoff') {
     const zoomD = povZoom;
     const camZ  =  (H3 / 2) * 0.62;
@@ -1002,7 +1011,7 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
     povCamera.fov = Math.min(88, 62 * zoomD);
     povCamera.position.set(0, camY, camZ + rzOff);
     povCamera.lookAt(0, 0, lookZ);
-
+ 
   } else {
     // ezdef
     const zoomD = povZoom;
@@ -1015,7 +1024,7 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
   }
   povCamera.updateProjectionMatrix();
 }
-
+ 
 // ── Populate scene with players and routes ─────────────
 function populatePOVScene() {
   povPlayerMeshes.forEach(m => povScene.remove(m.group));
@@ -1024,7 +1033,7 @@ function populatePOVScene() {
   if (povBallMesh) povScene.remove(povBallMesh);
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
   gltfMixers = [];
-
+ 
   const build = (useGLTF) => {
     if (!povScene) return;
     players.forEach(p => {
@@ -1048,7 +1057,7 @@ function populatePOVScene() {
     updateSelfVisibility();
     applyStaticCamera();
   };
-
+ 
   if (gltfModelCache) {
     build(true);
   } else {
@@ -1064,7 +1073,7 @@ function populatePOVScene() {
     });
   }
 }
-
+ 
 // ── Build player tab buttons ───────────────────────────
 function buildPOVTabs() {
   const container = document.getElementById('povTabs');
@@ -1085,7 +1094,7 @@ function buildPOVTabs() {
     container.appendChild(btn);
   });
 }
-
+ 
 function updatePOVHUD() {
   const list = povSelectedSide==='offense' ? players : defenders;
   const p    = list.find(x=>x.id===povSelectedId);
@@ -1099,12 +1108,12 @@ function updatePOVHUD() {
   document.getElementById('povKeyRead').textContent        = getKeyRead(p);
   document.getElementById('povDn').textContent             = '2nd & 7';
 }
-
+ 
 function getKeyRead(p) {
   const reads = {QB:'Watch safety rotation pre-snap',WR:'Read CB leverage — inside or outside',RB:'Hit the first down lineman',TE:'Release inside or outside the LB',OL:'Gap assignment — who do you fire on?',DL:'Read guard\'s first step',LB:'Key the near back — read mesh',CB:'Watch #1 release — press or bail',S:'Read QB eyes post-snap'};
   return reads[p.pos] || 'Execute your assignment';
 }
-
+ 
 // ── GLTF Model Loader ──────────────────────────────────
 function loadGLTFModel(onLoaded) {
   if (gltfModelCache) { if (onLoaded) onLoaded(); return; }
@@ -1135,7 +1144,7 @@ function loadGLTFModel(onLoaded) {
     }
   );
 }
-
+ 
 // ── Open POV ──────────────────────────────────────────
 function openPOV() {
   document.getElementById('povOverlay').classList.add('open');
@@ -1159,7 +1168,7 @@ function openPOV() {
     resizePOV();
     applyStaticCamera();
     povRenderLoop();
-
+ 
     // ── Scroll wheel zoom — normalized so speed is consistent ──
     const povCanvasEl = document.getElementById('povCanvas');
     povCanvasEl.onwheel = e => {
@@ -1176,7 +1185,7 @@ function openPOV() {
   // THREE.js loaded eagerly in <head> — always available
   doInit();
 }
-
+ 
 function closePOV() {
   document.getElementById('povOverlay').classList.remove('open');
   povAnimating = false;
@@ -1193,7 +1202,7 @@ function closePOV() {
   povPlayerMeshes = []; povDefMeshes = []; povRoutelines = [];
   povBallMesh = null;
 }
-
+ 
 function povRenderLoop() {
   if (!document.getElementById('povOverlay').classList.contains('open')) return;
   povRaf = requestAnimationFrame(povRenderLoop);
@@ -1206,7 +1215,7 @@ function povRenderLoop() {
   }
   if (povScene && povCamera && povRenderer) povRenderer.render(povScene, povCamera);
 }
-
+ 
 // ── Playback control functions ─────────────────────────
 function adjustZoom(delta) {
   if (delta === 0) {
@@ -1217,12 +1226,12 @@ function adjustZoom(delta) {
   updateZoomUI();
   if (!povAnimating) applyStaticCamera();
 }
-
+ 
 function updateZoomUI() {
   const lbl = document.getElementById('povZoomLabel');
   if (lbl) lbl.textContent = povZoom.toFixed(1) + '×';
 }
-
+ 
 function setPovSpeed(s) {
   povSpeed = s;
   document.querySelectorAll('.pov-ctrl-btn').forEach(b => {
@@ -1231,7 +1240,7 @@ function setPovSpeed(s) {
   });
   const lbl = document.getElementById('speedBtn-1');
 }
-
+ 
 function togglePovPause() {
   if (!povAnimating && povProgress === 0) { povRunPlay(); return; }
   povPaused = !povPaused;
@@ -1243,7 +1252,7 @@ function togglePovPause() {
     povRaf = requestAnimationFrame(povStepRef);
   }
 }
-
+ 
 function stepFrame(dir) {
   // Step ±1% through the play, render that frame statically
   povPaused = true;
@@ -1253,7 +1262,7 @@ function stepFrame(dir) {
   updateScrubUI();
   if (povStepFn) povStepFn(povProgress);
 }
-
+ 
 function scrubTo(val) {
   povPaused = true;
   const btn = document.getElementById('povPauseBtn');
@@ -1262,26 +1271,26 @@ function scrubTo(val) {
   updateScrubUI();
   if (povStepFn) povStepFn(povProgress);
 }
-
+ 
 function updateScrubUI() {
   const scrub = document.getElementById('povScrub');
   const lbl   = document.getElementById('povProgressLabel');
   if (scrub) scrub.value = Math.round(povProgress * 100);
   if (lbl)   lbl.textContent = Math.round(povProgress * 100) + '%';
 }
-
+ 
 // Shared state for pause/resume timing
 let povT0 = 0;
 let povTotalMs = 3400;
 let povStepRef = null;
-
+ 
 // ── Play animation in POV ──────────────────────────────
 function povRunPlay() {
   if (povAnimating && !povPaused) return;
-
+ 
   const allActions = [...motions,...routes,...blocks];
   if (!allActions.length) { alert('Generate a play first, then open POV.'); return; }
-
+ 
   povAnimating = true;
   povPaused    = false;
   if (povProgress >= 1) povProgress = 0; // restart if finished
@@ -1289,11 +1298,11 @@ function povRunPlay() {
   document.getElementById('povRunBtn').onclick = stopPOVPlay;
   const pauseBtn = document.getElementById('povPauseBtn');
   if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
-
+ 
   const hasM  = motions.length > 0;
   const MEND  = hasM ? 0.28 : 0;
   povTotalMs  = hasM ? 4200 : 3400;
-
+ 
   // ── Build tracks ───────────────────────────────────
   const offTrk={};
   players.forEach(p=>{
@@ -1309,17 +1318,17 @@ function povRunPlay() {
   });
   const defTrk = computeDefenderTracks();
   const isDef = povSelectedSide === 'defense';
-
+ 
   function eIO(t){return t<.5?2*t*t:-1+(4-2*t)*t;}
   function ptAt2D(pts,e){if(!pts||pts.length<2)return pts?pts[0]:{x:0,y:0};const ci=Math.max(0,Math.min(1,e));const idx=Math.min(pts.length-2,Math.floor(ci*(pts.length-1)));const loc=ci*(pts.length-1)-idx;const a=pts[idx],b=pts[idx+1]||a;return{x:a.x+(b.x-a.x)*loc,y:a.y+(b.y-a.y)*loc};}
-
+ 
   // ── Core render-at-progress function (shared by rAF and scrub) ──
   // Track time for leg animation
   let _animFrameTime = 0;
-
+ 
   function renderAtProgress(raw) {
     _animFrameTime += 0.016 * povSpeed; // advance animation clock
-
+ 
     // Move offense
     players.forEach(p=>{
       const pm=povPlayerMeshes.find(m=>m.id===p.id); if(!pm) return;
@@ -1328,18 +1337,18 @@ function povRunPlay() {
       if(hasM&&raw<MEND){ pos2d=tr.motion?ptAt2D(tr.motion,eIO(raw/MEND)):{x:p.x,y:p.y}; }
       else{ const pr=hasM?(raw-MEND)/(1-MEND):raw; const sp=tr.isQB?Math.min(pr/0.62,1):tr.isOL?Math.min(pr/0.75,1):pr; pos2d=ptAt2D(tr.play,eIO(sp)); }
       const w=canvasToWorld(pos2d.x,pos2d.y);
-
+ 
       // Check movement speed for leg animation
       const prevPos = pm.group.position.clone();
       pm.group.position.set(w.x,0,w.z);
       const moveSpd = prevPos.distanceTo(pm.group.position);
-
+ 
       // Face direction
       const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
       const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
       const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
       if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz)+Math.PI;
-
+ 
       // ── LEG ANIMATION ──────────────────────────────
       // Swing legs if moving; settle into stance if stopped
       if (pm.group._legL && pm.group._legR) {
@@ -1353,7 +1362,7 @@ function povRunPlay() {
         pm.group.position.y = bob;
       }
     });
-
+ 
     // Move defense
     defenders.forEach(d=>{
       const dm=povDefMeshes.find(m=>m.id===d.id); if(!dm) return;
@@ -1362,11 +1371,11 @@ function povRunPlay() {
       const pts=defTrk[d.id]||[{x:d.x,y:d.y}];
       const pos2d=ptAt2D(pts.length>1?pts:[pts[0],pts[0]],eIO(pr));
       const w=canvasToWorld(pos2d.x,pos2d.y);
-
+ 
       const prevPos = dm.group.position.clone();
       dm.group.position.set(w.x,0,w.z);
       const moveSpd = prevPos.distanceTo(dm.group.position);
-
+ 
       if (dm.group._legL && dm.group._legR) {
         const phase = dm.group._animT || 0;
         const spd   = moveSpd > 0.004 ? 18 : 0;
@@ -1377,7 +1386,7 @@ function povRunPlay() {
         dm.group.position.y = bob;
       }
     });
-
+ 
     // Ball arc
     if(povThrowArc&&povBallMesh){
       const pr=hasM?(raw-MEND)/(1-MEND):raw;
@@ -1394,7 +1403,7 @@ function povRunPlay() {
         povBallMesh.rotation.z+=0.15;
       } else { povBallMesh.visible=false; }
     }
-
+ 
     // Camera follow
     const sArr=povSelectedSide==='offense'?povPlayerMeshes:povDefMeshes;
     const sMesh=sArr.find(m=>m.id===povSelectedId);
@@ -1445,28 +1454,28 @@ function povRunPlay() {
         povCamera.lookAt(0, 0, (H3/2)*0.55+rzOff);
       }
     }
-
+ 
     povRenderer.render(povScene,povCamera);
     updateScrubUI();
   }
-
+ 
   // Expose for scrubbing
   povStepFn = renderAtProgress;
-
+ 
   // ── rAF loop ───────────────────────────────────────
   // Start timing from current progress position
   povT0 = performance.now() - (povProgress * povTotalMs / Math.max(povSpeed, 0.1));
-
+ 
   function povStep(ts) {
     if (!povAnimating) return;
     if (povPaused) { povRaf = requestAnimationFrame(povStep); return; } // idle loop while paused
-
+ 
     const elapsed = (ts - povT0) * povSpeed;
     const raw = Math.min(elapsed / povTotalMs, 1);
     povProgress = raw;
-
+ 
     renderAtProgress(raw);
-
+ 
     if (raw >= 1) {
       povAnimating = false;
       povProgress  = 1;
@@ -1479,11 +1488,11 @@ function povRunPlay() {
     }
     povRaf = requestAnimationFrame(povStep);
   }
-
+ 
   povStepRef = povStep;
   povRaf = requestAnimationFrame(povStep);
 }
-
+ 
 // ── POV PNG screenshot ────────────────────────
 function savePOVPNG() {
   if (!povRenderer) { alert('Open the POV view first.'); return; }
@@ -1505,7 +1514,7 @@ function savePOVPNG() {
     reinitPOVWithBuffer();
   }
 }
-
+ 
 function reinitPOVWithBuffer() {
   // Re-create renderer with preserveDrawingBuffer:true so PNG export works
   if (!povScene) return;
@@ -1520,12 +1529,12 @@ function reinitPOVWithBuffer() {
   if (povScene && povCamera) povRenderer.render(povScene, povCamera);
   setTimeout(() => savePOVPNG(), 100);
 }
-
+ 
 // ── POV WebM video recording ──────────────────
 let povMediaRecorder = null;
 let povRecordedChunks = [];
 let povRecording = false;
-
+ 
 function startPOVVideo() {
   if (povRecording) { stopPOVVideo(); return; }
   const c = document.getElementById('povCanvas');
@@ -1553,7 +1562,7 @@ function startPOVVideo() {
     alert('Could not start POV recording: ' + err.message);
   }
 }
-
+ 
 function stopPOVVideo() {
   if (povMediaRecorder && povRecording) {
     povMediaRecorder.stop();
@@ -1562,7 +1571,7 @@ function stopPOVVideo() {
     if (btn) { btn.textContent = '🎬 Video'; btn.style.background='rgba(30,60,120,.85)'; }
   }
 }
-
+ 
 function savePOVVideoFile() {
   if (!povRecordedChunks.length) return;
   const blob = new Blob(povRecordedChunks, { type:'video/webm' });
@@ -1576,7 +1585,7 @@ function savePOVVideoFile() {
   povRecordedChunks = [];
   status('POV video saved as .webm — opens in Chrome, VLC, Firefox.', 'success');
 }
-
+ 
 function stopPOVPlay() {
   povAnimating = false;
   povPaused    = false;
@@ -1597,7 +1606,7 @@ function stopPOVPlay() {
   povRenderLoop(); // restart idle render loop so camera/zoom changes are visible
 }
 // ═══════════════════════════════════════════════════════
-
+ 
 // ── Label visibility toggle ────────────────────────────
 let povLabelsVisible = true;
 function togglePOVLabels() {
@@ -1611,7 +1620,7 @@ function togglePOVLabels() {
     btn.style.opacity = povLabelsVisible ? '1' : '0.5';
   }
 }
-
+ 
 // ── Red Zone mode toggle ───────────────────────────────
 function toggleRedZone() {
   povRedZoneMode = !povRedZoneMode;
@@ -1623,3 +1632,4 @@ function toggleRedZone() {
   }
   if (!povAnimating) applyStaticCamera();
 }
+ 
