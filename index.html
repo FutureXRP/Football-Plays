@@ -8482,75 +8482,29 @@ function populatePOVScene() {
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
   gltfMixers = [];
 
-  const buildWithGLTF = () => {
-    if (!povScene) return; // scene may have been closed
-    console.log('Building with GLTF models. Scene children before:', gltfModelCache.scene.children.length);
-    players.forEach(p => {
-      const group = makeGLTFPlayer(p, false);
-      povScene.add(group);
-      povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
-    });
-    defenders.forEach(d => {
-      const group = makeGLTFPlayer(d, true);
-      povScene.add(group);
-      povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
-    });
-    routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    povBallMesh = makeBallMesh();
-    povScene.add(povBallMesh);
-    povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
-    buildPOVTabs();
-    updatePOVHUD();
-    updateSelfVisibility();
-    applyStaticCamera();
-    if (povRenderer && povScene && povCamera) povRenderer.render(povScene, povCamera);
-  };
+  players.forEach(p => {
+    const group = makeFootballPlayer(p, false);
+    povScene.add(group);
+    povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
+  });
+  defenders.forEach(d => {
+    const group = makeFootballPlayer(d, true);
+    povScene.add(group);
+    povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
+  });
 
-  const buildWithProcedural = () => {
-    if (!povScene) return;
-    console.log('Building with procedural models');
-    players.forEach(p => {
-      const group = makeFootballPlayer(p, false);
-      povScene.add(group);
-      povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
-    });
-    defenders.forEach(d => {
-      const group = makeFootballPlayer(d, true);
-      povScene.add(group);
-      povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
-    });
-    routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-    povBallMesh = makeBallMesh();
-    povScene.add(povBallMesh);
-    povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
-    buildPOVTabs();
-    updatePOVHUD();
-    updateSelfVisibility();
-    applyStaticCamera();
-  };
+  routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+  blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+  motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
 
-  if (gltfModelCache) {
-    // Already cached — use GLTF directly
-    console.log('GLTF already cached, building immediately');
-    buildWithGLTF();
-  } else {
-    // Procedural first, swap when GLTF loads
-    buildWithProcedural();
-    loadGLTFModel(() => {
-      if (!povScene) return; // POV was closed during load
-      // Clear procedural, rebuild with GLTF
-      povPlayerMeshes.forEach(m => { if(povScene) povScene.remove(m.group); });
-      povDefMeshes.forEach(m    => { if(povScene) povScene.remove(m.group); });
-      povPlayerMeshes=[]; povDefMeshes=[];
-      gltfMixers = [];
-      buildWithGLTF();
-      status('3D models loaded ✓', 'success');
-    });
-  }
+  povBallMesh = makeBallMesh();
+  povScene.add(povBallMesh);
+  povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+
+  buildPOVTabs();
+  updatePOVHUD();
+  updateSelfVisibility();
+  applyStaticCamera();
 }
 
 // ── Build player tab buttons ───────────────────────────
