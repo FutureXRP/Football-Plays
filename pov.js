@@ -249,6 +249,7 @@ function makeGLTFPlayer(p, isDef) {
   }
 
   // Clone the whole character subtree so SkeletonUtils can rewire bones correctly
+  if (!makeGLTFPlayer._loggedRoot) { makeGLTFPlayer._loggedRoot = true; console.log('commonRoot name:', commonRoot.name, '| children:', commonRoot.children.length, '| is scene root:', commonRoot === gltfModelCache.scene); }
   const clonedRoot = THREE.SkeletonUtils.clone(commonRoot);
 
   // Hide every skinned mesh except the one we want
@@ -279,9 +280,54 @@ function makeGLTFPlayer(p, isDef) {
 
   const charGroup = new THREE.Group();
   charGroup.add(clonedRoot);
-  charGroup.scale.setScalar(0.026);
+
+  // Force all GLTF parts visible/renderable
+  clonedRoot.traverse(n => {
+    n.visible = true;
+    n.frustumCulled = false;
+
+    if (n.isMesh || n.isSkinnedMesh) {
+      n.castShadow = true;
+      n.receiveShadow = true;
+
+      if (n.material) {
+        n.material = n.material.clone();
+        n.material.side = THREE.DoubleSide;
+        n.material.transparent = false;
+        n.material.opacity = 1;
+        n.material.depthWrite = true;
+        n.material.needsUpdate = true;
+      }
+    }
+  });
+
+  // Normalize the imported model to local origin
+  clonedRoot.updateMatrixWorld(true);
+
+  const box = new THREE.Box3().setFromObject(clonedRoot);
+  const size = new THREE.Vector3();
+  const center = new THREE.Vector3();
+
+  box.getSize(size);
+  box.getCenter(center);
+
+  console.log('GLTF bbox size:', size, 'center:', center);
+
+  // Move model center to x/z origin and feet to y=0
+  clonedRoot.position.x -= center.x;
+  clonedRoot.position.z -= center.z;
+  clonedRoot.position.y -= box.min.y;
+
+  // Auto-scale model to about 2.8 world units tall
+  const targetHeight = 2.8;
+  const modelHeight = size.y || 1;
+  const scale = targetHeight / modelHeight;
+
+  charGroup.scale.setScalar(scale);
   charGroup.rotation.y = isDef ? 0 : Math.PI;
+
   group.add(charGroup);
+
 
   // Animation mixer -- drive the cloned root; SkinnedMesh follows via rebound skeleton
   if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
@@ -985,7 +1031,7 @@ function updateSelfVisibility() {
     // Show floating label still
     pm.group.children.forEach((child, i) => {
       if (child.isSprite) return; // always show label
-      child.visible = !(isSelf && povCamMode === 'fp');
+      child.visible = true; // DEBUG: visibility hide temporarily disabled
     });
   });
 }
