@@ -281,52 +281,64 @@ function makeGLTFPlayer(p, isDef) {
   const charGroup = new THREE.Group();
   charGroup.add(clonedRoot);
 
-  // Force all GLTF parts visible/renderable
+  // First: hide ALL SkinnedMeshes, then show only the one we want (pair.mesh).
+  // n.visible=true blanket pass is what caused the mosh pit — every cloned
+  // character was visible at once. Keep frustumCulled=false on everything so
+  // Three.js doesn't cull the skeleton we're not showing.
   clonedRoot.traverse(n => {
-    n.visible = true;
     n.frustumCulled = false;
-
-    if (n.isMesh || n.isSkinnedMesh) {
+    if (n.isSkinnedMesh || (n.isMesh && !n.isSkinnedMesh)) {
+      n.visible = (n.name === pair.mesh);
+    }
+    // Material fixup only on the one we're keeping
+    if (n.isSkinnedMesh && n.name === pair.mesh && n.material) {
+      n.material = n.material.clone();
+      n.material.side = THREE.DoubleSide;
+      n.material.transparent = false;
+      n.material.opacity = 1;
+      n.material.depthWrite = true;
+      n.material.needsUpdate = true;
       n.castShadow = true;
       n.receiveShadow = true;
-
-      if (n.material) {
-        n.material = n.material.clone();
-        n.material.side = THREE.DoubleSide;
-        n.material.transparent = false;
-        n.material.opacity = 1;
-        n.material.depthWrite = true;
-        n.material.needsUpdate = true;
-      }
+      // Team color tint
+      const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+      const tr = ((col >> 16) & 0xff) / 255;
+      const tg = ((col >> 8)  & 0xff) / 255;
+      const tb = (col & 0xff) / 255;
+      n.material.color = new THREE.Color(
+        0.30 + tr * 0.70,
+        0.30 + tg * 0.70,
+        0.30 + tb * 0.70
+      );
     }
   });
 
-  // Normalize the imported model to local origin
+  // Normalize the imported model to local origin.
+  // Compute bbox from ONLY the visible mesh so we don't include the 5 hidden ones.
   clonedRoot.updateMatrixWorld(true);
+  let targetMesh = null;
+  clonedRoot.traverse(n => { if (n.isSkinnedMesh && n.name === pair.mesh) targetMesh = n; });
 
-  const box = new THREE.Box3().setFromObject(clonedRoot);
-  const size = new THREE.Vector3();
-  const center = new THREE.Vector3();
+  if (targetMesh) {
+    const box    = new THREE.Box3().setFromObject(targetMesh);
+    const size   = new THREE.Vector3();
+    const center = new THREE.Vector3();
+    box.getSize(size);
+    box.getCenter(center);
+    // Move model so feet are at y=0, centered on x/z
+    clonedRoot.position.x -= center.x;
+    clonedRoot.position.z -= center.z;
+    clonedRoot.position.y -= box.min.y;
+    // Auto-scale to 2.8 world units tall
+    const scale = 2.8 / (size.y || 1);
+    charGroup.scale.setScalar(scale);
+  } else {
+    charGroup.scale.setScalar(0.026); // safe fallback
+  }
 
-  box.getSize(size);
-  box.getCenter(center);
-
-  console.log('GLTF bbox size:', size, 'center:', center);
-
-  // Move model center to x/z origin and feet to y=0
-  clonedRoot.position.x -= center.x;
-  clonedRoot.position.z -= center.z;
-  clonedRoot.position.y -= box.min.y;
-
-  // Auto-scale model to about 2.8 world units tall
-  const targetHeight = 2.8;
-  const modelHeight = size.y || 1;
-  const scale = targetHeight / modelHeight;
-
-  charGroup.scale.setScalar(scale);
   charGroup.rotation.y = isDef ? 0 : Math.PI;
-
   group.add(charGroup);
+
 
 
   // Animation mixer -- drive the cloned root; SkinnedMesh follows via rebound skeleton
@@ -1031,7 +1043,7 @@ function updateSelfVisibility() {
     // Show floating label still
     pm.group.children.forEach((child, i) => {
       if (child.isSprite) return; // always show label
-      child.visible = true; // DEBUG: visibility hide temporarily disabled
+      child.visible = !(isSelf && povCamMode === 'fp');
     });
   });
 }
