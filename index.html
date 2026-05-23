@@ -4591,7 +4591,7 @@ let animTotalMs  = 3400;
 let animRenderFn = null;   // shared render-at-progress function for scrub
 
 // ── Path visibility ───────────────────────────
-let showPaths = false;
+let showPaths = true;
 
 // ── Ball script state ──────────────────────────
 let ballScript    = [];
@@ -7464,6 +7464,9 @@ function init() {
   draw();
   suspendHistory = false;
   historyStack = []; redoStack = [];
+  // Paths are on by default — reflect that in the button
+  const btnP = document.getElementById('btnPaths');
+  if (btnP) btnP.classList.add('active');
 }
 
 
