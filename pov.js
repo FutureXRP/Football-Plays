@@ -128,30 +128,28 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
 // ── GLTF PLAYER — clone individual character from loaded model ─
 // GLB hierarchy: scene → Sketchfab_model → root → [6 Metarig nodes]
 // Each Metarig contains one character mesh.
-// Node indices confirmed from GLB inspection:
-//   [3]  Metarig Man.005  → AmericanFootballMan.003  (athletic stance)
-//   [50] Metarig Man.006  → AmericanFootballMan.002  (running)
-//   [97] Metarig Man.013  → AmericanFootballMan.001  (upright)
-//   [144] Metarig Woman.019 → AmericanFootballWoman.001
-//   [191] Metarig Woman.020 → AmericanFootball.006   (crouching lineman)
-//   [238] Metarig Woman.021 → AmericanFootballWoman.002
-
-// ── Character mapping: position → [armaturePattern, skinnedMeshName]
-// GLB structure: armatures are under scene→root, SkinnedMesh Objects are
-// siblings of root. Each pair shares a skin. Confirmed by GLB inspection.
-// Metarig Man.005  (node 3)   ↔ Object_6   (skin 0) → athletic upright
-// Metarig Man.006  (node 50)  ↔ Object_53  (skin 1) → running
-// Metarig Man.013  (node 97)  ↔ Object_100 (skin 2) → upright ready
-// Metarig Woman.019(node 144) ↔ Object_147 (skin 3)
-// Metarig Woman.020(node 191) ↔ Object_194 (skin 4) → crouching lineman
-// Metarig Woman.021(node 238) ↔ Object_241 (skin 5)
+//
+// Three.js r128 sanitizes node names on load:
+//   spaces → underscores, dots removed
+//   e.g. "Metarig Man.005" → "Metarig_Man005_44"
+//
+// CHAR_PAIRS uses the sanitized names (what Three.js actually produces).
+// Use startsWith() so the numeric suffix (_44, _89, etc.) is ignored.
+//
+// Armature/mesh pairing (confirmed by GLB inspection + console diagnostics):
+//   Metarig_Man005  ↔ Object_6   (skin 0) → athletic upright
+//   Metarig_Man006  ↔ Object_53  (skin 1) → running
+//   Metarig_Man013  ↔ Object_100 (skin 2) → upright ready
+//   Metarig_Woman019↔ Object_147 (skin 3) → female upright
+//   Metarig_Woman020↔ Object_194 (skin 4) → crouching lineman
+//   Metarig_Woman021↔ Object_241 (skin 5) → female running
 const CHAR_PAIRS = [
-  { armature: 'Metarig Man.005',   mesh: 'Object_6'   }, // 0: athletic upright
-  { armature: 'Metarig Man.006',   mesh: 'Object_53'  }, // 1: running
-  { armature: 'Metarig Man.013',   mesh: 'Object_100' }, // 2: upright ready
-  { armature: 'Metarig Woman.019', mesh: 'Object_147' }, // 3: female upright
-  { armature: 'Metarig Woman.020', mesh: 'Object_194' }, // 4: crouching lineman
-  { armature: 'Metarig Woman.021', mesh: 'Object_241' }, // 5: female running
+  { armature: 'Metarig_Man005',   mesh: 'Object_6'   }, // 0: athletic upright
+  { armature: 'Metarig_Man006',   mesh: 'Object_53'  }, // 1: running
+  { armature: 'Metarig_Man013',   mesh: 'Object_100' }, // 2: upright ready
+  { armature: 'Metarig_Woman019', mesh: 'Object_147' }, // 3: female upright
+  { armature: 'Metarig_Woman020', mesh: 'Object_194' }, // 4: crouching lineman
+  { armature: 'Metarig_Woman021', mesh: 'Object_241' }, // 5: female running
 ];
 
 function getCharPairIdx(pos, isDef) {
@@ -172,27 +170,30 @@ function makeGLTFPlayer(p, isDef) {
   const pairIdx = getCharPairIdx(p.pos, isDef);
   const pair    = CHAR_PAIRS[pairIdx];
 
-  // Find armature and SkinnedMesh nodes by name
+  // Find armature and SkinnedMesh nodes by name.
+  // pair.armature is already the sanitized form Three.js r128 produces,
+  // so a plain startsWith() match is all that's needed.
+  // The numeric suffix (_44, _89, etc.) is ignored by startsWith.
   let armNode  = null;
   let meshNode = null;
-  let meshIdx  = 0; // index of this character's SkinnedMesh among all SkinnedMeshes
 
-  // The 6 SkinnedMesh nodes are Object_6, Object_53, Object_100, Object_147, Object_194, Object_241
-  // in GLB order. Three.js may rename them — use index-based fallback.
   const skinnedMeshes = [];
   gltfModelCache.scene.traverse(n => {
-    // Collect armature by name (primary) or userData.name (fallback)
-    const name = n.name || (n.userData && n.userData.name) || '';
-    if (!armNode && (name.startsWith(pair.armature) || name.includes(pair.armature.replace('Metarig ', '')))) {
+    const name = n.name || '';
+
+    // Armature: match sanitized name prefix, ignore numeric suffix
+    if (!armNode && name.startsWith(pair.armature)) {
       armNode = n;
     }
-    // Collect all SkinnedMeshes in traversal order
+
+    // Collect all SkinnedMeshes in traversal order (index-based fallback)
     if (n.isSkinnedMesh) skinnedMeshes.push(n);
-    // Try exact mesh name match
+
+    // Mesh: exact name match
     if (!meshNode && name === pair.mesh) meshNode = n;
   });
 
-  // Index-based fallback: CHAR_PAIRS index maps to SkinnedMesh order
+  // Index-based mesh fallback
   if (!meshNode && skinnedMeshes.length > pairIdx) {
     meshNode = skinnedMeshes[pairIdx];
     console.log('Using index-based mesh fallback[' + pairIdx + ']:', meshNode.name || meshNode.uuid);
@@ -207,12 +208,12 @@ function makeGLTFPlayer(p, isDef) {
     console.log('Total SkinnedMeshes:', skinnedMeshes.length, skinnedMeshes.map(n => n.name || 'unnamed'));
   }
 
-  // Armature fallback: find all Metarig/armature nodes and pick by index
+  // Armature index-based fallback: collect all Metarig nodes, pick by pairIdx
   if (!armNode) {
     const armatures = [];
     gltfModelCache.scene.traverse(n => {
-      const name = n.name || (n.userData && n.userData.name) || '';
-      if (name.toLowerCase().includes('metarig') || name.toLowerCase().includes('armature')) {
+      const name = n.name || '';
+      if (name.toLowerCase().startsWith('metarig') || name.toLowerCase().includes('armature')) {
         armatures.push(n);
       }
     });
