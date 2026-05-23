@@ -6673,12 +6673,9 @@ function runPlay() {
   animPaused = false;
   if (animProgress >= 1) animProgress = 0; // restart if finished
 
-  // Show playback row, auto-hide paths
+  // Show playback row
   const row3 = document.getElementById('playbackRow');
   if (row3) row3.classList.remove('hidden');
-  showPaths = false; // hide paths during animation
-  const btn = document.getElementById('btnPaths');
-  if (btn) btn.classList.remove('active');
 
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.add('active');
@@ -6836,11 +6833,9 @@ function stopPlay(done = false) {
   const progEl = document.getElementById('animProgress');
   if (progEl) progEl.classList.remove('active');
 
-  // Hide row 3 — paths stay at whatever the user set, no auto-restore
+  // Hide row 3
   const row3 = document.getElementById('playbackRow');
   if (row3) row3.classList.add('hidden');
-  const btnP = document.getElementById('btnPaths');
-  if (btnP) btnP.classList.toggle('active', showPaths);
   const pauseBtn = document.getElementById('animPauseBtn');
   if (pauseBtn) pauseBtn.textContent = '⏸';
   updateAnimScrubUI();
