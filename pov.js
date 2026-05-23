@@ -1155,20 +1155,7 @@ function populatePOVScene() {
     applyStaticCamera();
   };
 
-  if (gltfModelCache) {
-    build(true);
-  } else {
-    build(false); // procedural renders immediately
-    loadGLTFModel(() => {
-      if (!povScene) return;
-      povPlayerMeshes.forEach(m => povScene.remove(m.group));
-      povDefMeshes.forEach(m    => povScene.remove(m.group));
-      povPlayerMeshes=[]; povDefMeshes=[];
-      gltfMixers = [];
-      build(true);
-      status('3D models loaded ✓', 'success');
-    });
-  }
+  build(false); // GLTF disabled — procedural models only
 }
 
 // ── Build player tab buttons ───────────────────────────
