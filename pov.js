@@ -229,65 +229,70 @@ function makeGLTFPlayer(p, isDef) {
     return makeFootballPlayer(p, isDef);
   }
 
-  // Build a wrapper group containing both the armature clone AND the mesh clone.
-  // SkeletonUtils.clone() handles bone rebinding correctly for the armature.
-  // The SkinnedMesh clone then gets its skeleton rebound to the cloned bones.
-  const armClone  = THREE.SkeletonUtils.clone(armNode);
-  const meshClone = meshNode.clone(true);
+  // Find the smallest common parent that contains BOTH armature and mesh
+  function containsNode(root, target) {
+    let found = false;
+    root.traverse(n => {
+      if (n === target) found = true;
+    });
+    return found;
+  }
 
-  // Collect cloned bones from the armature
-  const boneMap = new Map();
-  armNode.traverse(n  => { if (n.isBone) boneMap.set(n.name, n); });
-  const clonedBones = new Map();
-  armClone.traverse(n => { if (n.isBone) clonedBones.set(n.name, n); });
+  let commonRoot = armNode.parent;
+  while (commonRoot && !containsNode(commonRoot, meshNode)) {
+    commonRoot = commonRoot.parent;
+  }
 
-  // Rebind the cloned SkinnedMesh to the cloned skeleton's bones
-  meshClone.traverse(node => {
-    if (!node.isSkinnedMesh) return;
-    const origSkin = node.skeleton;
-    if (!origSkin) return;
-    const newBones = origSkin.bones.map(b => clonedBones.get(b.name) || b);
-    const newSkeleton = new THREE.Skeleton(newBones, origSkin.boneInverses);
-    node.bind(newSkeleton, node.matrixWorld);
-    node.frustumCulled = false;
-    node.visible = true;
-  });
+  if (!commonRoot) {
+    console.warn('No common GLTF parent found -- falling back');
+    return makeFootballPlayer(p, isDef);
+  }
 
-  // Apply team color tint to mesh materials
-  const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  const tr = ((col >> 16) & 0xff) / 255;
-  const tg = ((col >> 8)  & 0xff) / 255;
-  const tb = (col & 0xff) / 255;
+  // Clone the whole character subtree so SkeletonUtils can rewire bones correctly
+  const clonedRoot = THREE.SkeletonUtils.clone(commonRoot);
 
-  meshClone.traverse(node => {
-    if (node.isMesh && node.material) {
-      node.material = node.material.clone();
-      node.material.color = new THREE.Color(
-        0.30 + tr * 0.70,
-        0.30 + tg * 0.70,
-        0.30 + tb * 0.70
-      );
-      node.castShadow = true;
+  // Hide every skinned mesh except the one we want
+  clonedRoot.traverse(node => {
+    if (node.isSkinnedMesh) {
+      const keep = node.name === pair.mesh;
+      node.visible = keep;
       node.frustumCulled = false;
+
+      if (keep && node.material) {
+        node.material = node.material.clone();
+
+        const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+        const tr = ((col >> 16) & 0xff) / 255;
+        const tg = ((col >> 8)  & 0xff) / 255;
+        const tb = (col & 0xff) / 255;
+
+        node.material.color = new THREE.Color(
+          0.30 + tr * 0.70,
+          0.30 + tg * 0.70,
+          0.30 + tb * 0.70
+        );
+
+        node.castShadow = true;
+      }
     }
   });
 
   const charGroup = new THREE.Group();
-  charGroup.add(armClone);
-  charGroup.add(meshClone);
+  charGroup.add(clonedRoot);
   charGroup.scale.setScalar(0.026);
   charGroup.rotation.y = isDef ? 0 : Math.PI;
   group.add(charGroup);
 
-  // Animation mixer — drive the armature; SkinnedMesh follows via skeleton
+  // Animation mixer -- drive the cloned root; SkinnedMesh follows via rebound skeleton
   if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
-    const mixer  = new THREE.AnimationMixer(armClone);
+    const mixer  = new THREE.AnimationMixer(clonedRoot);
     const clip   = gltfModelCache.animations[0];
     const action = mixer.clipAction(clip);
     action.play();
     mixer.setTime(Math.random() * clip.duration);
     gltfMixers.push(mixer);
     group._mixer = mixer;
+
   }
 
   // Soft shadow
