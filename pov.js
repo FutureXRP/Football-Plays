@@ -136,80 +136,87 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
 //   [191] Metarig Woman.020 → AmericanFootball.006   (crouching lineman)
 //   [238] Metarig Woman.021 → AmericanFootballWoman.002
 
-function getCharRootIndex(pos, isDef) {
-  // Map position to Metarig node index
+// ── Character mapping: position → [armaturePattern, skinnedMeshName]
+// GLB structure: armatures are under scene→root, SkinnedMesh Objects are
+// siblings of root. Each pair shares a skin. Confirmed by GLB inspection.
+// Metarig Man.005  (node 3)   ↔ Object_6   (skin 0) → athletic upright
+// Metarig Man.006  (node 50)  ↔ Object_53  (skin 1) → running
+// Metarig Man.013  (node 97)  ↔ Object_100 (skin 2) → upright ready
+// Metarig Woman.019(node 144) ↔ Object_147 (skin 3)
+// Metarig Woman.020(node 191) ↔ Object_194 (skin 4) → crouching lineman
+// Metarig Woman.021(node 238) ↔ Object_241 (skin 5)
+const CHAR_PAIRS = [
+  { armature: 'Metarig Man.005',   mesh: 'Object_6'   }, // 0: athletic upright
+  { armature: 'Metarig Man.006',   mesh: 'Object_53'  }, // 1: running
+  { armature: 'Metarig Man.013',   mesh: 'Object_100' }, // 2: upright ready
+  { armature: 'Metarig Woman.019', mesh: 'Object_147' }, // 3: female upright
+  { armature: 'Metarig Woman.020', mesh: 'Object_194' }, // 4: crouching lineman
+  { armature: 'Metarig Woman.021', mesh: 'Object_241' }, // 5: female running
+];
+
+function getCharPairIdx(pos, isDef) {
   if (!isDef) {
-    if (pos === 'OL') return 191;   // crouching stance — lineman
-    if (pos === 'QB') return 3;     // athletic upright
-    if (pos === 'RB' || pos === 'FB') return 50; // running pose
-    return 97;                      // WR/TE — upright ready
+    if (pos === 'OL') return 4;             // crouching lineman
+    if (pos === 'QB') return 0;             // athletic upright
+    if (pos === 'RB' || pos === 'FB') return 1; // running
+    return 2;                               // WR/TE upright ready
   } else {
-    if (pos === 'DL') return 191;   // crouching — defensive lineman
-    if (pos === 'LB') return 3;     // athletic stance
-    return 50;                      // CB/S — running/ready
+    if (pos === 'DL') return 4;             // crouching lineman
+    if (pos === 'LB') return 0;             // athletic stance
+    return 1;                               // CB/S running
   }
 }
 
 function makeGLTFPlayer(p, isDef) {
   const group = new THREE.Group();
-  const targetNodeIdx = getCharRootIndex(p.pos, isDef);
+  const pairIdx = getCharPairIdx(p.pos, isDef);
+  const pair    = CHAR_PAIRS[pairIdx];
 
-  // Find character node by collecting all nodes in traversal order
-  // then picking by the known GLB node index
-  // GLB node indices confirmed: Man.005=3, Man.006=50, Man.013=97,
-  // Woman.019=144, Woman.020=191, Woman.021=238
-  const allNodes = [];
-  gltfModelCache.scene.traverse(n => allNodes.push(n));
+  // Find armature and SkinnedMesh nodes by name
+  let armNode  = null;
+  let meshNode = null;
+  gltfModelCache.scene.traverse(n => {
+    if (!n.name) return;
+    if (!armNode  && n.name.startsWith(pair.armature)) armNode  = n;
+    if (!meshNode && n.name === pair.mesh)              meshNode = n;
+  });
 
-  // Find by name suffix pattern — names are like "Metarig Man.005_44"
-  const targetPatterns = {
-    3:   ['Metarig Man.005', 'Man.005_'],
-    50:  ['Metarig Man.006', 'Man.006_'],
-    97:  ['Metarig Man.013', 'Man.013_'],
-    144: ['Metarig Woman.019', 'Woman.019_'],
-    191: ['Metarig Woman.020', 'Woman.020_'],
-    238: ['Metarig Woman.021', 'Woman.021_'],
-  };
-  const patterns = targetPatterns[targetNodeIdx] || [];
-  let srcNode = null;
-  for (const n of allNodes) {
-    if (!n.name) continue;
-    if (patterns.some(pat => n.name.includes(pat))) {
-      srcNode = n;
-      break;
-    }
-  }
-
-  // Last resort fallback — pick by position in traversal
-  // The 6 Metarig roots appear at predictable positions
-  if (!srcNode) {
-    const metarigNodes = allNodes.filter(n => n.name && n.name.startsWith('Metarig'));
-    const metarigOrder = [3, 50, 97, 144, 191, 238];
-    const metarigIdx = metarigOrder.indexOf(targetNodeIdx);
-    if (metarigIdx >= 0 && metarigNodes[metarigIdx]) {
-      srcNode = metarigNodes[metarigIdx];
-      console.log('Used fallback metarig[' + metarigIdx + ']:', srcNode.name);
-    }
-  }
-
-  if (!srcNode) {
-    console.warn('Character node not found for pos:', p.pos, 'idx:', targetNodeIdx);
+  if (!armNode || !meshNode) {
+    console.warn('GLTF pair not found:', pair, '— falling back to procedural');
     return makeFootballPlayer(p, isDef);
   }
 
-  // SkeletonUtils.clone properly rebinds bones — regular .clone(true) leaves
-  // SkinnedMesh bound to original skeleton, making clones invisible.
-  const charClone = THREE.SkeletonUtils
-    ? THREE.SkeletonUtils.clone(srcNode)
-    : srcNode.clone(true);
+  // Build a wrapper group containing both the armature clone AND the mesh clone.
+  // SkeletonUtils.clone() handles bone rebinding correctly for the armature.
+  // The SkinnedMesh clone then gets its skeleton rebound to the cloned bones.
+  const armClone  = THREE.SkeletonUtils.clone(armNode);
+  const meshClone = meshNode.clone(true);
 
-  // Apply team color tint
+  // Collect cloned bones from the armature
+  const boneMap = new Map();
+  armNode.traverse(n  => { if (n.isBone) boneMap.set(n.name, n); });
+  const clonedBones = new Map();
+  armClone.traverse(n => { if (n.isBone) clonedBones.set(n.name, n); });
+
+  // Rebind the cloned SkinnedMesh to the cloned skeleton's bones
+  meshClone.traverse(node => {
+    if (!node.isSkinnedMesh) return;
+    const origSkin = node.skeleton;
+    if (!origSkin) return;
+    const newBones = origSkin.bones.map(b => clonedBones.get(b.name) || b);
+    const newSkeleton = new THREE.Skeleton(newBones, origSkin.boneInverses);
+    node.bind(newSkeleton, node.matrixWorld);
+    node.frustumCulled = false;
+    node.visible = true;
+  });
+
+  // Apply team color tint to mesh materials
   const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
   const tr = ((col >> 16) & 0xff) / 255;
   const tg = ((col >> 8)  & 0xff) / 255;
   const tb = (col & 0xff) / 255;
 
-  charClone.traverse(node => {
+  meshClone.traverse(node => {
     if (node.isMesh && node.material) {
       node.material = node.material.clone();
       node.material.color = new THREE.Color(
@@ -218,21 +225,27 @@ function makeGLTFPlayer(p, isDef) {
         0.30 + tb * 0.70
       );
       node.castShadow = true;
-      node.visible = true;
       node.frustumCulled = false;
-    }
-    if (node.isSkinnedMesh) {
-      node.frustumCulled = false;
-      node.visible = true;
     }
   });
 
-  charClone.scale.setScalar(0.026);
-  charClone.rotation.y = isDef ? 0 : Math.PI;
-  group.add(charClone);
+  const charGroup = new THREE.Group();
+  charGroup.add(armClone);
+  charGroup.add(meshClone);
+  charGroup.scale.setScalar(0.026);
+  charGroup.rotation.y = isDef ? 0 : Math.PI;
+  group.add(charGroup);
 
-  // Animation disabled for now — SkinnedMesh needs skeleton rebind before mixing
-  // TODO: re-enable once static rendering is confirmed working
+  // Animation mixer — drive the armature; SkinnedMesh follows via skeleton
+  if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
+    const mixer  = new THREE.AnimationMixer(armClone);
+    const clip   = gltfModelCache.animations[0];
+    const action = mixer.clipAction(clip);
+    action.play();
+    mixer.setTime(Math.random() * clip.duration);
+    gltfMixers.push(mixer);
+    group._mixer = mixer;
+  }
 
   // Soft shadow
   const sc = document.createElement('canvas');
@@ -1012,29 +1025,44 @@ function populatePOVScene() {
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
   gltfMixers = [];
 
-  players.forEach(p => {
-    const group = makeFootballPlayer(p, false);
-    povScene.add(group);
-    povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
-  });
-  defenders.forEach(d => {
-    const group = makeFootballPlayer(d, true);
-    povScene.add(group);
-    povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
-  });
+  const build = (useGLTF) => {
+    if (!povScene) return;
+    players.forEach(p => {
+      const group = useGLTF ? makeGLTFPlayer(p, false) : makeFootballPlayer(p, false);
+      povScene.add(group);
+      povPlayerMeshes.push({ id:p.id, side:'offense', group, ox:p.x, oy:p.y });
+    });
+    defenders.forEach(d => {
+      const group = useGLTF ? makeGLTFPlayer(d, true) : makeFootballPlayer(d, true);
+      povScene.add(group);
+      povDefMeshes.push({ id:d.id, side:'defense', group, ox:d.x, oy:d.y });
+    });
+    routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
+    povBallMesh = makeBallMesh();
+    povScene.add(povBallMesh);
+    povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
+    buildPOVTabs();
+    updatePOVHUD();
+    updateSelfVisibility();
+    applyStaticCamera();
+  };
 
-  routes.forEach(r  => { const l=makeLine3D(r.pts,0xf5c842,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-  blocks.forEach(b  => { const l=makeLine3D(b.pts,0xe74c3c,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-  motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
-
-  povBallMesh = makeBallMesh();
-  povScene.add(povBallMesh);
-  povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
-
-  buildPOVTabs();
-  updatePOVHUD();
-  updateSelfVisibility();
-  applyStaticCamera();
+  if (gltfModelCache) {
+    build(true);
+  } else {
+    build(false); // procedural renders immediately
+    loadGLTFModel(() => {
+      if (!povScene) return;
+      povPlayerMeshes.forEach(m => povScene.remove(m.group));
+      povDefMeshes.forEach(m    => povScene.remove(m.group));
+      povPlayerMeshes=[]; povDefMeshes=[];
+      gltfMixers = [];
+      build(true);
+      status('3D models loaded ✓', 'success');
+    });
+  }
 }
 
 // ── Build player tab buttons ───────────────────────────
