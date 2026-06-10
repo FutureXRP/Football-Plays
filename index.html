@@ -131,8 +131,9 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
 <body>
 <header>
   <h1>⚡ Play Designer Pro</h1>
-  <span class="v-badge">v7</span>
-  <span class="subtitle">Smart Coach · Fixed Spacing · All-11 Animation</span>
+  <span class="v-badge">v8</span>
+  <span class="subtitle">Draw Plays · All-11 Animation · 3D Film Room</span>
+  <span id="accountArea" style="margin-left:auto;display:flex;align-items:center;gap:8px"></span>
 </header>
 <div class="app">
   <!-- LEFT PANEL -->
@@ -224,7 +225,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     </div>
 
     <div class="section" data-coach="defense">
-      <div class="label">Defense AI</div>
+      <div class="label">Defense</div>
       <select id="defFront" class="select">
         <option>4-3 Over</option><option>4-3 Under</option>
         <option>3-4 Odd</option><option>5-2</option>
@@ -237,10 +238,7 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <option>Zero Blitz</option><option>Tampa 2</option>
         <option>Cover 6</option><option>Quarters</option>
       </select>
-      <div class="grid2" style="margin-top:7px">
-        <button class="btn primary full" onclick="suggestDefense()">🤖 AI Recommend</button>
-        <button class="btn full" onclick="autoDefense()">Set Selected</button>
-      </div>
+      <button class="btn primary full" style="margin-top:7px" onclick="autoDefense()">Set Defense</button>
     </div>
 
     <div class="section" data-coach="both">
@@ -272,12 +270,11 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
         <input id="playName" class="play-name" placeholder="NAME YOUR PLAY" maxlength="36">
         <button class="btn green" onclick="runPlay()">▶ Run</button>
         <button class="btn red" onclick="stopPlay()">■ Stop</button>
-        <button class="btn blue" onclick="smartAnalyze()">🤖 Coach</button>
         <button class="btn" onclick="undoStep()" title="Undo (Ctrl+Z)">↶</button>
         <button class="btn" onclick="redoStep()" title="Redo (Ctrl+Y)">↷</button>
         <button class="btn" onclick="clearSelectedAssignment()">Clear Sel.</button>
         <button class="btn" onclick="openPOV()" title="First-person player view">👁 POV</button>
-        <span id="status" class="status">Pick a formation, generate run/pass/defense, then hit Coach.</span>
+        <span id="status" class="status">Pick a formation, draw routes and blocks, then hit Run.</span>
       </div>
       <!-- Row 2: save / open / export / reset / paths toggle -->
       <div class="bar-row">
@@ -396,21 +393,16 @@ canvas{display:block;max-width:100%;max-height:100%;border:2px solid #333;box-sh
     </div>
 
     <div class="section">
-      <div class="label">🤖 Smart Coach</div>
-      <div id="coach" class="coach">Generate a run scheme, pass protection, or defensive look — then click Coach for a full integrated breakdown with real matchup analysis, gap counts, coverage stress points, and coaching adjustments.</div>
-    </div>
-
-    <div class="section">
       <div class="label">Defense Movement</div>
-      <p class="hint" style="margin-bottom:9px">By default defenders <b style="color:var(--text)">only move if you draw a custom path</b> for them. Enable AI mode to add smart reactions for all defenders automatically.</p>
+      <p class="hint" style="margin-bottom:9px">By default defenders <b style="color:var(--text)">only move if you draw a custom path</b> for them. Enable auto reactions to make all defenders flow with the play automatically.</p>
       <select id="defReactionMode" class="select" style="margin-bottom:7px">
         <option value="custom">Custom Paths Only (default)</option>
-        <option value="ai">AI Reactions (all defenders)</option>
-        <option value="both">AI + Custom Overrides</option>
+        <option value="ai">Auto Reactions (all defenders)</option>
+        <option value="both">Auto + Custom Overrides</option>
       </select>
       <div class="grid2">
         <button class="btn full" onclick="clearDefPaths()">✕ Clear Def Paths</button>
-        <button class="btn full blue" onclick="previewDefReactions()">👁 Preview AI</button>
+        <button class="btn full blue" onclick="previewDefReactions()">👁 Preview</button>
       </div>
     </div>
 

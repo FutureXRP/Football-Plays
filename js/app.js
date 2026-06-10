@@ -443,123 +443,8 @@ function setCoordinator(side) {
 }
 
 // ─────────────────────────────────────────────
-// OFFENSE PROFILE ANALYZER (used by AI coach)
+// DEFENSE TEMPLATE LOADER
 // ─────────────────────────────────────────────
-function offenseProfile() {
-  const wr = players.filter(p => p.pos === 'WR').length;
-  const te = players.filter(p => p.pos === 'TE').length;
-  const rb = players.filter(p => p.pos === 'RB' || p.pos === 'FB').length;
-  const qb = players.find(p => p.pos === 'QB');
-  const gun = qb && qb.y > LOS + 35;
-  const heavy = te + rb >= 3;
-  const empty = rb === 0 && wr >= 4;
-  const spread = wr >= 4;
-
-  // Count receivers per side of center
-  const center = players.find(p => p.label === 'C') || { x: W * .5 };
-  const recL = players.filter(p => ['WR','TE'].includes(p.pos) && p.x < center.x).length;
-  const recR = players.filter(p => ['WR','TE'].includes(p.pos) && p.x >= center.x).length;
-  const trips = recL >= 3 || recR >= 3;
-  const bunch = checkBunch();
-
-  // Motion indicators
-  const hasMotion = motions.length > 0;
-  const hasPlayAction = routes.some(r => r.playAction) || motions.some(m => m.playAction);
-
-  // Run tendency
-  const hasRun = !!ballPath;
-  const runScheme = document.getElementById('runScheme').value;
-  const passScheme = document.getElementById('passScheme').value;
-  const routeCount = routes.filter(r => r.kind !== 'carry').length;
-  const blockCount = blocks.length;
-
-  return { wr, te, rb, qb, gun, heavy, empty, spread, trips, bunch,
-           hasMotion, hasPlayAction, hasRun, runScheme, passScheme,
-           routeCount, blockCount, recL, recR };
-}
-
-function checkBunch() {
-  const eligible = players.filter(p => ['WR','TE'].includes(p.pos));
-  for (const a of eligible) {
-    const nearby = eligible.filter(b => b !== a &&
-      Math.abs(a.x - b.x) < 60 && Math.abs(a.y - b.y) < 50);
-    if (nearby.length >= 2) return true;
-  }
-  return false;
-}
-
-// ─────────────────────────────────────────────
-// SMART DEFENSE SUGGESTER
-// ─────────────────────────────────────────────
-function suggestDefense() {
-  const o = offenseProfile();
-  let front = '4-3 Over', cov = 'Cover 3';
-  const reasons = [];
-  const counters = [];
-
-  if (o.empty || o.wr >= 5) {
-    front = 'Dime'; cov = 'Cover 4';
-    reasons.push('5-wide / empty forces a 6-DB dime shell — must match routes vertically');
-    counters.push('Zero-gap stunts from DTs to create instant pressure without blitzing LBs');
-  } else if (o.spread && o.trips) {
-    front = 'Nickel 2-4-5'; cov = 'Cover 3';
-    reasons.push('Trips overload demands a cover-3 sky with the boundary CB rotating down to bracket the #3 receiver');
-    counters.push('Apex LB must align inside-out on #2 to take away the sit route in the flat');
-  } else if (o.bunch) {
-    front = 'Nickel 2-4-5'; cov = 'Man Free';
-    reasons.push('Bunch formations create rub/pick concepts — man coverage risks illegal contact issues, but Free Safety over-top keeps it legal');
-    counters.push('Trail technique on #2 from bunch, bracket #1 with safety help, take away the shoot route');
-  } else if (o.spread) {
-    front = 'Nickel 2-4-5'; cov = 'Cover 3';
-    reasons.push('Spread sets with 4 WRs force at least 5 DBs — nickel with zone is the base answer');
-    counters.push('Fire zones (3-under, 3-deep) let you generate pressure while keeping 3 deep zones');
-  } else if (o.heavy) {
-    front = '5-2'; cov = 'Cover 2';
-    reasons.push('Heavy / 2-TE / FB sets are run-first — 5-2 fills every gap with a down lineman and keeps 2 LBs free to flow to the ball');
-    counters.push('WILL and MIKE must stay clean — block the offensive line, let them find the ball carrier. SS in the box as the 8th run defender');
-  } else if (currentFormation.includes('Power') || currentFormation.includes('Beast')) {
-    front = '5-2'; cov = 'Man Free';
-    reasons.push('Power/Beast formations demand a loaded box — 5-2 with a Monster SS gives 8 men in the box before the snap');
-    counters.push('Declare gap responsibility pre-snap for all 5 DL — no freelancing. The 2 LBs are your first and second level run stoppers');
-  } else if (currentFormation.includes('Flexbone') || currentFormation.includes('Wing') || currentFormation.includes('Wildcat') || currentFormation.includes('Option')) {
-    front = '3-4 Odd'; cov = 'Man Free';
-    reasons.push('Option/Wing-T requires assignment-sound run fits — 3-4 gives flexible force players to each side');
-    counters.push('Assign dive key, QB key, and pitch key before the snap — do not guess, declare');
-  } else if (currentFormation.includes('I-Form') || currentFormation.includes('Ace') || currentFormation.includes('Singleback')) {
-    front = '4-3 Over'; cov = 'Cover 3';
-    reasons.push('Pro-style 2-back / 2-TE sets are run-balanced — base 4-3 Over with Cover 3 provides run support and secondary depth');
-    counters.push('SAM must handle TE releases into the flat — keep him on the LOS in press or he becomes a conflict player');
-  } else {
-    front = 'Nickel 2-4-5'; cov = 'Cover 3';
-    reasons.push('Shotgun/pistol spread usually requires nickel personnel to match receiver count');
-    counters.push('Cover 3 buzz with a cloud corner over the #1 trips receiver creates a 4-under bracket effect');
-  }
-
-  document.getElementById('defFront').value = front;
-  document.getElementById('coverage').value = cov;
-  autoDefense();
-
-  coach(buildDefenseCoachText(o, front, cov, reasons, counters));
-}
-
-function buildDefenseCoachText(o, front, cov, reasons, counters) {
-  return `DEFENSIVE RECOMMENDATION
-─────────────────────────
-Formation scouted: ${currentFormation}
-Personnel: ${o.wr} WR · ${o.te} TE · ${o.rb} RB/FB · ${o.gun ? 'Shotgun/Pistol' : 'Under Center'}
-${o.trips ? 'Alignment: TRIPS to ' + (o.recR >= 3 ? 'right' : 'left') : ''}${o.bunch ? 'Alignment: BUNCH' : ''}${o.heavy ? 'Personnel: HEAVY (run-first)' : ''}${o.empty ? 'Personnel: EMPTY / no back' : ''}
-
-RECOMMENDATION: ${front} / ${cov}
-
-WHY THIS CALL:
-${reasons.map(r => '• ' + r).join('\n')}
-
-KEY ADJUSTMENT:
-${counters.map(c => '▶ ' + c).join('\n')}
-
-NEXT STEP: Drag defenders to disguise the shell pre-snap. Edit individual leverage, depth, and assignment from the Player Editor. Run "Set Selected" to rebuild from the template at any time.`;
-}
-
 function autoDefense() {
   pushHistory('Set defense');
   const front = document.getElementById('defFront').value;
@@ -737,7 +622,7 @@ function autoRun(reset = true) {
   rb.assignment = `${scheme}: ${dir === 0 ? 'up the middle' : dir > 0 ? 'hit right' : 'hit left'}, aim ${Math.round(targetX)},${Math.round(targetY)}`;
 
   buildList(); draw();
-  coach(buildRunCoachText(scheme, dir, rb, ol, targetX, targetY));
+  status('Run generated: ' + scheme + ' ' + (dir === 0 ? 'middle' : dir > 0 ? 'right' : 'left') + ' — hit ▶ Run to animate.', 'success');
 }
 
 function getOLTech(scheme, label, dir, isPlayside) {
@@ -746,47 +631,6 @@ function getOLTech(scheme, label, dir, isPlayside) {
   if (scheme === 'Counter' && ['LG','RG','LT','RT'].includes(label)) return 'PULL → kick-out';
   if (scheme === 'Trap' && label === (dir > 0 ? 'LG' : 'RG')) return 'TRAP the backside DT';
   return isPlayside ? 'down block / drive' : 'cut-off / backside seal';
-}
-
-function buildRunCoachText(scheme, dir, rb, ol, tx, ty) {
-  const dirLabel = dir === 0 ? 'middle' : dir > 0 ? 'right' : 'left';
-  const coverage = document.getElementById('coverage').value;
-  const front = document.getElementById('defFront').value;
-
-  const schemeNotes = {
-    'Inside Zone': `Inside Zone attacks the A/B-gap with combo blocks. The RB reads the first down lineman from the center outward, pressing the line of scrimmage until a lane opens.`,
-    'Outside Zone': `Outside Zone stretches the defense horizontally. The RB aims for the outside hip of the RT/TE, then cuts back once the defense over-pursues.`,
-    'Power': `Power sends a pulling guard through the C/D gap as the lead blocker. The playside blocks down and the ballcarrier runs off the kick-out block.`,
-    'Counter': `Counter shows action one way, then pulls two OL players the other direction. Best against over-aggressive linebackers who crash to flow.`,
-    'Duo': `Duo is a downhill double-team play — both OL players on the POA drive the DL backward. No pulls, no reads — just physical downfield blocking.`,
-    'Trap': `Trap blocks down on the playside, then the backside guard pulls to kick-out the unblocked DT. Works best when the DT charges upfield.`,
-    'Draw': `Draw sets up like a pass, freezes linebackers, then hands to the RB into a vacated middle. Most effective vs. heavy pass-rush fronts.`,
-    'Toss Sweep': `Toss Sweep uses a tossed pitch to get the RB outside quickly. WRs crack the force player, and OT/TE seal the edge.`,
-    'QB Keeper': `QB Keeper reads the edge player — if he crashes inside, QB bounces; if he holds, QB cuts. Best with a mobile QB.`,
-    'Option': `Triple Option gives the QB read-keys at every level. Mesh the dive, read the DE for the keep, read the OLB for the pitch.`,
-  };
-
-  const note = schemeNotes[scheme] || `The ${scheme} scheme attacks the ${dirLabel} side with coordinated OL movement.`;
-
-  return `RUN CONCEPT: ${scheme.toUpperCase()}
-─────────────────────────
-Direction: ${dirLabel.toUpperCase()} | Aiming point: (${Math.round(tx)}, ${Math.round(ty)})
-Carrier: ${rb.label} | Defense: ${front} / ${coverage}
-
-SCHEME DETAILS:
-${note}
-
-OL ASSIGNMENTS:
-${ol.map(p => `• ${p.label}: ${p.assignment || 'not assigned'}`).join('\n')}
-
-MATCHUP NOTES:
-${coverage.includes('4') || coverage.includes('Quarters') ? `▶ Cover 4 rolls safeties shallow — edge runs may face safety alley support quickly. Attack the B-gap first.` : ''}
-${coverage.includes('Cover 3') ? `▶ Cover 3 leaves the flat to a hook-curl zone. RB flare and TE seam can compliment this run series.` : ''}
-${coverage.includes('Blitz') || coverage.includes('Zero') ? `▶ Pressure look — check to a quick screen or draw if linebackers walk up. Protect the edge in pass pro first.` : ''}
-${front.includes('Bear') ? `▶ Bear Front fills all interior gaps — counter or toss to the edge is your best answer here.` : ''}
-${front.includes('Goal Line') ? `▶ Goal Line = heavy fronts in interior. Power or Duo at a gap opened by motion is most effective.` : ''}
-
-NEXT STEP: Use "Play Action Pass" to attach a PA fake to this run concept, or adjust the aiming point by switching to RB Target mode.`;
 }
 
 // ─────────────────────────────────────────────
@@ -852,28 +696,7 @@ function autoPassPro() {
   });
 
   buildList(); draw();
-  coach(`PASS PROTECTION: ${scheme.toUpperCase()}
-─────────────────────────
-${getPassProBreakdown(scheme)}
-
-OL RULES:
-${players.filter(p => p.pos === 'OL' || ['LT','LG','C','RG','RT'].includes(p.label)).map(p => `• ${p.label}: ${p.assignment}`).join('\n')}
-
-COACHING POINT: The protection will auto-animate when you hit Run. You can still hand-draw an override for any OL player. If the defense shows a blitz look, adjust the back's pickup direction manually.`);
-}
-
-function getPassProBreakdown(scheme) {
-  const breakdowns = {
-    'Half-Slide Left': 'The backside (right) OL uses BOB rules. The playside (left) OL slides toward the protected edge. The back scans the unprotected side for late blitzers.',
-    'Half-Slide Right': 'The backside (left) OL uses BOB rules. The playside (right) OL slides away from the protected edge.',
-    'Full Slide Left': 'Entire OL slides left as a unit, leaving the right edge on its own. The back must pick up the backside edge rusher or the QB must hot-throw.',
-    'Full Slide Right': 'Entire OL slides right as a unit. Back protects the left edge.',
-    'Man Protection': 'Each OL is responsible for one specific rusher — no help, no communication. High-risk, clean-pocket scheme. Best with experienced, stout OL.',
-    'Max Protect': 'All five OL plus both backs/TEs stay in to protect. Only 2-3 receivers release. QB gets maximum time, but it is easy to cover with limited routes.',
-    'BOB (Big-on-Big)': 'Each OL handles the lineman aligned directly across from them. Backs handle linebackers. Clean, physical, old-school.',
-    'Turnback': 'OL sets back toward the center, allowing the QB to quickly roll opposite. Matches well with bootleg and sprint-out play designs.',
-  };
-  return breakdowns[scheme] || 'Standard protection rules apply.';
+  status('Pass protection set: ' + scheme + '.', 'success');
 }
 
 // ─────────────────────────────────────────────
@@ -930,30 +753,7 @@ function addQuickPassConcept() {
   });
 
   buildList(); draw();
-  coach(`PASS CONCEPT: ${concept.toUpperCase()}
-─────────────────────────
-${getConceptBreakdown(concept)}
-
-RECEIVER ROUTES:
-${receivers.map((p, i) => `• ${p.label} (${p.pos}): ${p.assignment}`).join('\n')}
-
-COACHING POINT: Pair with your protection scheme to complete the play design. Manually adjust any route stem by selecting the player and redrawing in Route mode.`);
-}
-
-function getConceptBreakdown(concept) {
-  const c = {
-    'Flood': 'Three-level horizontal stretch to one side: deep corner, intermediate out, and a flat. Attacks Cover 3 and Tampa 2.',
-    'Levels': 'Three receivers at different depths on the same side. Creates a high/low conflict for the zone defender and stresses Cover 2.',
-    'Y-Cross': 'TE crosses underneath safeties while outside routes clear vertically. Attacks man coverage and Cover 3 curl-flat defenders.',
-    'Boot Sail': 'QB boots away from the run fake. Three-level stretch to the open side: go, sail, and flat. Attacks Cover 3 boundary side.',
-    'Mesh': 'Two crossing routes beneath the safeties running under each other at 5-6 yards. Creates natural pick on man coverage. High-percentage concept.',
-    'Smash': 'Hitch-corner combo: corner attacks the CB, hitch sits in front of it. Forces the CB to choose — both answers leave a throw open.',
-    'Four Verts': 'Four vertical routes stretch the defense from sideline to sideline. Attacks Cover 2 safeties and forces one-on-one outside.',
-    'Yankee': 'Post-cross combo: deep post over one safety, deep cross under the other. Creates a rub effect and attacks Cover 2/Cover 4.',
-    'Drive': 'Low-level crossing routes with a front runner and trail runner. Creates picks, natural depth separations, and flat answer.',
-    'Spacing': 'Three hitches at staggered depths — one deep, one intermediate, one quick flat. Dinks the ball quickly into zone windows.',
-  };
-  return c[concept] || `${concept} attacks the defense with coordinated route combinations.`;
+  status('Pass concept installed: ' + concept + '.', 'success');
 }
 
 // ─────────────────────────────────────────────
@@ -1097,23 +897,7 @@ function autoPlayAction() {
   ballPath._targetId = primaryTarget.id;
 
   buildList(); draw();
-  coach(`PLAY ACTION: ${runScheme.toUpperCase()} FAKE → THROW TO ${primaryTarget.label.toUpperCase()}
-─────────────────────────
-SEQUENCE:
-1. Snap — QB jabs toward ${fakeDir > 0 ? 'right' : 'left'} side to sell ${runScheme} action
-2. RB takes fake handoff into the ${fakeDir > 0 ? 'right' : 'left'} side (defenders see ball in line)
-3. QB takes 5-step drop, sets feet at depth
-4. ${primaryTarget.label} (${primaryTarget.pos}) runs stem → breaks open: primary read
-${secondaryTarget ? `5. ${secondaryTarget.label} clears deep to hold the safety\n` : ''}${scored.length > 2 ? `6. ${scored.slice(2).map(s=>s.p.label).join(', ')} leak to flat and checkdown\n` : ''}
-WHY IT WORKS:
-• The ${runScheme} fake freezes linebackers for 1-2 steps — that's the window
-• ${primaryTarget.label} breaks into the void LBs vacated
-• 5-step drop gives receivers time to get depth and separate
-• Football 🏈 travels as a throw arc in the animation — watch the spiral
-
-HIT OR MISS:
-• If defense is in ${document.getElementById('coverage').value}, the ${primaryTarget.label} break should be OPEN
-• Checkdown is ${eligibleReceivers[eligibleReceivers.length-1]?.label || 'RB'} in the flat if the primary is covered`);
+  status('Play action built: ' + runScheme + ' fake → throw to ' + primaryTarget.label + '.', 'success');
 }
 
 // Helper: interpolate a parabolic arc given t (0→1)
@@ -1123,108 +907,6 @@ function arcPt(p0, p1, p2, t) {
     x: u*u*p0.x + 2*u*t*p1.x + t*t*p2.x,
     y: u*u*p0.y + 2*u*t*p1.y + t*t*p2.y
   };
-}
-
-// ─────────────────────────────────────────────
-// SMART ANALYZE (full integrated coach)
-// ─────────────────────────────────────────────
-function smartAnalyze() {
-  const o = offenseProfile();
-  const front = document.getElementById('defFront').value;
-  const cov = document.getElementById('coverage').value;
-  const hasRun = !!ballPath;
-  const routeN = routes.filter(r => r.kind !== 'carry').length;
-  const blockN = blocks.length;
-  const motionN = motions.length;
-
-  // Real coverage stress analysis
-  const covStress = analyzeCoverageStress(cov, o);
-  const runFit = analyzeRunFit(o.runScheme, front, cov);
-  const matchupAdvantage = findMatchupAdvantage(o, front, cov);
-
-  coach(`INTEGRATED COACH ANALYSIS
-─────────────────────────
-OFFENSE: ${currentFormation} (${o.wr} WR, ${o.te} TE, ${o.rb} RB/FB)
-DEFENSE: ${front} / ${cov}
-${o.gun ? 'QB Depth: Shotgun/Pistol' : 'QB Depth: Under Center'}
-${o.trips ? '⚠ TRIPS alignment detected' : ''}${o.bunch ? '⚠ BUNCH alignment detected' : ''}${o.empty ? '⚠ EMPTY — no back in protection' : ''}
-
-PLAY DESIGN STATE:
-• Routes drawn: ${routeN}
-• Blocks assigned: ${blockN}
-• Motions: ${motionN}
-• Ball path: ${hasRun ? 'YES (' + o.runScheme + ')' : 'None — use RB Target mode or Auto Run'}
-
-RUN GAME FIT:
-${runFit}
-
-COVERAGE STRESS POINTS:
-${covStress}
-
-MATCHUP ADVANTAGE:
-${matchupAdvantage}
-
-${o.empty ? 'EMPTY PROTECTION WARNING:\nWith no back in protection, the QB must identify the hot receiver before the snap. Any blitz = immediate hot throw. Confirm the protection call covers at least 5 rushers.\n' : ''}
-COACHING RECOMMENDATION:
-${getCoachRecommendation(o, front, cov, hasRun, routeN, blockN)}`);
-}
-
-function analyzeCoverageStress(cov, o) {
-  const stressMap = {
-    'Cover 3': `• Attack the seams between the corner and safety — 10-15 yards, between hash and numbers\n• Flood to the field side creates a 3-on-2 vs. the hook-curl defender\n• Double-move routes (slant-go, in-out) beat the flat-footed corner\n• Short motion to the boundary pulls the CB and opens the alley run game`,
-    'Cover 2': `• Four verticals splits the safeties — the post between the hash and the numbers is open\n• Smash concept (hitch-corner) attacks the flat-footed corner\n• Seam routes between the CB and Safety create a high-low stretch\n• Run game is effective into CB-force gaps — safeties are too deep to support`,
-    'Man Free': `• Pick/rub routes (mesh, drive) create natural traffic on crossing routes\n• Motion pre-snap identifies man coverage and shifts the CB's leverage\n• Back out of the backfield vs. a LB is a favorable matchup — look at the swing/wheel\n• Speed releases — no cushion to work with, so attack quickly at the snap`,
-    'Cover 4': `• Load the box — Cover 4 brings safeties to the flat, so the post and dig are open\n• Trips into the boundary forces bracket coverage, opening the backside single receiver\n• Run game benefits from two-high safety shells — hit gaps before safeties can converge\n• Four verts creates a 4-on-4 that the safeties cannot cover from depth`,
-    'Zero Blitz': `• Hot receivers must be declared pre-snap — quick outs, slants, and tunnel screens\n• Every WR needs a hot route adjustment vs. the pressure look\n• Rub and mesh concepts can neutralize man leverage even with immediate pressure\n• Screen game is highly effective — take the free yards when they come free`,
-    'Tampa 2': `• The Mike LB drops deep into the post window — attack the seam between MIKE and the safety\n• Dig routes (10-12 yards) find the void between the LB drop and the corner flat\n• TE seam is the killer route — threaded inside the LB and between the safeties\n• Flood weak creates a 3-on-2 on the boundary CB and hook zone`,
-    'Cover 6': `• Field side plays like Cover 4 (press-bracket); boundary side plays like Cover 2\n• Attack the boundary corner with a smash concept — he has flat responsibility and post help\n• The field side post is protected, so bend the route to the corner window\n• Identify which side is the '4' and which is the '2' before the snap`,
-    'Quarters': `• Pattern-match coverage — routes must create conflict reads, not just vertical stems\n• Levels concept at 6 and 12 yards forces the defender to choose sit or carry\n• Bunch releases create confusion in the pattern-match key reads\n• Run game is wide open — safeties are in pure pass coverage`,
-  };
-  return stressMap[cov] || `• Attack spacing gaps and mix depths to create coverage conflicts\n• Look for 3-on-2 overloads in any coverage shell`;
-}
-
-function analyzeRunFit(scheme, front, cov) {
-  if (!scheme) return '• No run scheme selected yet. Choose from the Run Game panel.';
-  const frontFits = {
-    'Inside Zone': { good: ['3-4 Odd', 'Cover 4', 'Nickel 2-4-5'], bad: ['Bear Front', 'Goal Line'] },
-    'Outside Zone': { good: ['Cover 3', 'Cover 4', '4-3 Over'], bad: ['Bear Front', 'Nickel 2-4-5'] },
-    'Power': { good: ['Nickel 2-4-5', 'Cover 4', 'Dime', 'Quarter'], bad: ['Bear Front', 'Goal Line'] },
-    'Counter': { good: ['4-3 Over', 'Cover 3', 'Man Free'], bad: ['3-4 Odd'] },
-  };
-  const fit = frontFits[scheme];
-  if (fit) {
-    const goodMatch = fit.good.includes(front) ? `✓ ${scheme} fits well vs. ${front} — exploit the defensive structure.` : '';
-    const badMatch = fit.bad.includes(front) ? `⚠ ${front} is specifically designed to stop ${scheme}. Consider a counter or check.` : '';
-    return (goodMatch || badMatch || `• ${scheme} vs. ${front} is a neutral matchup. Execution determines the outcome.`) + '\n• ' +
-      (cov.includes('Cover 2') || cov.includes('Quarters') ? 'Two-high shell allows safeties to support the run quickly — avoid slow-developing runs.' :
-       cov.includes('Cover 3') ? 'Cover 3 with single-high is run-support sound — expect the SS to be a force player.' :
-       'Coverage shell has limited run impact — focus on OL technique vs. the front.');
-  }
-  return `• ${scheme} vs. ${front}: study the gap assignment chart and identify the weakest interior gap.`;
-}
-
-function findMatchupAdvantage(o, front, cov) {
-  const advantages = [];
-  if (o.te >= 2 && front.includes('Dime')) advantages.push('▶ 2 TEs vs. Dime = run-block advantage — the extra DB cannot handle a physical TE at the point of attack');
-  if (o.empty && !cov.includes('Cover 4') && !cov.includes('Dime')) advantages.push('▶ Empty formation stresses non-4-DB shells — you have more receivers than they have DBs');
-  if (o.bunch && cov.includes('Man')) advantages.push('▶ Bunch alignment creates natural picks on man coverage — exploit this immediately');
-  if (o.trips && cov.includes('Cover 3')) advantages.push('▶ Trips into Cover 3 forces the CB into a 2-on-1 — the #3 in the flat is almost always open');
-  if (o.heavy && (front.includes('Nickel') || front.includes('Dime'))) advantages.push('▶ Heavy personnel vs. sub package = run the ball — they are undersized for this fight');
-  if (o.spread && front.includes('Goal Line')) advantages.push('▶ Spread vs. Goal Line = massive mismatch — they cannot cover your receivers with LBs');
-  if (advantages.length === 0) advantages.push('▶ No obvious structural mismatch — win through execution, route precision, and leverage');
-  return advantages.join('\n');
-}
-
-function getCoachRecommendation(o, front, cov, hasRun, routeN, blockN) {
-  if (!hasRun && routeN === 0 && blockN === 0) {
-    return '1. Start by generating a run scheme or pass concept using the left panel buttons.\n2. Then click Coach again for a full integrated breakdown.';
-  }
-  const steps = [];
-  if (!hasRun) steps.push('• Set an RB aiming point (RB Target mode or Auto Run) to anchor the run game analysis');
-  if (blockN === 0) steps.push('• Generate protection — pass pro or run blocks — to complete the assignment picture');
-  if (routeN === 0 && hasRun) steps.push('• Add a play-action pass concept to make this a complete formation package');
-  if (steps.length > 0) return steps.join('\n');
-  return '✓ Full play design is active. Hit ▶ Run to see the 11-player animation. Adjust individual routes/blocks by selecting a player and redrawing in the appropriate mode.';
 }
 
 // ─────────────────────────────────────────────
@@ -1284,7 +966,7 @@ function renderEditor() {
     </div>
     ${isDef ? `<div class="hint" style="margin-top:8px;padding:7px;background:#1a0a0a;border:1px solid #3a1818;border-radius:5px">
       <span style="color:#ff9090;font-weight:700">Defender selected.</span> Switch to any draw mode (R/B/M) then draw on the field to set a custom movement path for this defender during animation.
-      ${hasCustomPath ? `<br><button class="btn red full" style="margin-top:6px;font-size:11px;padding:5px" onclick="clearOneDefPath(${p.id})">✕ Remove Custom Path</button>` : '<br><span style="color:var(--muted)">No custom path yet — AI reactions will apply.</span>'}
+      ${hasCustomPath ? `<br><button class="btn red full" style="margin-top:6px;font-size:11px;padding:5px" onclick="clearOneDefPath(${p.id})">✕ Remove Custom Path</button>` : '<br><span style="color:var(--muted)">No custom path yet — auto reactions can apply.</span>'}
     </div>` : ''}
     <button class="btn red full" style="margin-top:9px" onclick="deleteSelected()">Delete ${isDef ? 'Defender' : 'Player'}</button>`;
 }
@@ -2016,7 +1698,7 @@ function previewDefReactions() {
     }
   });
   drawWithPreview(tracks);
-  status('Preview: AI reaction paths shown in red. Draw custom paths to override.', 'success');
+  status('Preview: auto reaction paths shown in red. Draw custom paths to override.', 'success');
 }
 
 function drawWithPreview(tracks) {
@@ -2555,10 +2237,6 @@ function arrow(a, b, c) {
 // ─────────────────────────────────────────────
 // UTILITY FUNCTIONS
 // ─────────────────────────────────────────────
-function coach(t) {
-  document.getElementById('coach').textContent = t;
-}
-
 function status(t, c) {
   const e = document.getElementById('status');
   e.textContent = t;
@@ -2747,7 +2425,7 @@ function clearOneDefPath(did) {
   const d = defenders.find(x => x.id === did);
   if (d && d.assignment === 'Custom path drawn') d.assignment = document.getElementById('coverage').value;
   renderEditor(); draw();
-  status('Custom path removed — AI reactions will apply.', 'success');
+  status('Custom path removed — auto reactions can apply.', 'success');
 }
 
 function resetAll() {
@@ -2765,7 +2443,6 @@ function hardReset() {
   document.getElementById('playName').value = '';
   loadFormation('Shotgun');
   autoDefense();
-  coach('Reset complete. Pick a formation and generate a new play.');
   status('Everything reset.', 'success');
 }
 
@@ -2886,7 +2563,7 @@ function init() {
   suspendHistory = true;
   refreshFormations();
   loadFormation('Shotgun');
-  suggestDefense();
+  autoDefense();
   refreshSaved();
   refreshCustomFormations();
   updateFlipButton();
