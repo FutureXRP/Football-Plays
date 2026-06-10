@@ -1095,16 +1095,30 @@ function closeBallPopup() {
 
 // Called when user picks an option from the popup
 function commitBallDraw(type) {
+  // Capture the pending draw BEFORE closing the popup — closeBallPopup()
+  // clears ballPending, which used to kill every ball action right here.
+  const pending = ballPending;
   closeBallPopup();
-  if (!ballPending) return;
+  if (!pending) return;
   pushHistory('Ball script draw');
 
-  const pts     = ballPending.pts;
+  const pts     = pending.pts;
   const startPt = pts[0];
   const endPt   = pts[pts.length - 1];
 
   // Find nearest player at the end point
   const targetPlayer = hit(players, endPt.x, endPt.y, 32);
+
+  // Passes are usually drawn to where the receiver WILL be, not where they
+  // stand pre-snap — also match a player whose route ends near the endpoint.
+  let routeTarget = null, routeTargetD = 50;
+  routes.forEach(r => {
+    if (!r.pts || r.pts.length < 2 || r.kind === 'carry') return;
+    const last = r.pts[r.pts.length - 1];
+    const d = Math.hypot(last.x - endPt.x, last.y - endPt.y);
+    const pl = players.find(p => p.id === r.pid);
+    if (pl && d < routeTargetD) { routeTarget = pl; routeTargetD = d; }
+  });
 
   // Find current carrier
   const carrierStep = [...ballScript].reverse().find(s =>
@@ -1167,15 +1181,16 @@ function commitBallDraw(type) {
     const arcH  = Math.max(18, dist * 0.20);
     const midX  = (startPt.x + endPt.x) / 2;
     const midY  = Math.min(startPt.y, endPt.y) - arcH;
-    const recvId = targetPlayer?.id || null;
+    const receiver = targetPlayer || routeTarget;
+    const recvId = receiver?.id ?? null;
     ballScript.push({ phase: 'pass', fromId: carrierId,
       toId: recvId, releasePt: startPt, arcPeak: { x: midX, y: midY }, catchPt: endPt });
     // YAC — follow receiver's route if exists, else short forward carry
-    if (recvId) {
+    if (recvId !== null) {
       const existingRoute = routes.find(r => r.pid === recvId);
       ballScript.push({ phase: 'carry', carrierId: recvId,
         pts: existingRoute ? existingRoute.pts.slice(-2) : [endPt, { x: endPt.x, y: endPt.y - 45 }] });
-      if (targetPlayer) targetPlayer.assignment = 'Pass target — ' + (dist > 150 ? 'deep' : dist > 80 ? 'intermediate' : 'quick') + ' route';
+      receiver.assignment = 'Pass target — ' + (dist > 150 ? 'deep' : dist > 80 ? 'intermediate' : 'quick') + ' route';
     }
     status('Pass drawn — ' + (dist > 150 ? 'deep ball' : dist > 80 ? 'intermediate' : 'quick throw') + '.', 'success');
 
@@ -1185,13 +1200,14 @@ function commitBallDraw(type) {
         ballScript[ballScript.length-1]?.phase === 'qbmove') ballScript.pop();
     const midX = (startPt.x + endPt.x) / 2;
     const midY = (startPt.y + endPt.y) / 2 + 12;
-    const recvId = targetPlayer?.id || null;
+    const receiver = targetPlayer || routeTarget;
+    const recvId = receiver?.id ?? null;
     ballScript.push({ phase: 'lateral', fromId: carrierId, toId: recvId,
       releasePt: startPt, arcPeak: { x: midX, y: midY }, catchPt: endPt });
-    if (recvId) {
+    if (recvId !== null) {
       ballScript.push({ phase: 'carry', carrierId: recvId,
         pts: [endPt, { x: endPt.x + (endPt.x > W/2 ? 60 : -60), y: endPt.y - 60 }] });
-      if (targetPlayer) targetPlayer.assignment = 'Lateral — pitch and run';
+      receiver.assignment = 'Lateral — pitch and run';
     }
     status('Lateral drawn.', 'success');
   }
@@ -1264,7 +1280,9 @@ function autoSnapScript(silent) {
 }
 
 // ── Compute ball position at progress t ──────────────
-function getBallPos(t, hasMotion, MEND) {
+// Returns { x, y, h, phase } — h is a height hint for the 3D view (yards).
+// `live` forces use of animX/animY even when the 2D anim flag is off (3D POV).
+function getBallPos(t, hasMotion, MEND, live) {
   if (!ballScript.length) return null;
   const playT = hasMotion ? Math.max(0, (t - MEND) / (1 - MEND)) : t;
   if (playT < 0) return null;
@@ -1284,30 +1302,40 @@ function getBallPos(t, hasMotion, MEND) {
     else if (s.phase === 'qbmove') totalFixed += qbMoveBase;
   });
   const nCarries = ballScript.filter(s => s.phase === 'carry').length;
-  const carryPool = Math.max(0.01, 1 - totalFixed);
+  // No carries to absorb the slack (e.g. snap → drop → throw): stretch the
+  // fixed windows across the whole play so the throw lands as routes finish.
+  // With carries, cap the fixed windows so the run still gets most of the play.
+  const fixedScale = nCarries === 0
+    ? 1 / Math.max(0.2, totalFixed)
+    : Math.min(1, 0.6 / Math.max(0.2, totalFixed));
+  const carryPool = Math.max(0.01, 1 - totalFixed * fixedScale);
   const carryTime  = nCarries > 0 ? carryPool / nCarries : 0.1;
 
   let cursor = 0;
   for (let i = 0; i < ballScript.length; i++) {
     const step = ballScript[i];
-    const dur  = step.phase === 'snap'    ? snapTime     :
-                 step.phase === 'carry'   ? carryTime    :
-                 step.phase === 'qbmove'  ? qbMoveBase   :
-                 step.phase === 'fake'    ? fakeTime     :
-                 transferTime;
+    const dur  = (step.phase === 'snap'    ? snapTime     :
+                  step.phase === 'carry'   ? carryTime    :
+                  step.phase === 'qbmove'  ? qbMoveBase   :
+                  step.phase === 'fake'    ? fakeTime     :
+                  transferTime) * (step.phase === 'carry' ? 1 : fixedScale);
     const end = cursor + dur;
     const isLast = i === ballScript.length - 1;
     if (playT <= end || isLast) {
       const localT = dur > 0 ? Math.max(0, Math.min(1, (playT - cursor) / dur)) : 1;
       const eT = localT < .5 ? 2*localT*localT : -1+(4-2*localT)*localT;
-      return getBallPosForStep(step, eT);
+      return getBallPosForStep(step, eT, live);
     }
     cursor = end;
   }
   return null;
 }
 
-function getBallPosForStep(step, e) {
+function getBallPosForStep(step, e, live) {
+  // Live position of a player: animated during playback (2D or 3D), static otherwise
+  const at = p => (anim || live)
+    ? { x: p.animX ?? p.x, y: p.animY ?? p.y }
+    : { x: p.x, y: p.y };
   const pAt = (pts, t) => {
     if (!pts || pts.length < 2) return pts?.[0] || null;
     const ci  = Math.max(0, Math.min(1, t));
@@ -1321,44 +1349,56 @@ function getBallPosForStep(step, e) {
     const from = players.find(p => p.id === step.fromId);
     const to   = players.find(p => p.id === step.toId);
     if (!from || !to) return null;
-    const fp = { x: anim?from.animX:from.x, y: anim?from.animY:from.y };
-    const tp = { x: anim?to.animX:to.x,     y: anim?to.animY:to.y };
+    const fp = at(from), tp = at(to);
     const dist = Math.hypot(tp.x-fp.x, tp.y-fp.y);
     const arcH = step.isGun ? -dist*0.10 : -10;
-    return quadBezier(fp, { x:(fp.x+tp.x)/2, y:Math.min(fp.y,tp.y)+arcH }, tp, e);
+    const pos = quadBezier(fp, { x:(fp.x+tp.x)/2, y:Math.min(fp.y,tp.y)+arcH }, tp, e);
+    pos.h = step.isGun ? 1.2 + Math.sin(e*Math.PI)*0.5 : 0.7;
+    pos.phase = 'snap';
+    return pos;
   }
 
-  if (step.phase === 'carry' || step.phase === 'qbmove') {
-    // Ball glued to carrier's animated position along their path
+  if (step.phase === 'carry' || step.phase === 'qbmove' || step.phase === 'fake') {
+    // Ball glued to the carrier — carriers are moved along their drawn paths
+    // by the animation engine, so following the player follows the path.
     const carrier = players.find(p => p.id === step.carrierId);
-    if (!carrier) return pAt(step.pts, e);
-    // Use animated position during animation, static otherwise
-    return { x: anim?carrier.animX:carrier.x, y: anim?carrier.animY:carrier.y };
-  }
-
-  if (step.phase === 'fake') {
-    // Ball stays with QB — fake draws to fake target but ball stays at QB
-    const carrier = players.find(p => p.id === step.carrierId);
-    if (!carrier) return pAt(step.pts, e);
-    return { x: anim?carrier.animX:carrier.x, y: anim?carrier.animY:carrier.y };
+    const pos = carrier ? at(carrier) : pAt(step.pts, e);
+    if (!pos) return null;
+    pos.h = 0.9;            // held at the belly
+    pos.phase = step.phase;
+    return pos;
   }
 
   if (step.phase === 'handoff') {
     const from = players.find(p => p.id === step.fromId);
     const to   = players.find(p => p.id === step.toId);
     if (!from || !to) return null;
-    const fp = { x: anim?from.animX:from.x, y: anim?from.animY:from.y };
-    const tp = { x: anim?to.animX:to.x,     y: anim?to.animY:to.y };
-    const mesh = step.meshPt || { x:(fp.x+tp.x)/2, y:(fp.y+tp.y)/2 };
-    return quadBezier(fp, mesh, tp, e);
+    const fp = at(from), tp = at(to);
+    const mesh = { x:(fp.x+tp.x)/2, y:(fp.y+tp.y)/2 };
+    const pos = quadBezier(fp, mesh, tp, e);
+    pos.h = 0.9;
+    pos.phase = 'handoff';
+    return pos;
   }
 
   if (step.phase === 'pass' || step.phase === 'lateral') {
-    const release = step.releasePt;
-    const peak    = step.arcPeak;
-    const catchPt = step.catchPt;
-    if (!release || !peak || !catchPt) return null;
-    return quadBezier(release, peak, catchPt, e);
+    // Throw from where the passer actually is to where the receiver actually is.
+    // Falls back to the drawn release/catch points for throws to open field.
+    const from = players.find(p => p.id === step.fromId);
+    const to   = step.toId != null ? players.find(p => p.id === step.toId) : null;
+    const release = from ? at(from) : step.releasePt;
+    const catchPt = to ? at(to) : step.catchPt;
+    if (!release || !catchPt) return null;
+    const dist = Math.hypot(catchPt.x-release.x, catchPt.y-release.y);
+    const peak = step.phase === 'pass'
+      ? { x:(release.x+catchPt.x)/2, y: Math.min(release.y,catchPt.y) - Math.max(18, dist*0.20) }
+      : { x:(release.x+catchPt.x)/2, y: (release.y+catchPt.y)/2 + 12 };
+    const pos = quadBezier(release, peak, catchPt, e);
+    pos.h = step.phase === 'pass'
+      ? 1.8 + Math.sin(e*Math.PI) * Math.max(2.0, dist/45)
+      : 1.0 + Math.sin(e*Math.PI) * 0.5;
+    pos.phase = step.phase;
+    return pos;
   }
 
   return null;
@@ -1369,14 +1409,24 @@ function quadBezier(p0, p1, p2, t) {
   return { x: u*u*p0.x+2*u*t*p1.x+t*t*p2.x, y: u*u*p0.y+2*u*t*p1.y+t*t*p2.y };
 }
 
-function getStaticBallPos() {
-  if (!ballScript.length) return null;
-  const snapStep = ballScript.find(s => s.phase === 'snap');
-  if (snapStep) {
-    const fromP = players.find(p => p.id === snapStep.fromId);
-    return fromP ? { x: fromP.x, y: fromP.y } : null;
-  }
-  return null;
+// Ball-script carriers must actually run their drawn carry/qbmove paths.
+// A carrier with no route/block otherwise stands still while the ball
+// (glued to them) appears frozen — the old "handoff/run does nothing" bug.
+// Used by both the 2D engine (runPlay) and the 3D POV engine.
+function mergeCarrierTracks(tracks) {
+  const carrierPts = {};
+  ballScript.forEach(s => {
+    if ((s.phase === 'carry' || s.phase === 'qbmove') && s.pts && s.pts.length > 1) {
+      (carrierPts[s.carrierId] = carrierPts[s.carrierId] || []).push(...s.pts);
+    }
+  });
+  Object.entries(carrierPts).forEach(([pid, pts]) => {
+    const id = Number(pid);
+    const hasPlay = routes.some(a => a.pid === id) || blocks.some(a => a.pid === id);
+    if (hasPlay || !tracks[id]) return;
+    // tracks[id][0] is the player's post-motion start position
+    tracks[id] = [tracks[id][0], ...pts];
+  });
 }
 
 // ═══════════════════════════════════════════════════════
@@ -1842,6 +1892,8 @@ function runPlay() {
     }
   });
 
+  mergeCarrierTracks(playTracks);
+
   const defTracks        = computeDefenderTracks();
   const isThrowPlay      = ballPath && ballPath._isThrow;
   const throwDelay       = isThrowPlay ? (ballPath._throwDelay || 0.58) : 0;
@@ -2031,8 +2083,8 @@ function drawBallScriptPaths() {
           // Under center — short white dashed line
           drawPath([{ x: from.x, y: from.y }, { x: to.x, y: to.y }], 'rgba(255,255,255,0.55)', true, 2);
         }
-        // Football icon on center
-        drawFootball(from.x, from.y);
+        // Football icon on center (static diagram only — animation draws the live ball)
+        if (!anim) drawFootball(from.x, from.y);
       }
 
     } else if (step.phase === 'carry' || step.phase === 'qbmove') {
@@ -2040,9 +2092,11 @@ function drawBallScriptPaths() {
       if (carrier && step.pts && step.pts.length > 1) {
         const color = step.phase === 'qbmove' ? '#a0d8f0' : '#e67e22'; // light blue for QB move, orange for carry
         drawPath(step.pts, color, false, step.phase === 'qbmove' ? 2.5 : 4);
-        // Football icon at end of carry/QB move
-        const endPt = step.pts[step.pts.length - 1];
-        drawFootball(endPt.x, endPt.y);
+        // Football icon at end of carry/QB move (static diagram only)
+        if (!anim) {
+          const endPt = step.pts[step.pts.length - 1];
+          drawFootball(endPt.x, endPt.y);
+        }
       }
 
     } else if (step.phase === 'fake') {

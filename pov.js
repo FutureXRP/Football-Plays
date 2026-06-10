@@ -1148,6 +1148,13 @@ function populatePOVScene() {
     motions.forEach(m => { const l=makeLine3D(m.pts,0x3498db,0.07); if(l){povScene.add(l);povRoutelines.push(l);} });
     povBallMesh = makeBallMesh();
     povScene.add(povBallMesh);
+    // Show the ball at its pre-snap spot (on the center) if a ball script exists
+    const staticBall = ballScript.length ? getStaticBallPos() : null;
+    if (staticBall) {
+      const bw = canvasToWorld(staticBall.x, staticBall.y);
+      povBallMesh.position.set(bw.x, 0.5, bw.z);
+      povBallMesh.visible = true;
+    }
     povThrowArc = (ballPath && ballPath._isThrow) ? ballPath : null;
     buildPOVTabs();
     updatePOVHUD();
@@ -1400,6 +1407,13 @@ function povRunPlay() {
     pP.forEach(a=>{ let seg=a.pts?.length?a.pts:[mEnd,mEnd]; if(a.type==='block'){const l=seg[seg.length-1];const pv=seg.length>=2?seg[seg.length-2]:seg[0];seg=[...seg,{x:l.x+(l.x-pv.x)*.15,y:l.y+(l.y-pv.y)*.15}];} plPts=plPts.concat(seg.slice(1)); });
     offTrk[p.id]={ motion:mPts.length>1?mPts:null, play:plPts.length>1?plPts:[sp,sp], isQB:p.pos==='QB'||p.label==='QB', isOL:p.pos==='OL'||['LT','LG','C','RG','RT'].includes(p.label) };
   });
+  // Ball carriers follow their drawn ball paths (same fix as the 2D engine)
+  {
+    const plain = {};
+    Object.keys(offTrk).forEach(id => plain[id] = offTrk[id].play);
+    mergeCarrierTracks(plain);
+    Object.keys(plain).forEach(id => offTrk[id].play = plain[id]);
+  }
   const defTrk = computeDefenderTracks();
   const isDef = povSelectedSide === 'defense';
 
@@ -1421,6 +1435,9 @@ function povRunPlay() {
       if(hasM&&raw<MEND){ pos2d=tr.motion?ptAt2D(tr.motion,eIO(raw/MEND)):{x:p.x,y:p.y}; }
       else{ const pr=hasM?(raw-MEND)/(1-MEND):raw; const sp=tr.isQB?Math.min(pr/0.62,1):tr.isOL?Math.min(pr/0.75,1):pr; pos2d=ptAt2D(tr.play,eIO(sp)); }
       const w=canvasToWorld(pos2d.x,pos2d.y);
+
+      // Record live 2D position so the shared ball engine can track players
+      p.animX = pos2d.x; p.animY = pos2d.y;
 
       // Check movement speed for leg animation
       const prevPos = pm.group.position.clone();
@@ -1471,21 +1488,35 @@ function povRunPlay() {
       }
     });
 
-    // Ball arc
-    if(povThrowArc&&povBallMesh){
-      const pr=hasM?(raw-MEND)/(1-MEND):raw;
-      const delay=povThrowArc._throwDelay||0.58;
-      if(pr>=delay){
-        const tT=Math.min((pr-delay)/(1-delay),1);
-        const p0=povThrowArc[0],p1=povThrowArc[1],p2=povThrowArc[2];
-        const bx=(1-tT)*(1-tT)*p0.x+2*(1-tT)*tT*p1.x+tT*tT*p2.x;
-        const by=(1-tT)*(1-tT)*p0.y+2*(1-tT)*tT*p1.y+tT*tT*p2.y;
-        const arcH=Math.sin(tT*Math.PI)*7;
-        const bw=canvasToWorld(bx,by);
-        povBallMesh.position.set(bw.x,arcH+0.6,bw.z);
+    // Ball — full ball-script support (snap → carry → handoff → pass)
+    if(povBallMesh){
+      let bp=null;
+      if(ballScript.length){
+        bp=getBallPos(raw,hasM,MEND,true);            // live player tracking
+        if(!bp){
+          const sp=getStaticBallPos();                 // pre-snap: ball on the center
+          if(sp){ bp={x:sp.x,y:sp.y,h:0.5,phase:'presnap'}; }
+        }
+      } else if(povThrowArc){
+        // Legacy play-action throw arc
+        const pr=hasM?(raw-MEND)/(1-MEND):raw;
+        const delay=povThrowArc._throwDelay||0.58;
+        if(pr>=delay){
+          const tT=Math.min((pr-delay)/(1-delay),1);
+          const p0=povThrowArc[0],p1=povThrowArc[1],p2=povThrowArc[2];
+          const bx=(1-tT)*(1-tT)*p0.x+2*(1-tT)*tT*p1.x+tT*tT*p2.x;
+          const by=(1-tT)*(1-tT)*p0.y+2*(1-tT)*tT*p1.y+tT*tT*p2.y;
+          bp={x:bx,y:by,h:Math.sin(tT*Math.PI)*7+0.6,phase:'pass'};
+        }
+      }
+      if(bp){
+        const bw=canvasToWorld(bp.x,bp.y);
+        povBallMesh.position.set(bw.x,bp.h??0.9,bw.z);
         povBallMesh.visible=true;
-        povBallMesh.rotation.z+=0.15;
-      } else { povBallMesh.visible=false; }
+        if(bp.phase==='pass'||bp.phase==='snap'||bp.phase==='lateral') povBallMesh.rotation.z+=0.15;
+      } else {
+        povBallMesh.visible=false;
+      }
     }
 
     // Camera follow
