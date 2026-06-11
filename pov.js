@@ -475,11 +475,8 @@ function makeFootballPlayer(p, isDef) {
   group._labelSprite = labelSprite;
   group.add(labelSprite);
 
-  // ── PRE-SNAP STANCE ─────────────────────────────────
-  const centerP = players.find(x => x.label === 'C');
-  const underCenter = !isDef && p.pos === 'QB' && centerP &&
-    Math.hypot(p.x - centerP.x, p.y - centerP.y) < 50;
-  applyProcStance(group, charStanceFor(p.pos, isDef, { underCenter }));
+  // ── PRE-SNAP POSE — upright athletic stand ──────────
+  applyProcStance(group, 'stand');
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
@@ -1191,8 +1188,8 @@ function animatePlayerGait(group, moveSpd) {
   }
   const phase = group._animT || 0;
   group._walkT = (group._walkT || 0) + Math.min(0.6, moveSpd * 2.2);
-  const swing = Math.sin(group._walkT * 8 + phase) * 0.5;
-  const bob   = Math.abs(Math.sin(group._walkT * 8 + phase)) * 0.04;
+  const swing = Math.sin(group._walkT * 4 + phase) * 0.5;
+  const bob   = Math.abs(Math.sin(group._walkT * 4 + phase)) * 0.04;
   group._legL.rotation.x =  swing;
   group._legR.rotation.x = -swing;
   // arms pump opposite the legs; trunk leans into the run
