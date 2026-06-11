@@ -5,14 +5,7 @@ let povScene, povCamera, povRenderer;
 let povPlayerMeshes = [];
 let povDefMeshes    = [];
 
-// ── GLTF MODEL SYSTEM ─────────────────────────────────
-const GLB_URL = 'https://raw.githubusercontent.com/FutureXRP/Football-Plays/main/american_football_players_animated_rigged.glb';
-let gltfModelCache  = null;   // cached loaded GLTF scene
-let gltfMixers      = [];     // AnimationMixer per player instance
-let gltfClockDelta  = 0;
-const gltfClock     = { then: performance.now() };
-
-// Position → character root node index (see getCharRootIndex below)
+// 3D characters come from js/characters.js (GLB prefabs + stance posing)
 let povRoutelines   = [];
 let povBallMesh     = null;
 let povSelectedId   = null;
@@ -125,235 +118,10 @@ function addOutline(mesh, scale=1.115, col=0x050505) {
   return mesh;
 }
 
-// ── GLTF PLAYER — clone individual character from loaded model ─
-// GLB hierarchy: scene → Sketchfab_model → root → [6 Metarig nodes]
-// Each Metarig contains one character mesh.
-//
-// Three.js r128 sanitizes node names on load:
-//   spaces → underscores, dots removed
-//   e.g. "Metarig Man.005" → "Metarig_Man005_44"
-//
-// CHAR_PAIRS uses the sanitized names (what Three.js actually produces).
-// Use startsWith() so the numeric suffix (_44, _89, etc.) is ignored.
-//
-// Armature/mesh pairing (confirmed by GLB inspection + console diagnostics):
-//   Metarig_Man005  ↔ Object_6   (skin 0) → athletic upright
-//   Metarig_Man006  ↔ Object_53  (skin 1) → running
-//   Metarig_Man013  ↔ Object_100 (skin 2) → upright ready
-//   Metarig_Woman019↔ Object_147 (skin 3) → female upright
-//   Metarig_Woman020↔ Object_194 (skin 4) → crouching lineman
-//   Metarig_Woman021↔ Object_241 (skin 5) → female running
-const CHAR_PAIRS = [
-  { armature: 'Metarig_Man005',   mesh: 'Object_6'   }, // 0: athletic upright
-  { armature: 'Metarig_Man006',   mesh: 'Object_53'  }, // 1: running
-  { armature: 'Metarig_Man013',   mesh: 'Object_100' }, // 2: upright ready
-  { armature: 'Metarig_Woman019', mesh: 'Object_147' }, // 3: female upright
-  { armature: 'Metarig_Woman020', mesh: 'Object_194' }, // 4: crouching lineman
-  { armature: 'Metarig_Woman021', mesh: 'Object_241' }, // 5: female running
-];
-
-function getCharPairIdx(pos, isDef) {
-  if (!isDef) {
-    if (pos === 'OL') return 4;             // crouching lineman
-    if (pos === 'QB') return 0;             // athletic upright
-    if (pos === 'RB' || pos === 'FB') return 1; // running
-    return 2;                               // WR/TE upright ready
-  } else {
-    if (pos === 'DL') return 4;             // crouching lineman
-    if (pos === 'LB') return 0;             // athletic stance
-    return 1;                               // CB/S running
-  }
-}
-
-function makeGLTFPlayer(p, isDef) {
-  const group = new THREE.Group();
-  const pairIdx = getCharPairIdx(p.pos, isDef);
-  const pair    = CHAR_PAIRS[pairIdx];
-
-  // Find armature and SkinnedMesh nodes by name.
-  // pair.armature is already the sanitized form Three.js r128 produces,
-  // so a plain startsWith() match is all that's needed.
-  // The numeric suffix (_44, _89, etc.) is ignored by startsWith.
-  let armNode  = null;
-  let meshNode = null;
-
-  const skinnedMeshes = [];
-  gltfModelCache.scene.traverse(n => {
-    const name = n.name || '';
-
-    // Armature: match sanitized name prefix, ignore numeric suffix
-    if (!armNode && name.startsWith(pair.armature)) {
-      armNode = n;
-    }
-
-    // Collect all SkinnedMeshes in traversal order (index-based fallback)
-    if (n.isSkinnedMesh) skinnedMeshes.push(n);
-
-    // Mesh: exact name match
-    if (!meshNode && name === pair.mesh) meshNode = n;
-  });
-
-  // Index-based mesh fallback
-  if (!meshNode && skinnedMeshes.length > pairIdx) {
-    meshNode = skinnedMeshes[pairIdx];
-    console.log('Using index-based mesh fallback[' + pairIdx + ']:', meshNode.name || meshNode.uuid);
-  }
-
-  // Log actual names first time for debugging
-  if (!makeGLTFPlayer._logged) {
-    makeGLTFPlayer._logged = true;
-    console.log('GLTF lookup — pair:', pair);
-    console.log('armNode found:', armNode ? armNode.name : 'NOT FOUND');
-    console.log('meshNode found:', meshNode ? (meshNode.name || 'unnamed') : 'NOT FOUND');
-    console.log('Total SkinnedMeshes:', skinnedMeshes.length, skinnedMeshes.map(n => n.name || 'unnamed'));
-  }
-
-  // Armature index-based fallback: collect all Metarig nodes, pick by pairIdx
-  if (!armNode) {
-    const armatures = [];
-    gltfModelCache.scene.traverse(n => {
-      const name = n.name || '';
-      if (name.toLowerCase().startsWith('metarig') || name.toLowerCase().includes('armature')) {
-        armatures.push(n);
-      }
-    });
-    if (armatures.length > pairIdx) {
-      armNode = armatures[pairIdx];
-      console.log('Using index-based armature fallback[' + pairIdx + ']:', armNode.name);
-    }
-  }
-
-  if (!armNode || !meshNode) {
-    console.warn('GLTF pair not found after all fallbacks — pos:', p.pos, 'pairIdx:', pairIdx,
-      '| armNode:', !!armNode, '| meshNode:', !!meshNode);
-    return makeFootballPlayer(p, isDef);
-  }
-
-  // Find the smallest common parent that contains BOTH armature and mesh
-  function containsNode(root, target) {
-    let found = false;
-    root.traverse(n => {
-      if (n === target) found = true;
-    });
-    return found;
-  }
-
-  let commonRoot = armNode.parent;
-  while (commonRoot && !containsNode(commonRoot, meshNode)) {
-    commonRoot = commonRoot.parent;
-  }
-
-  if (!commonRoot) {
-    console.warn('No common GLTF parent found -- falling back');
-    return makeFootballPlayer(p, isDef);
-  }
-
-  // Clone the whole character subtree so SkeletonUtils can rewire bones correctly
-  if (!makeGLTFPlayer._loggedRoot) { makeGLTFPlayer._loggedRoot = true; console.log('commonRoot name:', commonRoot.name, '| children:', commonRoot.children.length, '| is scene root:', commonRoot === gltfModelCache.scene); }
-  const clonedRoot = THREE.SkeletonUtils.clone(commonRoot);
-
-  // Hide every skinned mesh except the one we want
-  clonedRoot.traverse(node => {
-    if (node.isSkinnedMesh) {
-      const keep = node.name === pair.mesh;
-      node.visible = keep;
-      node.frustumCulled = false;
-
-      if (keep && node.material) {
-        node.material = node.material.clone();
-
-        const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-        const tr = ((col >> 16) & 0xff) / 255;
-        const tg = ((col >> 8)  & 0xff) / 255;
-        const tb = (col & 0xff) / 255;
-
-        node.material.color = new THREE.Color(
-          0.30 + tr * 0.70,
-          0.30 + tg * 0.70,
-          0.30 + tb * 0.70
-        );
-
-        node.castShadow = true;
-      }
-    }
-  });
-
-  const charGroup = new THREE.Group();
-  charGroup.add(clonedRoot);
-
-  // First: hide ALL SkinnedMeshes, then show only the one we want (pair.mesh).
-  // n.visible=true blanket pass is what caused the mosh pit — every cloned
-  // character was visible at once. Keep frustumCulled=false on everything so
-  // Three.js doesn't cull the skeleton we're not showing.
-  clonedRoot.traverse(n => {
-    n.frustumCulled = false;
-    if (n.isSkinnedMesh || (n.isMesh && !n.isSkinnedMesh)) {
-      n.visible = (n.name === pair.mesh);
-    }
-    // Material fixup only on the one we're keeping
-    if (n.isSkinnedMesh && n.name === pair.mesh && n.material) {
-      n.material = n.material.clone();
-      n.material.side = THREE.DoubleSide;
-      n.material.transparent = false;
-      n.material.opacity = 1;
-      n.material.depthWrite = true;
-      n.material.needsUpdate = true;
-      n.castShadow = true;
-      n.receiveShadow = true;
-      // Team color tint
-      const col = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-      const tr = ((col >> 16) & 0xff) / 255;
-      const tg = ((col >> 8)  & 0xff) / 255;
-      const tb = (col & 0xff) / 255;
-      n.material.color = new THREE.Color(
-        0.30 + tr * 0.70,
-        0.30 + tg * 0.70,
-        0.30 + tb * 0.70
-      );
-    }
-  });
-
-  // Normalize the imported model to local origin.
-  // Compute bbox from ONLY the visible mesh so we don't include the 5 hidden ones.
-  clonedRoot.updateMatrixWorld(true);
-  let targetMesh = null;
-  clonedRoot.traverse(n => { if (n.isSkinnedMesh && n.name === pair.mesh) targetMesh = n; });
-
-  if (targetMesh) {
-    const box    = new THREE.Box3().setFromObject(targetMesh);
-    const size   = new THREE.Vector3();
-    const center = new THREE.Vector3();
-    box.getSize(size);
-    box.getCenter(center);
-    // Move model so feet are at y=0, centered on x/z
-    clonedRoot.position.x -= center.x;
-    clonedRoot.position.z -= center.z;
-    clonedRoot.position.y -= box.min.y;
-    // Auto-scale to 2.8 world units tall
-    const scale = 2.8 / (size.y || 1);
-    charGroup.scale.setScalar(scale);
-  } else {
-    charGroup.scale.setScalar(0.026); // safe fallback
-  }
-
-  charGroup.rotation.y = isDef ? 0 : Math.PI;
-  group.add(charGroup);
-
-
-
-  // Animation mixer -- drive the cloned root; SkinnedMesh follows via rebound skeleton
-  if (gltfModelCache.animations && gltfModelCache.animations.length > 0) {
-    const mixer  = new THREE.AnimationMixer(clonedRoot);
-    const clip   = gltfModelCache.animations[0];
-    const action = mixer.clipAction(clip);
-    action.play();
-    mixer.setTime(Math.random() * clip.duration);
-    gltfMixers.push(mixer);
-    group._mixer = mixer;
-
-  }
-
-  // Soft shadow
+// ── GLB PLAYER — posed rigged character from js/characters.js ──
+let _blobShadowTex = null;
+function getBlobShadowTex() {
+  if (_blobShadowTex) return _blobShadowTex;
   const sc = document.createElement('canvas');
   sc.width = sc.height = 128;
   const sx = sc.getContext('2d');
@@ -363,31 +131,49 @@ function makeGLTFPlayer(p, isDef) {
   sg.addColorStop(0.75,'rgba(0,0,0,0.10)');
   sg.addColorStop(1.0, 'rgba(0,0,0,0)');
   sx.fillStyle = sg; sx.fillRect(0,0,128,128);
+  _blobShadowTex = new THREE.CanvasTexture(sc);
+  return _blobShadowTex;
+}
+
+function makeGLTFPlayer(p, isDef) {
+  if (!charPrefabs.length) return makeFootballPlayer(p, isDef);
+  const centerP = players.find(x => x.label === 'C');
+  const underCenter = !isDef && p.pos === 'QB' && centerP &&
+    Math.hypot(p.x - centerP.x, p.y - centerP.y) < 50;
+  const stance = charStanceFor(p.pos, isDef, { underCenter });
+  const tint = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
+  const inst = makeCharInstance(charIdxFor(p.pos, isDef), stance, tint);
+  if (!inst) return makeFootballPlayer(p, isDef);
+
+  const group = new THREE.Group();
+  group.add(inst.group);
+  group._charInst = inst;
+
   const shadow = new THREE.Mesh(
-    new THREE.PlaneGeometry(2.8, 1.8),
-    new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(sc), transparent: true, depthWrite: false })
+    new THREE.PlaneGeometry(2.2, 1.5),
+    new THREE.MeshBasicMaterial({ map: getBlobShadowTex(), transparent: true, depthWrite: false })
   );
   shadow.rotation.x = -Math.PI / 2;
-  shadow.position.set(0, 0.01, 0.3);
+  shadow.position.set(0, 0.01, 0.1);
   group.add(shadow);
 
-  // Label
   const label = makeLabelCrisp(p.label, isDef ? '#ff9999' : '#ffffff', isDef ? '#550000' : '#002255');
-  label.position.y = 3.4;
-  label.scale.set(2.4, 0.95, 1);
+  label.position.y = Math.max(2.6, inst.height + 0.7);
+  label.scale.set(1.9, 0.75, 1);
   group._labelSprite = label;
+  label.visible = typeof povLabelsVisible === 'undefined' ? true : povLabelsVisible;
   group.add(label);
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
-  group._eyeY  = EYE_HEIGHT;
-  group._bodyH = 3.0;
+  group.rotation.y = isDef ? 0 : Math.PI; // characters face +z at identity
+  group._eyeY  = inst.eyeY;
+  group._bodyH = inst.height;
   group._isDef = isDef;
   group._animT = Math.random() * Math.PI * 2;
-
+  group._runPhase = Math.random() * Math.PI * 2;
   return group;
 }
-
 
 // Key ratios vs realistic:
 //   Helmet  : ~42% of total height  (realistic ~14%)
@@ -908,25 +694,27 @@ function initPOV() {
     lineMesh.position.set(0, 0.02, z);
     povScene.add(lineMesh);
 
-    // Yard number sprites — large, bold, Blitz painted style
+    // Yard numbers — painted flat on the turf like a real field
     if (!isLOS && i > 0 && i < 10) {
       const yardNum = Math.abs(i*10 - 50);
       for (const sx of [-W3*0.52, W3*0.52]) {
         const nc2 = document.createElement('canvas');
-        nc2.width = 96; nc2.height = 64;
+        nc2.width = 128; nc2.height = 96;
         const nctx = nc2.getContext('2d');
-        // White painted number — large, bold, Blitz style
-        nctx.fillStyle = 'rgba(255,255,255,0.95)';
-        nctx.font = 'bold 52px Barlow Condensed, Arial Black, sans-serif';
+        nctx.fillStyle = 'rgba(255,255,255,0.92)';
+        nctx.font = 'bold 64px Barlow Condensed, Arial Black, sans-serif';
         nctx.textAlign = 'center';
         nctx.textBaseline = 'middle';
-        nctx.fillText(yardNum, 48, 32);
-        const sp = new THREE.Sprite(new THREE.SpriteMaterial({
-          map: new THREE.CanvasTexture(nc2), transparent: true, depthTest: false
-        }));
-        sp.scale.set(4.0, 2.6, 1);
-        sp.position.set(sx, 0.05, z + 1.5); // offset slightly behind line
-        povScene.add(sp);
+        nctx.fillText(yardNum, 64, 48);
+        const numMesh = new THREE.Mesh(
+          new THREE.PlaneGeometry(3.2, 2.4),
+          new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(nc2), transparent: true, depthWrite: false })
+        );
+        numMesh.rotation.x = -Math.PI/2;
+        // numbers read toward the near sideline on each side
+        numMesh.rotation.z = sx > 0 ? Math.PI/2 : -Math.PI/2;
+        numMesh.position.set(sx, 0.03, z + 1.6);
+        povScene.add(numMesh);
       }
     }
   }
@@ -1048,12 +836,20 @@ function updateSelfVisibility() {
   });
 }
 
+function getSelectedMeshGroup() {
+  const arr = povSelectedSide === 'offense' ? povPlayerMeshes : povDefMeshes;
+  const m = arr.find(x => x.id === povSelectedId);
+  return m ? m.group : null;
+}
+
 function applyStaticCamera() {
   const selList = povSelectedSide==='offense' ? players : defenders;
   const selP    = selList.find(x => x.id===povSelectedId);
   if (!selP) return;
   const w = canvasToWorld(selP.x, selP.y);
-  applyCameraForMode(w.x, EYE_HEIGHT, w.z, 0, selP);
+  // Face the selected player's default direction (offense looks downfield)
+  const defaultFacing = povSelectedSide === 'defense' ? 0 : Math.PI;
+  applyCameraForMode(w.x, 0, w.z, defaultFacing, selP);
   // Force an immediate render so the new camera position is visible right away
   if (povRenderer && povScene && povCamera) povRenderer.render(povScene, povCamera);
 }
@@ -1065,18 +861,13 @@ function applyCameraForMode(px, py, pz, facingY, selP) {
   if (povCamMode === 'fp') {
     // Tightened FOV — more game camera, less browser demo
     povCamera.fov = Math.max(42, Math.min(90, 68 * povZoom));
-    povCamera.position.set(px, EYE_HEIGHT, pz + rzOff);
-
-    const forwardZ = isDef ? 1 : -1;
-    let lx, lz;
-    if (facingY !== 0) {
-      lx = px + Math.sin(facingY) * 20;
-      lz = (pz + rzOff) - Math.cos(facingY) * 20 * (isDef ? -1 : 1);
-    } else {
-      lx = px;
-      lz = (pz + rzOff) + forwardZ * 20;
-    }
-    povCamera.lookAt(lx, EYE_HEIGHT - 0.12, lz);
+    const g = getSelectedMeshGroup();
+    const eyeY = (g && g._eyeY) || EYE_HEIGHT;
+    povCamera.position.set(px, eyeY, pz + rzOff);
+    // facingY uses the model convention: rotation 0 faces +z
+    const lx = px + Math.sin(facingY) * 20;
+    const lz = (pz + rzOff) + Math.cos(facingY) * 20;
+    povCamera.lookAt(lx, eyeY - 0.8, lz);
 
   } else if (povCamMode === 'broadcast') {
     const zoomD = povZoom;
@@ -1129,7 +920,6 @@ function populatePOVScene() {
   povRoutelines.forEach(l   => povScene.remove(l));
   if (povBallMesh) povScene.remove(povBallMesh);
   povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
-  gltfMixers = [];
 
   const build = (useGLTF) => {
     if (!povScene) return;
@@ -1162,7 +952,23 @@ function populatePOVScene() {
     applyStaticCamera();
   };
 
-  build(false); // GLTF disabled — procedural models only
+  // Rigged GLB characters with procedural fallback if the model fails
+  if (charPrefabs.length) {
+    build(true);
+  } else {
+    build(false); // show something immediately
+    charLoad(() => {
+      // rebuild with characters once loaded (only if POV still open)
+      if (povScene && document.getElementById('povOverlay').classList.contains('open')) {
+        povPlayerMeshes.forEach(m => povScene.remove(m.group));
+        povDefMeshes.forEach(m => povScene.remove(m.group));
+        povRoutelines.forEach(l => povScene.remove(l));
+        if (povBallMesh) povScene.remove(povBallMesh);
+        povPlayerMeshes=[]; povDefMeshes=[]; povRoutelines=[];
+        build(true);
+      }
+    }, () => { /* keep procedural models */ });
+  }
 }
 
 // ── Build player tab buttons ───────────────────────────
@@ -1203,37 +1009,6 @@ function updatePOVHUD() {
 function getKeyRead(p) {
   const reads = {QB:'Watch safety rotation pre-snap',WR:'Read CB leverage — inside or outside',RB:'Hit the first down lineman',TE:'Release inside or outside the LB',OL:'Gap assignment — who do you fire on?',DL:'Read guard\'s first step',LB:'Key the near back — read mesh',CB:'Watch #1 release — press or bail',S:'Read QB eyes post-snap'};
   return reads[p.pos] || 'Execute your assignment';
-}
-
-// ── GLTF Model Loader ──────────────────────────────────
-function loadGLTFModel(onLoaded) {
-  if (gltfModelCache) { if (onLoaded) onLoaded(); return; }
-  // GLTFLoader is now embedded inline — always available
-  if (!THREE.GLTFLoader) {
-    console.error('GLTFLoader not available');
-    status('3D model loader not available.', '');
-    return;
-  }
-  status('Loading 3D models…', '');
-  const loader = new THREE.GLTFLoader();
-  loader.load(
-    GLB_URL,
-    gltf => {
-      gltfModelCache = gltf;
-      console.log('GLTF loaded:', gltf.scene.children.length, 'root children,', gltf.animations.length, 'animations');
-      if (onLoaded) onLoaded();
-    },
-    xhr => {
-      if (xhr.total > 0) {
-        const pct = Math.round(xhr.loaded / xhr.total * 100);
-        status('Loading 3D models… ' + pct + '%', '');
-      }
-    },
-    err => {
-      console.error('GLTF load error:', err);
-      status('3D model load failed — using procedural models.', '');
-    }
-  );
 }
 
 // ── Open POV ──────────────────────────────────────────
@@ -1284,9 +1059,6 @@ function closePOV() {
   povProgress  = 0;
   if (povRaf) cancelAnimationFrame(povRaf);
   if (povRecording) stopPOVVideo();
-  // Stop all mixers
-  gltfMixers.forEach(m => m.stopAllAction());
-  gltfMixers = [];
   // Fully dispose and null — next open rebuilds scene with current materials
   if (povRenderer) { povRenderer.dispose(); povRenderer = null; }
   povScene = null; povCamera = null;
@@ -1297,13 +1069,6 @@ function closePOV() {
 function povRenderLoop() {
   if (!document.getElementById('povOverlay').classList.contains('open')) return;
   povRaf = requestAnimationFrame(povRenderLoop);
-  // Tick GLTF animation mixers
-  if (gltfMixers.length > 0) {
-    const now = performance.now();
-    const delta = (now - gltfClock.then) / 1000;
-    gltfClock.then = now;
-    gltfMixers.forEach(m => m.update(delta));
-  }
   if (povScene && povCamera && povRenderer) povRenderer.render(povScene, povCamera);
 }
 
@@ -1368,6 +1133,26 @@ function updateScrubUI() {
   const lbl   = document.getElementById('povProgressLabel');
   if (scrub) scrub.value = Math.round(povProgress * 100);
   if (lbl)   lbl.textContent = Math.round(povProgress * 100) + '%';
+}
+
+// ── Gait animation: GLB run cycle or procedural leg swing ──
+function animatePlayerGait(group, moveSpd) {
+  const moving = moveSpd > 0.004;
+  if (group._charInst) {
+    // stride frequency follows ground speed
+    group._runPhase = (group._runPhase || 0) + Math.min(0.55, moveSpd * 2.1);
+    charRunCycle(group._charInst, group._runPhase, moving);
+    return;
+  }
+  if (group._legL && group._legR) {
+    const phase = group._animT || 0;
+    group._walkT = (group._walkT || 0) + (moving ? Math.min(0.6, moveSpd * 2.2) : 0);
+    const swing = moving ? Math.sin(group._walkT * 8 + phase) * 0.45 : 0;
+    const bob   = moving ? Math.abs(Math.sin(group._walkT * 8 + phase)) * 0.04 : 0;
+    group._legL.rotation.x =  swing;
+    group._legR.rotation.x = -swing;
+    group.position.y = bob;
+  }
 }
 
 // Shared state for pause/resume timing
@@ -1448,20 +1233,11 @@ function povRunPlay() {
       const pr2=hasM?(Math.min(raw+0.025,1)-MEND)/(1-MEND):Math.min(raw+0.025,1);
       const npos=ptAt2D(tr.play,eIO(Math.max(0,Math.min(1,pr2))));
       const ddx=npos.x-pos2d.x,ddz=npos.y-pos2d.y;
-      if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz)+Math.PI;
+      if(Math.abs(ddx)>0.3||Math.abs(ddz)>0.3) pm.group.rotation.y=Math.atan2(ddx,ddz);
 
       // ── LEG ANIMATION ──────────────────────────────
       // Swing legs if moving; settle into stance if stopped
-      if (pm.group._legL && pm.group._legR) {
-        const phase = pm.group._animT || 0;
-        const spd   = moveSpd > 0.004 ? 18 : 0;
-        const swing = spd > 0 ? Math.sin(_animFrameTime * spd + phase) * 0.45 : 0;
-        const bob   = spd > 0 ? Math.abs(Math.sin(_animFrameTime * spd + phase)) * 0.04 : 0;
-        pm.group._legL.rotation.x =  swing;
-        pm.group._legR.rotation.x = -swing;
-        // Slight body bob on step
-        pm.group.position.y = bob;
-      }
+      animatePlayerGait(pm.group, moveSpd);
     });
 
     // Move defense
@@ -1477,15 +1253,7 @@ function povRunPlay() {
       dm.group.position.set(w.x,0,w.z);
       const moveSpd = prevPos.distanceTo(dm.group.position);
 
-      if (dm.group._legL && dm.group._legR) {
-        const phase = dm.group._animT || 0;
-        const spd   = moveSpd > 0.004 ? 18 : 0;
-        const swing = spd > 0 ? Math.sin(_animFrameTime * spd + phase) * 0.42 : 0;
-        const bob   = spd > 0 ? Math.abs(Math.sin(_animFrameTime * spd + phase)) * 0.04 : 0;
-        dm.group._legL.rotation.x =  swing;
-        dm.group._legR.rotation.x = -swing;
-        dm.group.position.y = bob;
-      }
+      animatePlayerGait(dm.group, moveSpd);
     });
 
     // Ball — full ball-script support (snap → carry → handoff → pass)
@@ -1529,17 +1297,15 @@ function povRunPlay() {
       if(povCamMode==='fp'){
         povCamera.fov = Math.max(42, Math.min(90, 68 * povZoom));
         povCamera.updateProjectionMatrix();
-        povCamera.position.lerp(new THREE.Vector3(mp.x,EYE_HEIGHT,mp.z+rzOff),0.18);
-        const forwardZ=isDef?1:-1;
-        let lx,lz;
-        if(Math.abs(fy)>0.05){
-          lx=mp.x+Math.sin(fy)*20;
-          lz=(mp.z+rzOff)-Math.cos(fy)*20*(isDef?-1:1);
-        } else {
-          lx=mp.x;
-          lz=(mp.z+rzOff)+forwardZ*20;
-        }
-        povCamera.lookAt(lx,EYE_HEIGHT-0.12,lz);
+        const eyeY=(sMesh.group._eyeY||EYE_HEIGHT);
+        povCamera.position.lerp(new THREE.Vector3(mp.x,eyeY,mp.z+rzOff),0.18);
+        // look along the model's facing (rotation 0 faces +z); smooth the
+        // look target so quick direction changes don't whip the camera
+        const lx=mp.x+Math.sin(fy)*20;
+        const lz=(mp.z+rzOff)+Math.cos(fy)*20;
+        if(!povCamera._fpLook) povCamera._fpLook=new THREE.Vector3(lx,eyeY-0.8,lz);
+        povCamera._fpLook.lerp(new THREE.Vector3(lx,eyeY-0.8,lz),0.15);
+        povCamera.lookAt(povCamera._fpLook);
       } else if(povCamMode==='broadcast'){
         const zoomD = povZoom;
         povCamera.fov = 58;
