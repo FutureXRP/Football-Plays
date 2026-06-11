@@ -43,7 +43,10 @@ const Account = (() => {
     return Math.max(0, FREE_LIMIT - usedSlots().length);
   }
 
-  function isPro() { return !!(profile && profile.is_pro); }
+  // Master switch — with the paywall off, everyone gets every feature
+  const paywallOn = cfg.PAYWALL_ENABLED !== false;
+
+  function isPro() { return !paywallOn || !!(profile && profile.is_pro); }
 
   // ── Profile ─────────────────────────────────────────
   async function refreshProfile() {
@@ -57,6 +60,16 @@ const Account = (() => {
   function renderHeader() {
     const el = document.getElementById('accountArea');
     if (!el) return;
+    if (!paywallOn) {
+      // Testing mode: no upgrade prompts; offer sign-in only if a backend
+      // exists (for the cloud playbook)
+      el.innerHTML = !hasBackend ? ''
+        : !user
+          ? `<button class="btn" onclick="Account.showAuth('signin')">Sign in</button>`
+          : `<span style="font-size:12px;color:var(--muted)">${esc(user.email || '')}</span>` +
+            `<button class="btn" onclick="Account.signOut()">Sign out</button>`;
+      return;
+    }
     if (!hasBackend) {
       el.innerHTML = `<button class="btn" onclick="Account.showUpgrade('setup')">🔒 Unlock Pro ${cfg.PRICE_LABEL || '$25'}</button>`;
       return;
