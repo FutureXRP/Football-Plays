@@ -5,7 +5,10 @@ let povScene, povCamera, povRenderer;
 let povPlayerMeshes = [];
 let povDefMeshes    = [];
 
-// 3D characters come from js/characters.js (GLB prefabs + stance posing)
+// 3D characters come from js/characters.js (GLB prefabs + stance posing).
+// The rigged GLB models have baked multi-colored uniforms that can't show
+// real team colors, so the posable low-poly players are the default look.
+const POV_USE_GLB = false;
 let povRoutelines   = [];
 let povBallMesh     = null;
 let povSelectedId   = null;
@@ -175,16 +178,51 @@ function makeGLTFPlayer(p, isDef) {
   return group;
 }
 
-// Key ratios vs realistic:
-//   Helmet  : ~42% of total height  (realistic ~14%)
-//   Legs    : ~22% of total height  (realistic ~45%)
-//   Torso   : ~22% of total height
-//   Shoulders: wider than player is tall
-// Total height ~2.8 units
+// ── PROCEDURAL LOW-POLY PLAYER ─────────────────────────
+// Built from posable groups: legL/legR (hip pivots), upperBody (hip pivot
+// carrying torso/arms/head), armL/armR (shoulder pivots). Stances pose
+// these groups pre-snap; the gait animation swings them while moving.
+// Total height ~2.8 units; team colors come straight from the 2D editor.
+
+const PROC_HIP = 0.95; // hip pivot height
+
+// lean = trunk pitch fwd, drop = body lowered, armX = arms swung fwd,
+// armXR overrides the right arm (3-point: hand to the turf)
+const PROC_STANCES = {
+  stand:         { lean: 0.05, drop: 0.00, armX: 0.10 },
+  ready2pt:      { lean: 0.30, drop: 0.10, armX: 0.40 },
+  handsOnKnees:  { lean: 0.55, drop: 0.18, armX: 0.90 },
+  threePoint:    { lean: 0.95, drop: 0.30, armX: 0.75, armXR: 1.55, legX: -0.20 },
+  qbUnderCenter: { lean: 0.42, drop: 0.12, armX: 1.20 },
+  sprinter:      { lean: 0.30, drop: 0.08, armX: 0.35, legLX: -0.28, legRX: 0.15 },
+};
+
+function applyProcStance(group, stanceName) {
+  const s = PROC_STANCES[stanceName] || PROC_STANCES.stand;
+  const u = group._upperBody;
+  if (!u) return;
+  u.rotation.x = s.lean;
+  u.position.y = PROC_HIP - s.drop;
+  if (group._armL) group._armL.rotation.x = s.armX;
+  if (group._armR) group._armR.rotation.x = s.armXR ?? s.armX;
+  if (group._legL) group._legL.rotation.x = s.legLX ?? s.legX ?? 0;
+  if (group._legR) group._legR.rotation.x = s.legRX ?? s.legX ?? 0;
+  group.position.y = 0;
+  group._stanceName = stanceName;
+  // eye height follows the leaned head (head center ~1.36 above the hip)
+  group._eyeY = (PROC_HIP - s.drop) + 1.36 * Math.cos(s.lean) + 0.18;
+}
+
 function makeFootballPlayer(p, isDef) {
   const group = new THREE.Group();
   const col   = hexColor(p.color || (isDef ? '#8b0000' : '#3498db'));
-  const jerseyColor = isDef ? Math.max(0, col - 0x111000) : col;
+  // darken defense slightly, per channel — plain integer subtraction
+  // borrowed across channels and turned dark red into yellow-green
+  const jerseyColor = isDef
+    ? (Math.max(0, ((col >> 16) & 0xff) - 0x18) << 16) |
+      (Math.max(0, ((col >> 8) & 0xff) - 0x18) << 8) |
+      Math.max(0, (col & 0xff) - 0x18)
+    : col;
 
   const jMat  = jerseyMat(jerseyColor);
   const pMat  = padMat();
@@ -198,27 +236,15 @@ function makeFootballPlayer(p, isDef) {
   const accentMat = new THREE.MeshToonMaterial({ color: isDef ? 0xffdddd : 0xffffff, gradientMap: getCelGradMap() });
 
   // ── SOFT-EDGE BLOB SHADOW ───────────────────────────
-  // Radial gradient canvas: dark center fading to transparent edge
-  const shadowCanvas = document.createElement('canvas');
-  shadowCanvas.width = shadowCanvas.height = 128;
-  const sctx = shadowCanvas.getContext('2d');
-  const grad = sctx.createRadialGradient(64, 64, 0, 64, 64, 64);
-  grad.addColorStop(0,   'rgba(0,0,0,0.55)');
-  grad.addColorStop(0.45,'rgba(0,0,0,0.35)');
-  grad.addColorStop(0.75,'rgba(0,0,0,0.12)');
-  grad.addColorStop(1.0, 'rgba(0,0,0,0)');
-  sctx.fillStyle = grad;
-  sctx.fillRect(0, 0, 128, 128);
-  const shadowTex = new THREE.CanvasTexture(shadowCanvas);
   const blobShadow = new THREE.Mesh(
     new THREE.PlaneGeometry(1.4, 1.0),
-    new THREE.MeshBasicMaterial({ map: shadowTex, transparent: true, depthWrite: false, opacity: 1 })
+    new THREE.MeshBasicMaterial({ map: getBlobShadowTex(), transparent: true, depthWrite: false, opacity: 1 })
   );
   blobShadow.rotation.x = -Math.PI / 2;
   blobShadow.position.set(0, 0.01, 0.12);
   group.add(blobShadow);
 
-  // ── LEGS — Blitz-style short, tapered cylinders ────
+  // ── LEGS — hip-pivot groups, tapered cylinders ──────
   const legL = new THREE.Group();
   const legR = new THREE.Group();
   group._legL = legL;
@@ -251,46 +277,46 @@ function makeFootballPlayer(p, isDef) {
     group.add(legGrp);
   });
 
-  // ── TORSO — LatheGeometry tapered silhouette ────────
-  // Profile: [radius, y] from hip to shoulder
-  // Wide at shoulder (top), narrow at waist, slight flare at hip
+  // ── UPPER BODY — single hip-pivot group ─────────────
+  // Everything above the waist lives here so stances/gait can lean it.
+  const upperBody = new THREE.Group();
+  upperBody.position.set(0, PROC_HIP, 0);
+  group._upperBody = upperBody;
+  group.add(upperBody);
+  const U = y => y - PROC_HIP; // convert old absolute height → upper-relative
+
+  // Torso — LatheGeometry tapered silhouette
   const torsoPoints = [
-    new THREE.Vector2(0.30, 0.00),   // hip flare
-    new THREE.Vector2(0.26, 0.12),   // waist narrow start
-    new THREE.Vector2(0.22, 0.28),   // waist
-    new THREE.Vector2(0.24, 0.40),   // chest lower
-    new THREE.Vector2(0.30, 0.52),   // chest
-    new THREE.Vector2(0.32, 0.62),   // upper chest / shoulder base
+    new THREE.Vector2(0.30, 0.00),
+    new THREE.Vector2(0.26, 0.12),
+    new THREE.Vector2(0.22, 0.28),
+    new THREE.Vector2(0.24, 0.40),
+    new THREE.Vector2(0.30, 0.52),
+    new THREE.Vector2(0.32, 0.62),
   ];
-  const torsoGeo = new THREE.LatheGeometry(torsoPoints, 12);
-  const torso = new THREE.Mesh(torsoGeo, jMat);
-  torso.position.set(0, 0.98, 0);
+  const torso = new THREE.Mesh(new THREE.LatheGeometry(torsoPoints, 12), jMat);
+  torso.position.set(0, U(0.98), 0);
   torso.castShadow = true;
   addOutline(torso, 1.07);
-  group.add(torso);
+  upperBody.add(torso);
 
-  // ── JERSEY COLLAR — two-tone detail ─────────────────
+  // Jersey collar
   const collar = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.195, 0.21, 0.09, 12),
-    accentMat
+    new THREE.CylinderGeometry(0.195, 0.21, 0.09, 12), accentMat
   );
-  collar.position.set(0, 1.62, 0);
-  group.add(collar);
+  collar.position.set(0, U(1.62), 0);
+  upperBody.add(collar);
 
-  // ── JERSEY NUMBER — two-tone panel + number ─────────
-  // White/contrast panel behind the number
+  // Jersey number panel
   const panelCanvas = document.createElement('canvas');
   panelCanvas.width = 128; panelCanvas.height = 128;
   const pc = panelCanvas.getContext('2d');
-  // Rounded rect panel in white/accent
   pc.fillStyle = isDef ? 'rgba(255,220,220,0.92)' : 'rgba(255,255,255,0.92)';
   pc.beginPath();
   pc.roundRect(18, 18, 92, 92, 14);
   pc.fill();
-  // Number on top
   pc.shadowColor = 'rgba(0,0,0,0.5)';
   pc.shadowBlur = 3;
-  // Jersey color for the number text
   const r = (jerseyColor >> 16) & 0xff;
   const g = (jerseyColor >> 8) & 0xff;
   const b = jerseyColor & 0xff;
@@ -302,132 +328,131 @@ function makeFootballPlayer(p, isDef) {
     new THREE.PlaneGeometry(0.36, 0.36),
     new THREE.MeshBasicMaterial({ map: new THREE.CanvasTexture(panelCanvas), transparent: true, depthTest: false })
   );
-  numMesh.position.set(0, 1.32, 0.32);
-  group.add(numMesh);
+  numMesh.position.set(0, U(1.32), 0.32);
+  upperBody.add(numMesh);
 
-  // ── SHOULDER PADS — curved crescent via CylinderGeometry ─
-  // Main yoke: flattened wide cylinder — rounded edge vs sharp box
-  const spadGeo = new THREE.CylinderGeometry(0.72, 0.68, 0.17, 16, 1, false, 0, Math.PI * 2);
-  const spad = new THREE.Mesh(spadGeo, pMat);
-  spad.scale.set(1, 1, 0.46); // flatten front-to-back into pad shape
-  spad.position.set(0, 1.66, 0);
+  // Shoulder pads — main yoke
+  const spad = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.72, 0.68, 0.17, 16, 1, false, 0, Math.PI * 2), pMat
+  );
+  spad.scale.set(1, 1, 0.46);
+  spad.position.set(0, U(1.66), 0);
   spad.castShadow = true;
   addOutline(spad, 1.06);
-  group.add(spad);
+  upperBody.add(spad);
 
-  // Front/back arch plates — slightly curved slabs
+  // Front/back arch plates
   for (const [z, rz] of [[-0.10, 0.12], [0.10, -0.12]]) {
     const plate = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.60, 0.58, 0.11, 14, 1, false, 0, Math.PI * 2),
-      pMat
+      new THREE.CylinderGeometry(0.60, 0.58, 0.11, 14, 1, false, 0, Math.PI * 2), pMat
     );
     plate.scale.set(1, 1, 0.22);
-    plate.position.set(0, 1.57, z);
+    plate.position.set(0, U(1.57), z);
     plate.rotation.x = rz;
-    group.add(plate);
+    upperBody.add(plate);
   }
 
-  // Side wings — angled drop pads, rounded cylinder slice
+  // Side wings
   [-0.66, 0.66].forEach(x => {
     const wing = new THREE.Mesh(
-      new THREE.CylinderGeometry(0.14, 0.12, 0.24, 10),
-      pMat
+      new THREE.CylinderGeometry(0.14, 0.12, 0.24, 10), pMat
     );
-    wing.position.set(x, 1.55, 0);
+    wing.position.set(x, U(1.55), 0);
     wing.rotation.z = x > 0 ? -0.42 : 0.42;
     wing.scale.set(1.4, 1, 1.5);
     addOutline(wing, 1.08);
-    group.add(wing);
+    upperBody.add(wing);
   });
 
-  // ── ARMS — upper/lower with natural angle ───────────
+  // ── ARMS — shoulder-pivot groups for pump + stances ─
   [[-1, 0.60], [1, -0.60]].forEach(([side, rz]) => {
-    const x = side * 0.74;
+    const arm = new THREE.Group();
+    arm.position.set(side * 0.74, U(1.53), 0);
+    if (side < 0) group._armL = arm; else group._armR = arm;
+
     const uArm = new THREE.Mesh(
       new THREE.CylinderGeometry(0.108, 0.095, 0.42, 10), jMat
     );
-    uArm.position.set(x, 1.53, 0);
     uArm.rotation.z = rz;
     uArm.castShadow = true;
     addOutline(uArm, 1.08);
-    group.add(uArm);
+    arm.add(uArm);
 
     const lArm = new THREE.Mesh(
       new THREE.CylinderGeometry(0.090, 0.078, 0.30, 10), sMat
     );
-    lArm.position.set(x + side * 0.26, 1.30, 0);
+    lArm.position.set(side * 0.26, -0.23, 0);
     lArm.rotation.z = rz * 0.62;
     lArm.castShadow = true;
-    group.add(lArm);
+    arm.add(lArm);
+
+    upperBody.add(arm);
   });
 
-  // ── NECK — bull neck, tapered ───────────────────────
+  // Neck
   const neck = new THREE.Mesh(
     new THREE.CylinderGeometry(0.155, 0.175, 0.19, 10), sMat
   );
-  neck.position.set(0, 1.74, 0);
+  neck.position.set(0, U(1.74), 0);
   addOutline(neck, 1.07);
-  group.add(neck);
+  upperBody.add(neck);
 
-  // ── HELMET — high-res dome, proper proportions ──────
-  // More segments = smoother dome, better light catch
-  const helmGeo = new THREE.SphereGeometry(0.52, 24, 16);
-  const helm = new THREE.Mesh(helmGeo, hMat);
+  // Helmet
+  const helm = new THREE.Mesh(new THREE.SphereGeometry(0.52, 24, 16), hMat);
   helm.scale.set(1.0, 0.96, 1.08);
-  helm.position.set(0, 2.31, 0.04);
+  helm.position.set(0, U(2.31), 0.04);
   helm.castShadow = true;
   addOutline(helm, 1.068);
-  group.add(helm);
+  upperBody.add(helm);
 
-  // Helmet chin cup — small rounded box under front
+  // Chin cup
   const chinCup = new THREE.Mesh(
     new THREE.BoxGeometry(0.22, 0.10, 0.12),
     new THREE.MeshToonMaterial({ color: 0x333333, gradientMap: getCelGradMap() })
   );
-  chinCup.position.set(0, 1.96, 0.44);
-  group.add(chinCup);
+  chinCup.position.set(0, U(1.96), 0.44);
+  upperBody.add(chinCup);
 
-  // Crown stripe — slightly raised panel on top
+  // Crown stripe
   const stripeCol = Math.min(0xffffff, jerseyColor + 0x606060);
   const stripe = new THREE.Mesh(
     new THREE.BoxGeometry(0.10, 0.56, 1.00),
     new THREE.MeshToonMaterial({ color: stripeCol, gradientMap: getCelGradMap() })
   );
-  stripe.position.set(0, 2.54, 0.04);
-  group.add(stripe);
+  stripe.position.set(0, U(2.54), 0.04);
+  upperBody.add(stripe);
 
-  // Ear flaps — rounded via cylinder slice
+  // Ear flaps
   [-0.49, 0.49].forEach(x => {
     const ear = new THREE.Mesh(
       new THREE.CylinderGeometry(0.16, 0.14, 0.08, 10),
       new THREE.MeshToonMaterial({ color: jerseyColor, gradientMap: getCelGradMap() })
     );
     ear.rotation.z = Math.PI / 2;
-    ear.position.set(x, 2.14, 0.10);
+    ear.position.set(x, U(2.14), 0.10);
     addOutline(ear, 1.07);
-    group.add(ear);
+    upperBody.add(ear);
   });
 
-  // ── FACEMASK — 3 bold rounded bars ──────────────────
+  // Facemask — 3 bars + vertical
   const fmRadius = 0.036;
   for (let i = 0; i < 3; i++) {
     const fm = new THREE.Mesh(
       new THREE.CylinderGeometry(fmRadius, fmRadius, 0.74, 8), fMat
     );
     fm.rotation.z = Math.PI / 2;
-    fm.position.set(0, 2.13 + i * 0.115, 0.47);
+    fm.position.set(0, U(2.13 + i * 0.115), 0.47);
     addOutline(fm, 1.13);
-    group.add(fm);
+    upperBody.add(fm);
   }
-  // Vertical bar
   const fmV = new THREE.Mesh(
     new THREE.CylinderGeometry(fmRadius, fmRadius, 0.36, 8), fMat
   );
-  fmV.position.set(0, 2.16, 0.54);
+  fmV.position.set(0, U(2.16), 0.54);
   addOutline(fmV, 1.13);
-  group.add(fmV);
+  upperBody.add(fmV);
 
-  // ── VISOR — tinted with subtle curve ────────────────
+  // Visor
   const visor = new THREE.Mesh(
     new THREE.BoxGeometry(0.68, 0.095, 0.07),
     new THREE.MeshToonMaterial({
@@ -435,8 +460,8 @@ function makeFootballPlayer(p, isDef) {
       gradientMap: getHelmetGradMap()
     })
   );
-  visor.position.set(0, 2.32, 0.48);
-  group.add(visor);
+  visor.position.set(0, U(2.32), 0.48);
+  upperBody.add(visor);
 
   // ── LABEL SPRITE ────────────────────────────────────
   const labelSprite = makeLabelCrisp(
@@ -444,15 +469,21 @@ function makeFootballPlayer(p, isDef) {
     isDef ? '#ff9999' : '#ffffff',
     isDef ? '#550000' : '#002255'
   );
-  labelSprite.position.y = 3.22;
-  labelSprite.scale.set(2.4, 0.95, 1);
+  labelSprite.position.y = 3.1;
+  labelSprite.scale.set(1.9, 0.75, 1);
+  labelSprite.visible = typeof povLabelsVisible === 'undefined' ? true : povLabelsVisible;
   group._labelSprite = labelSprite;
   group.add(labelSprite);
+
+  // ── PRE-SNAP STANCE ─────────────────────────────────
+  const centerP = players.find(x => x.label === 'C');
+  const underCenter = !isDef && p.pos === 'QB' && centerP &&
+    Math.hypot(p.x - centerP.x, p.y - centerP.y) < 50;
+  applyProcStance(group, charStanceFor(p.pos, isDef, { underCenter }));
 
   const w = canvasToWorld(p.x, p.y);
   group.position.set(w.x, 0, w.z);
   group.rotation.y = isDef ? 0 : Math.PI;
-  group._eyeY  = EYE_HEIGHT;
   group._bodyH = 2.88;
   group._isDef = isDef;
   group._animT = Math.random() * Math.PI * 2;
@@ -565,10 +596,12 @@ function initPOV() {
   povRenderer.shadowMap.enabled = true;
   povRenderer.shadowMap.type = THREE.PCFSoftShadowMap;
   povRenderer.setClearColor(0x87ceeb);
-  // Tone mapping — lower exposure keeps team colors saturated, not blown out
+  // No filmic tone mapping — ACES was desaturating team colors to near
+  // white (dark red read as yellow). Plain output + moderate lights keeps
+  // jerseys saturated and true to the editor colors.
   povRenderer.outputEncoding = THREE.sRGBEncoding || 3001;
-  povRenderer.toneMapping = THREE.ACESFilmicToneMapping || 4;
-  povRenderer.toneMappingExposure = 0.88;
+  povRenderer.toneMapping = THREE.NoToneMapping || 0;
+  povRenderer.toneMappingExposure = 1.0;
 
   povScene = new THREE.Scene();
   // Blitz-style bright stadium sky — clear afternoon blue
@@ -580,10 +613,10 @@ function initPOV() {
   // ── LIGHTING — tuned for MeshToonMaterial ─────────
   // Toon needs STRONG directional lights to produce visible band transitions.
   // Ambient fills the dark sides. No specular in toon so dial up intensity.
-  povScene.add(new THREE.AmbientLight(0xffeedd, 0.70)); // warm fill — lower so shadows read
+  povScene.add(new THREE.AmbientLight(0xffeedd, 0.55)); // warm fill — lower so shadows read
 
   // Primary sun — strong but not blowing out team colors
-  const sun = new THREE.DirectionalLight(0xfff4d0, 3.2);
+  const sun = new THREE.DirectionalLight(0xfff4d0, 1.15);
   sun.position.set(30, 55, -25);
   sun.castShadow = true;
   sun.shadow.mapSize.width  = 4096;
@@ -595,7 +628,7 @@ function initPOV() {
   sun.shadow.bias = -0.0005;
   povScene.add(sun);
 
-  const fill = new THREE.DirectionalLight(0x8ecbff, 0.75);
+  const fill = new THREE.DirectionalLight(0x8ecbff, 0.35);
   fill.position.set(-30, 20, 20);
   povScene.add(fill);
 
@@ -629,7 +662,7 @@ function initPOV() {
     pole.position.set(lx, (ly - 8) / 2 + 4, lz);
     povScene.add(pole);
     // Point light — contributes to band shading on nearby players
-    const pt = new THREE.PointLight(0xfff8e0, 0.6, 60);
+    const pt = new THREE.PointLight(0xfff8e0, 0.2, 60);
     pt.position.set(lx, ly - 2, lz);
     povScene.add(pt);
   });
@@ -952,6 +985,10 @@ function populatePOVScene() {
     applyStaticCamera();
   };
 
+  if (!POV_USE_GLB) {
+    build(false); // posable low-poly players with true team colors
+    return;
+  }
   // Rigged GLB characters with procedural fallback if the model fails
   if (charPrefabs.length) {
     build(true);
@@ -1135,24 +1172,37 @@ function updateScrubUI() {
   if (lbl)   lbl.textContent = Math.round(povProgress * 100) + '%';
 }
 
-// ── Gait animation: GLB run cycle or procedural leg swing ──
+// ── Gait animation: GLB run cycle or procedural run/stance ──
 function animatePlayerGait(group, moveSpd) {
-  const moving = moveSpd > 0.004;
+  // A huge per-frame jump means the timeline was scrubbed, not real
+  // movement — settle into the stance instead of a mid-stride pose.
+  const moving = moveSpd > 0.004 && moveSpd < 1.5;
   if (group._charInst) {
     // stride frequency follows ground speed
-    group._runPhase = (group._runPhase || 0) + Math.min(0.55, moveSpd * 2.1);
+    group._runPhase = (group._runPhase || 0) + (moving ? Math.min(0.55, moveSpd * 2.1) : 0);
     charRunCycle(group._charInst, group._runPhase, moving);
     return;
   }
-  if (group._legL && group._legR) {
-    const phase = group._animT || 0;
-    group._walkT = (group._walkT || 0) + (moving ? Math.min(0.6, moveSpd * 2.2) : 0);
-    const swing = moving ? Math.sin(group._walkT * 8 + phase) * 0.45 : 0;
-    const bob   = moving ? Math.abs(Math.sin(group._walkT * 8 + phase)) * 0.04 : 0;
-    group._legL.rotation.x =  swing;
-    group._legR.rotation.x = -swing;
-    group.position.y = bob;
+  if (!group._legL || !group._legR) return;
+  if (!moving) {
+    // settle back into the pre-snap stance
+    if (group._stanceName) applyProcStance(group, group._stanceName);
+    return;
   }
+  const phase = group._animT || 0;
+  group._walkT = (group._walkT || 0) + Math.min(0.6, moveSpd * 2.2);
+  const swing = Math.sin(group._walkT * 8 + phase) * 0.5;
+  const bob   = Math.abs(Math.sin(group._walkT * 8 + phase)) * 0.04;
+  group._legL.rotation.x =  swing;
+  group._legR.rotation.x = -swing;
+  // arms pump opposite the legs; trunk leans into the run
+  if (group._armL) group._armL.rotation.x = 0.30 - swing * 0.9;
+  if (group._armR) group._armR.rotation.x = 0.30 + swing * 0.9;
+  if (group._upperBody) {
+    group._upperBody.rotation.x = 0.22;
+    group._upperBody.position.y = PROC_HIP - 0.05;
+  }
+  group.position.y = bob;
 }
 
 // Shared state for pause/resume timing
@@ -1165,7 +1215,7 @@ function povRunPlay() {
   if (povAnimating && !povPaused) return;
 
   const allActions = [...motions,...routes,...blocks];
-  if (!allActions.length) { alert('Generate a play first, then open POV.'); return; }
+  if (!allActions.length && !ballScript.length) { alert('Draw a play first, then open the 3D film room.'); return; }
 
   povAnimating = true;
   povPaused    = false;
@@ -1481,8 +1531,8 @@ function stopPOVPlay() {
   if (pauseBtn) pauseBtn.textContent = '⏸ Pause';
   updateScrubUI();
   if (povBallMesh) povBallMesh.visible = false;
-  players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=Math.PI;}});
-  defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;}});
+  players.forEach(p=>{const pm=povPlayerMeshes.find(m=>m.id===p.id);if(pm){const w=canvasToWorld(p.x,p.y);pm.group.position.set(w.x,0,w.z);pm.group.rotation.y=Math.PI;animatePlayerGait(pm.group,0);}});
+  defenders.forEach(d=>{const dm=povDefMeshes.find(m=>m.id===d.id);if(dm){const w=canvasToWorld(d.x,d.y);dm.group.position.set(w.x,0,w.z);dm.group.rotation.y=0;animatePlayerGait(dm.group,0);}});
   applyStaticCamera();
   povRenderLoop(); // restart idle render loop so camera/zoom changes are visible
 }
