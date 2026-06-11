@@ -113,6 +113,13 @@ vercel.json                 cache headers
 
 ---
 
+## Paywall master switch
+
+`js/config.js` has `PAYWALL_ENABLED`. While it's `false` (the default right
+now), **everything is unlocked for everyone** — ideal for testing. When you're
+ready to charge, finish the Supabase + Stripe setup above and flip it to
+`true`.
+
 ## How the paywall works
 
 - `js/account.js` wraps the gated functions (`openPOV`, `savePlay`,
